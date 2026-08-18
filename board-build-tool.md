@@ -28,9 +28,6 @@ answers, or from distributor tables the User downloads and hands over.
 |---|---|
 | Covers | The KiCad design process, from the parts table to the fabrication package |
 | Entered | At any process, as often as the design needs |
-| Excludes | Connectivity. Nets are drawn in the schematic editor and the tool never reads or writes a wire |
-| Excludes | Routing. The board's copper is the User's |
-| Excludes | Design rules. ERC and DRC are run in KiCad by the User |
 
 **T1.2 — Where the tool works and where the User does**
 
@@ -44,7 +41,6 @@ answers, or from distributor tables the User downloads and hands over.
 | Board outline, stackup | User |
 | Placing footprints in their region | Tool |
 | Routing | User |
-| ERC, DRC | User, in KiCad |
 | Gerbers, drill, centroid, BOM | Tool |
 
 **T1.3 — The parts table**
