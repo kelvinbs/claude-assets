@@ -162,7 +162,8 @@ picked, described and given an IPN in process 1; the symbol, footprint and
 model are built in process 2, from the rows that are missing them. One is
 hand work against a schema, the other is a batch run.
 
-`clone-check` sits outside the chain. It is run after process 2.
+`db-init` and `clone-check` sit outside the chain. `db-init` runs once, on
+an empty board project, before process 1. `clone-check` runs after process 2.
 
 **The RF-simulation file**
 
@@ -232,6 +233,7 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 | Tool | Function | In | Out |
 |---|---|---|---|
+| `db-init` | Create the databases and their tables | T1.2, T1.3 | `design.db`, `sourcing.db` |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Create or modify symbol | Pins from `datasheet-read` | `lib/*.kicad_sym` |
 | `footprint-draw` | Create or modify footprint | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
