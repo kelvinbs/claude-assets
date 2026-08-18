@@ -52,11 +52,13 @@ sheet.
 
 **T1.1 — Where the data lives**
 
-| File | Tables | Role | Committed |
-|---|---|---|---|
-| `design.db` | `parts` | Master for design fields. Pushes to KiCad | Yes |
-| `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` | Yes |
-| `sourcing.db` | `aml`, `mpns`, `offers` | Order time. Fetched, refetchable | `aml` yes. `mpns` and `offers` are cache |
+| File | Tables | Role |
+|---|---|---|
+| `design.db` | `parts` | Master for design fields. Pushes to KiCad |
+| `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
+| `sourcing.db` | `aml`, `mpns`, `offers` | Order time. `mpns` and `offers` are fetched and refetchable |
+
+Every file is tracked and pushed. Nothing here is untracked.
 
 KiCad is the native store for design use, generally updated from the master.
 Ordering reads `sourcing.db` and never writes a design file. Design never
