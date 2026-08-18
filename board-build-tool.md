@@ -246,12 +246,8 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 **Layout**
 
-- `board-build-tool.md` — this container
-- `<tool>.md` — one document per tool
-
-Documents at the top level, code below it.
-
-- `tools/` — the scripts, called by any tool
+- `board-build-tool.md` — the only document at the top level
+- `tools/` — one `<tool>.md` and its scripts, per tool
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
 - `commands/` — one per interactive process, T3.2
 - `agents/` — one per batch process, T3.2
@@ -259,7 +255,7 @@ Documents at the top level, code below it.
 
 **State**
 
-- Written: this document, `db-init.md`.
+- Written: this document, `tools/db-init.md`.
 - Built: `tools/db-init.py`.
 - `builds/proto1/tools` is the working precedent for the rest, and has not
   been moved here.
