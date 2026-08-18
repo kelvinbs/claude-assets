@@ -1,12 +1,17 @@
 # Board-build
 
-The tool takes a part that has a datasheet and produces a fabrication
-package. It is pointed at a database and a set of placement intents, and it
-emits the schematic, the board and the outputs. Nothing in it is specific
-to one product.
+A framework for agent-assisted hardware design. It holds the processes that
+carry a board through KiCad, the documents that describe them, and the
+scripts they call. Nothing in it is specific to one product.
 
-It is carried out by an agent. It is deterministic where it can be and
-inferential where it must be, and it states which is which at every step.
+The board is not specified in advance. It is designed by working the
+processes in order, and revised by re-entering them — a part is added, a
+specification changes, the affected processes run again. The tool is
+entered at whichever step is next, not run end to end.
+
+Design choices are made with the agent's assistance. Availability and price
+come from the JLCPCB API, which is the only distributor interface that
+answers, or from distributor tables the user downloads and hands over.
 
 ## Contents
 
@@ -21,69 +26,67 @@ inferential where it must be, and it states which is which at every step.
 
 | | |
 |---|---|
-| Starts at | A part that has a datasheet and a record row |
-| Ends at | Gerbers, drill, centroid and BOM, ready for a fabricator |
-| Holds | The tools, their documents, and the schema they read |
+| Covers | The KiCad design process, from the parts table to the fabrication package |
+| Entered | At any process, as often as the design needs |
+| Excludes | Connectivity. Nets are drawn in the schematic editor and the tool never reads or writes a wire |
+| Excludes | Routing. The board's copper is the user's |
 
-**T1.2 — The flow**
+**T1.2 — Where the tool works and where the user does**
 
-| # | Step |
+| Step | Whose |
 |---|---|
-| 1 | Define a part |
-| 2 | Place it |
-| 3 | Render |
-| 4 | Verify |
-| 5 | Fabricate |
-| 6 | Source |
+| Parts table | Tool, with the user's decisions |
+| Symbols, footprints, models | Tool |
+| Placing symbols on their page | Tool |
+| Wiring | User |
+| Footprint assignment | Tool |
+| Board outline, stackup | User |
+| Placing footprints in their region | Tool |
+| Routing | User |
+| ERC, DRC | Tool runs them and reports |
+| Gerbers, drill, centroid, BOM | Tool |
 
-**T1.3 — The schema**
+**T1.3 — The parts table**
 
-| Table | One row per | Columns | Owner |
-|---|---|---|---|
-| `part` | IPN | Function, requirement, package, pins, pitch, footprint, symbol, datasheet, pins checked, origin | Hand |
-| `aml` | IPN and MPN | Manufacturer, rank, approved, note | Hand |
-| `sourcing` | MPN | Distributor, part number, price, stock, lifecycle, library tier, priced on | Generated |
+The design begins here, and every later process reads it. It carries what a
+part is, and it is the input a new part is entered into.
+
+| Holds | |
+|---|---|
+| Identity | Part number, manufacturer, function |
+| Physical | Package, pins, pitch |
+| Library | Symbol, footprint, model, pins checked |
+| Placement | The page a symbol goes on, the region a footprint goes in |
+| Source | Where the part comes from, and the alternates that may replace it |
+
+Market data — price, stock, lifecycle — is fetched, never typed, and is
+held apart from the fields above so it can be discarded and fetched again.
 
 **T1.4 — What the schematic carries**
 
-| Field | Built in | Holds |
-|---|---|---|
-| `Reference` | Yes | U3, C12 |
-| `Value` | Yes | What the part is, as read on the page |
-| `Footprint` | Yes | The land pattern |
-| `IPN` | No | The join key into the database |
-
-Four fields. Everything else is joined from the database when an output is
-written.
-
-**T1.5 — Placement fields**
-
-| Field | Holds |
+| Field | Built in |
 |---|---|
-| `sheet_room` | The page a part is drawn on |
-| `sheet_x`, `sheet_y` | Its position on that page |
-| `board_room` | The region of the board it sits inside |
-| `board_x`, `board_y` | Its position within that region |
+| `Reference` | Yes |
+| `Value` | Yes |
+| `Footprint` | Yes |
+| The key back to the parts table | No |
 
 ## 2 — Assets
 
 **T2.1 — What constitutes a board project**
 
-| Asset | Kind | Owner |
-|---|---|---|
-| `parts.db` | Database — `part`, `aml`, `sourcing` | Hand, except `sourcing` |
-| `lib/*.kicad_sym` | Symbol libraries | Hand |
-| `lib/*.pretty` | Footprint libraries | Hand |
-| `lib/3d/` | Models | Hand |
-| `datasheets/` | Source documents | Hand |
-| `*.kicad_pro` | Project file | Generated once |
-| `*.kicad_sch` | Root sheet and pages | Updated |
-| `*.kicad_pcb` | Board | Updated |
-| `board-setup` | Stackup, fabricator rules, DRC rule set | Hand |
-| `out/netlist` | Intermediate | Generated |
-| `out/gerber`, `out/drill`, `out/centroid` | Fabrication package | Generated |
-| `out/bom` | Order table | Generated |
-| `out/erc`, `out/drc` | Reports | Generated |
+| Asset | Owner |
+|---|---|
+| The parts table | Hand, except the market columns |
+| `lib/*.kicad_sym` | Hand |
+| `lib/*.pretty` | Hand |
+| `lib/3d/` | Hand |
+| `datasheets/` | Hand |
+| `*.kicad_pro` | Generated once |
+| `*.kicad_sch` | Updated by the tool, wired by the user |
+| `*.kicad_pcb` | Updated by the tool, routed by the user |
+| Board setup — stackup, fabricator rules, DRC rules | Hand |
+| `out/` — netlist, gerbers, drill, centroid, BOM, reports | Generated |
 
 **T2.2 — The clone**
 
@@ -101,23 +104,28 @@ missing. No library, footprint or model resolves outside the repository.
 | Symbols, footprints, models | Copied into `lib/`, and owned from that point |
 
 The check runs against a fresh clone rather than the working copy, and
-fails the build on any of the above.
+fails on any of the above.
 
 ## 3 — Processes
 
-**T3.1 — What each one does**
+**T3.1 — In order**
 
-| Process | Does |
-|---|---|
-| Define parts | Reads a datasheet and writes a `part` row, a symbol, a footprint and a model |
-| Update schematic | Writes every page from the database, placing new parts in their sheet room |
-| Update board | Writes the board, placing new parts in their board room |
-| Verify | ERC and DRC |
-| Output | Gerber, drill, centroid, BOM |
-| Source | Joins MPNs to the distributor APIs |
+| # | Process | Does |
+|---|---|---|
+| 1 | Define parts | Enters a part in the table from its datasheet, and draws its symbol, footprint and model |
+| 2 | Update schematic | Places every part that is not yet on a page, in the page and position the table gives it |
+| 3 | Update board | Places every footprint that is not yet on the board, in the region the table gives it |
+| 4 | Verify | Runs ERC and DRC, and reports |
+| 5 | Output | Writes the netlist, gerbers, drill, centroid and BOM |
+| 6 | Source | Reads availability and price for what the board needs |
 
-After a run, the file and the database name the same set of parts. The
-database owns what a part is. The file owns where it sits.
+Between 2 and 3 the user wires the schematic. After 3 the user routes.
+
+**T3.2 — Re-entry**
+
+A process adds what is missing and leaves what is there. A part already
+placed keeps its position, its wiring and its routing. A process reports
+what it found and did not touch; it deletes nothing.
 
 ## 4 — Tools
 
@@ -126,14 +134,13 @@ document and calls the scripts. It writes code only to cover a gap in them,
 and declares what it wrote so the gap can be closed.
 
 Each tool document opens with the assets it reads and the assets it writes.
-The container names no sub-step.
 
 **T4.1 — Layout**
 
 | Path | Holds |
 |---|---|
 | `board-build-tool.md` | This container |
-| `define-parts.md` | One document per tool |
+| `define-parts.md` | One document per process |
 | `update-sch.md` | |
 | `update-pcb.md` | |
 | `scripts/` | Shared, called by any tool |
