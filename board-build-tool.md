@@ -1,6 +1,6 @@
 # board-build
 
-board-build takes a part that has a datasheet and produces a fabrication
+The tool takes a part that has a datasheet and produces a fabrication
 package. It is pointed at a database and a set of placement intents, and it
 emits the schematic, the board and the outputs. Nothing in it is specific
 to one product.
