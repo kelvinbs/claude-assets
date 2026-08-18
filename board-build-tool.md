@@ -256,6 +256,7 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 **State**
 
-- Written: this document.
-- Built: nothing. `builds/proto1/tools` is the working precedent, and has
-  not been moved here.
+- Written: this document, `db-init.md`.
+- Built: `scripts/db-init.py`.
+- `builds/proto1/tools` is the working precedent for the rest, and has not
+  been moved here.
