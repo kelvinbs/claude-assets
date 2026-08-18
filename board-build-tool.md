@@ -24,13 +24,13 @@ answers, or from distributor tables the User downloads and hands over.
 
 **Scope**
 
-- Covers the KiCad design process, from the parts table to the outputs.
+- Covers the KiCad design process, from the parts data to the outputs.
 - Entered at any process, as often as the design needs.
 
 **The split**
 
 - Tool
-  - The parts table, on the User's decisions
+  - The parts data, on the User's decisions
   - Symbols, footprints, models
   - Placing symbols on their page
   - Footprint assignment
@@ -41,24 +41,53 @@ answers, or from distributor tables the User downloads and hands over.
   - Board outline and stackup
   - Routing
 
-**The parts table**
+**The data**
 
-The design begins here, and every later process reads it. It carries what a
-part is, and it is the input a new part is entered into.
+The design keys to an **IPN** — an internal part number, this project's own
+handle for a part. It is not a manufacturer part number. An MPN is data
+hanging off an IPN, and several MPNs may satisfy one.
 
-- Identity — part number, manufacturer, function
-- Physical — package, pins, pitch
-- Library — symbol, footprint, model, pins checked
-- Placement — the page a symbol goes on, the region a footprint goes in
-- Source — where the part comes from, and the alternates that may replace it
+Parameters flow one way, database to design. A field is never edited on the
+sheet.
 
-Market data — price, stock, lifecycle — is fetched, never typed, and is held
-apart from the fields above so it can be discarded and fetched again.
+**T1.1 — Where the data lives**
+
+| File | Tables | Role | Committed |
+|---|---|---|---|
+| `design.db` | `ipn`, `page`, `room` | Master for design fields. Pushes to KiCad | Yes |
+| `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` | Yes |
+| `sourcing.db` | `aml`, `mpn`, `offer` | Order time. Fetched, refetchable | `aml` yes. `mpn` and `offer` are cache |
+
+KiCad is the native store for design use, generally updated from the master.
+Ordering reads `sourcing.db` and never writes a design file. Design never
+reads `sourcing.db`. The join between them is `aml.ipn`.
+
+Availability and price come from the JLCPCB API, the only distributor
+interface that answers, or from distributor tables the User downloads and
+hands over.
+
+**T1.2 — The tables**
+
+| Table | Fields |
+|---|---|
+| `ipn` | `ipn`, `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page`, `room_id`, `qty`, `status` |
+| `page` | `page`, `position`, `paper`, `title` |
+| `room` | `room_id`, `name`, `layer`, `note` |
+| `aml` | `ipn`, `mpn`, `rank`, `approved`, `approved_by`, `approved_on`, `drop_in`, `note` |
+| `mpn` | `mpn`, `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
+| `offer` | `mpn`, `distributor`, `sku`, `currency`, `price`, `break_qty`, `stock`, `moq`, `lead_days`, `fetched_at` |
+
+`ipn.page` names a row of `page`, `ipn.room_id` a row of `room`. `aml` is the
+approved manufacturer list: which MPNs may be built against an IPN, ranked,
+each approval dated and attributed.
 
 **What the schematic carries**
 
 - `Reference`, `Value` and `Footprint`, all built in
-- The key back to the parts table, which is not
+- `ipn`, the key back to `design.db`, which is not
+
+`Value` is drawn from the IPN, not from a manufacturer part number — which of
+`ipn.description` or the ranked `aml` MPN fills it is not yet settled.
 
 ## 2 — Assets
 
@@ -66,7 +95,9 @@ apart from the fields above so it can be discarded and fetched again.
 
 | Asset | Owner |
 |---|---|
-| The parts table | Hand, except the market columns |
+| `design.db` | Hand |
+| `sourcing.db` — `aml` | Hand |
+| `sourcing.db` — `mpn`, `offer` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
@@ -104,11 +135,11 @@ the tools in section 4.
 
 | # | Process | In | Out | User then |
 |---|---|---|---|---|
-| 1 | Define parts | Datasheet<br>Record row | Table row<br>Symbol<br>Footprint<br>Model | — |
-| 2 | Update schematic | Table | `*.kicad_sch`<br>Symbols, on their page | Wires |
-| 3 | Update board | Table<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, in their region | Routes |
+| 1 | Define parts | Datasheet<br>Record row | `ipn` row<br>Symbol<br>Footprint<br>Model | — |
+| 2 | Update schematic | `design.db` | `*.kicad_sch`<br>Symbols, on their page | Wires |
+| 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, in their region | Routes |
 | 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
-| 5 | Source | Table | Price<br>Stock<br>Availability | — |
+| 5 | Source | `aml` | Price<br>Stock<br>Availability | — |
 
 **The RF-simulation file**
 
