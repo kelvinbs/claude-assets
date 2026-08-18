@@ -82,6 +82,37 @@ hands over.
 tool may use in choosing where a footprint goes; it constrains nothing, and a
 KiCad group is nothing more than a list of parts.
 
+**The IPN**
+
+`AAA-NNNN`. `AAA` is the part class, from the list below. `NNNN` is
+sequential inside that class, from `0001`, and is never reused.
+
+No project prefix — the database is the project. No revision suffix — a
+change of form, fit or function is a new IPN, and a change that is none of
+those is a second MPN against the same one, which is what `aml_table` holds.
+
+| Code | Class |
+|---|---|
+| `RES` | resistor |
+| `CAP` | capacitor |
+| `IND` | inductor, ferrite |
+| `FIL` | filter |
+| `AMP` | amplifier |
+| `MIX` | mixer |
+| `SYN` | synthesizer, PLL |
+| `SWI` | RF switch |
+| `OSC` | oscillator, reference |
+| `MCU` | processor, memory |
+| `SNS` | sensor |
+| `PWR` | regulator, converter |
+| `CON` | connector |
+| `ANT` | antenna, panel |
+| `MEC` | mechanical, enclosure |
+| `TST` | test point, cal standard |
+
+`category` carries the class word, so the prefix is never the only place the
+class is recorded. A class the list does not hold is added here first.
+
 **T1.3 — `sourcing.db`**
 
 | Table | Key | Fields |
