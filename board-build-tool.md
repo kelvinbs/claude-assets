@@ -84,6 +84,24 @@ Four. Everything else is joined from the database at output time.
 | `out/bom` | Order table | Generated |
 | `out/erc`, `out/drc` | Reports | Generated |
 
+**T2.2 — The clone**
+
+The file organisation exists for one reason: a clone into an empty
+directory, on a fresh KiCad install, opens and edits with nothing
+missing. No library, footprint or model resolves outside the repository.
+
+| | |
+|---|---|
+| Library tables | `sym-lib-table` and `fp-lib-table` sit in the project directory and are committed |
+| Paths in them | `${KIPRJMOD}/lib/...` |
+| Model paths in each `.kicad_mod` | `${KIPRJMOD}/lib/3d/...` |
+| Nicknames | Prefixed to the project, so a global entry on another machine cannot collide |
+| Other path variables | None. No `${KICAD9_SYMBOL_DIR}` or its kind, no absolute paths, anywhere |
+| Symbols, footprints, models | Copied into `lib/`, then owned |
+
+The check script fails the build on any of those, and is run against a
+fresh clone rather than the working copy.
+
 ## 3 — Processes
 
 **T3.1 — What each one does**
