@@ -84,34 +84,42 @@ KiCad group is nothing more than a list of parts.
 
 **The IPN**
 
-`AAA-NNNN`. `AAA` is the part class, from the list below. `NNNN` is
-sequential inside that class, from `0001`, and is never reused.
+`ANNNN`. One letter for the part class, from the list below, then four
+digits. The digits are sequential inside that letter, from `0001`, and are
+never reused.
 
 No project prefix — the database is the project. No revision suffix — a
 change of form, fit or function is a new IPN, and a change that is none of
 those is a second MPN against the same one, which is what `aml_table` holds.
 
-| Code | Class |
+| Letter | Class |
 |---|---|
-| `RES` | resistor |
-| `CAP` | capacitor |
-| `IND` | inductor, ferrite |
-| `FIL` | filter |
-| `AMP` | amplifier |
-| `MIX` | mixer |
-| `SYN` | synthesizer, PLL |
-| `SWI` | RF switch |
-| `SPL` | splitter, coupler, bias tee |
-| `OSC` | oscillator, reference |
-| `MCU` | processor, memory |
-| `SNS` | sensor |
-| `PWR` | regulator, converter |
-| `CON` | connector |
-| `ANT` | antenna, panel |
-| `MEC` | mechanical, enclosure |
-| `TST` | test point, cal standard |
+| `A` | amplifier |
+| `C` | capacitor |
+| `E` | antenna, panel |
+| `F` | filter |
+| `G` | synthesizer, PLL |
+| `H` | mechanical, enclosure |
+| `J` | connector |
+| `K` | switch |
+| `L` | inductor, ferrite |
+| `M` | mixer |
+| `P` | regulator, converter |
+| `R` | resistor |
+| `S` | sensor |
+| `T` | test point, cal standard |
+| `U` | processor, memory |
+| `W` | splitter, coupler, bias tee |
+| `Y` | oscillator, reference |
 
-`category` carries the class word, so the prefix is never the only place the
+Ten of them are the KiCad reference-designator letter for the same thing, so
+the letter reads as itself to anyone who has opened a schematic.
+
+An IPN therefore looks like a reference designator — `U0001` beside `U1`.
+The four fixed digits are what keep them apart, and the IPN never reaches the
+`Value` field in any case.
+
+`category` carries the class word, so the letter is not the only place the
 class is recorded. A class the list does not hold is added here first.
 
 **T1.3 — `sourcing.db`**
