@@ -22,55 +22,47 @@ answers, or from distributor tables the User downloads and hands over.
 
 ## 1 — Introduction
 
-**T1.1 — Scope**
+**Scope**
 
-| | |
-|---|---|
-| Covers | The KiCad design process, from the parts table to the outputs |
-| Entered | At any process, as often as the design needs |
+- Covers the KiCad design process, from the parts table to the outputs.
+- Entered at any process, as often as the design needs.
 
-**T1.2 — Where the tool works and where the User does**
+**The split**
 
-| Step | Whose |
-|---|---|
-| Parts table | Tool, with the User's decisions |
-| Symbols, footprints, models | Tool |
-| Placing symbols on their page | Tool |
-| Wiring | User |
-| Footprint assignment | Tool |
-| Board outline, stackup | User |
-| Placing footprints in their region | Tool |
-| Routing | User |
-| RF-simulation file | Tool |
+- Tool
+  - The parts table, on the User's decisions
+  - Symbols, footprints, models
+  - Placing symbols on their page
+  - Footprint assignment
+  - Placing footprints in their region
+  - The RF-simulation file
+- User
+  - Wiring
+  - Board outline and stackup
+  - Routing
 
-**T1.3 — The parts table**
+**The parts table**
 
 The design begins here, and every later process reads it. It carries what a
 part is, and it is the input a new part is entered into.
 
-| Holds | |
-|---|---|
-| Identity | Part number, manufacturer, function |
-| Physical | Package, pins, pitch |
-| Library | Symbol, footprint, model, pins checked |
-| Placement | The page a symbol goes on, the region a footprint goes in |
-| Source | Where the part comes from, and the alternates that may replace it |
+- Identity — part number, manufacturer, function
+- Physical — package, pins, pitch
+- Library — symbol, footprint, model, pins checked
+- Placement — the page a symbol goes on, the region a footprint goes in
+- Source — where the part comes from, and the alternates that may replace it
 
-Market data — price, stock, lifecycle — is fetched, never typed, and is
-held apart from the fields above so it can be discarded and fetched again.
+Market data — price, stock, lifecycle — is fetched, never typed, and is held
+apart from the fields above so it can be discarded and fetched again.
 
-**T1.4 — What the schematic carries**
+**What the schematic carries**
 
-| Field | Built in |
-|---|---|
-| `Reference` | Yes |
-| `Value` | Yes |
-| `Footprint` | Yes |
-| The key back to the parts table | No |
+- `Reference`, `Value` and `Footprint`, all built in
+- The key back to the parts table, which is not
 
 ## 2 — Assets
 
-**T2.1 — What constitutes a board project**
+**T2.1 — The board project**
 
 | Asset | Owner |
 |---|---|
@@ -85,20 +77,20 @@ held apart from the fields above so it can be discarded and fetched again.
 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | `out/` — RF-simulation file | Generated |
 
-**T2.2 — The clone**
+**The clone**
 
 The file organisation exists for one reason. A clone into an empty
 directory, on a fresh KiCad install, must open and edit with nothing
 missing. No library, footprint or model resolves outside the repository.
 
-| | |
-|---|---|
-| Library tables | `sym-lib-table` and `fp-lib-table` sit in the project directory and are committed |
-| Paths in them | `${KIPRJMOD}/lib/...` |
-| Model paths in each `.kicad_mod` | `${KIPRJMOD}/lib/3d/...` |
-| Nicknames | Prefixed to the project, so a global entry on another machine cannot collide |
-| Other path variables | None. No `${KICAD9_SYMBOL_DIR}` or its equivalents, and no absolute paths |
-| Symbols, footprints, models | Copied into `lib/`, and owned from that point |
+- `sym-lib-table` and `fp-lib-table` sit in the project directory and are committed.
+- Every path in them is `${KIPRJMOD}/lib/...`.
+- Every model path in every `.kicad_mod` is `${KIPRJMOD}/lib/3d/...`.
+- Nicknames are prefixed to the project, so a global entry on another
+  machine cannot collide.
+- No other path variable appears, and no absolute path.
+- Symbols, footprints and models are copied into `lib/`, and owned from that
+  point.
 
 The check runs against a fresh clone rather than the working copy, and
 fails on any of the above.
@@ -118,7 +110,7 @@ the tools in section 4.
 | 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
 | 5 | Source | Table | Price<br>Stock<br>Availability | — |
 
-**T3.2 — The RF-simulation file**
+**The RF-simulation file**
 
 Output writes the files `rf-simulation` reads. Geometry in three dimensions
 is carried on the KiCad User layers. Each layer names a vertical position
@@ -126,7 +118,7 @@ and a height; the objects drawn on it are the boxes at that level,
 dielectric or conductor. The naming grammar and the export are defined
 later.
 
-**T3.3 — Re-entry**
+**Re-entry**
 
 A process adds what is missing and leaves what is there. A part already
 placed keeps its position, its wiring and its routing. A process reports
@@ -157,17 +149,14 @@ Each tool document opens with the assets it reads and the assets it writes.
 | `stock-query` | Source |
 | `clone-check` | Any |
 
-**T4.2 — Layout**
+**Layout**
 
-| Path | Holds |
-|---|---|
-| `board-build-tool.md` | This container |
-| `<tool>.md` | One document per tool |
-| `scripts/` | Shared, called by any tool |
+- `board-build-tool.md` — this container
+- `<tool>.md` — one document per tool
+- `scripts/` — shared, called by any tool
 
-**T4.3 — State**
+**State**
 
-| | |
-|---|---|
-| Written | This document |
-| Built | Nothing. `builds/proto1/tools` is the working precedent, and has not been moved here |
+- Written: this document.
+- Built: nothing. `builds/proto1/tools` is the working precedent, and has
+  not been moved here.
