@@ -148,13 +148,21 @@ fails on any of the above.
 A process takes the output of the one before it. Each uses one or more of
 the tools in section 4.
 
-| # | Process | In | Out | User then |
-|---|---|---|---|---|
-| 1 | Define or modify parts | Datasheet<br>Record row | `parts_table` row<br>Symbol<br>Footprint<br>Model | — |
-| 2 | Update schematic | `design.db` | `*.kicad_sch`<br>Symbols, on their page | Wires |
-| 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, placed | Routes |
-| 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
-| 5 | Source | `aml_table` | Price<br>Stock<br>Availability | — |
+| # | Process | In | Out | Tools | User then |
+|---|---|---|---|---|---|
+| 1 | Define or modify parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
+| 2 | Update library | `design.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
+| 3 | Update schematic | `design.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `sheet-place` | Wires |
+| 4 | Update board | `design.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `board-place` | Routes |
+| 5 | Output | `*.kicad_pcb` | RF-simulation file | `layer-export` | — |
+| 6 | Source | `aml_table` | Price<br>Stock<br>Availability | `stock-query` | — |
+
+Defining a part and building its library objects are separate. A part is
+picked, described and given an IPN in process 1; the symbol, footprint and
+model are built in process 2, from the rows that are missing them. One is
+hand work against a schema, the other is a batch run.
+
+`clone-check` sits outside the chain. It is run after process 2.
 
 **The RF-simulation file**
 
@@ -172,21 +180,35 @@ what it found and did not touch; it deletes nothing.
 
 **T3.2 — One agent per process**
 
-Each process in T3.1 is an agent. The agent is entered on its own, holds its
-own context, and calls the tools T3.1 gives it. Agents are written one at a
-time and each is agreed working before the next is started; the order is
-processes 1 and 2 together, then 3, then 4, then 5.
+Each process in T3.1 is entered on its own and calls the tools its row names.
+They are written one at a time, each agreed working before the next is
+started: 1 and 2, then 3, then 4, then 5, then 6.
 
-The agent files are tool assets and live in this folder, not in `.claude/`.
-Claude Code reads agents and skills only from fixed paths, so the folder is
-carried as a plugin:
+A process that needs the User mid-run is a command, loaded into the running
+session. A process that runs to completion on its own is an agent, holding
+its own context and reporting at the end. A subagent cannot ask a question,
+so the split is not a preference.
+
+| # | Process | Form |
+|---|---|---|
+| 1 | Define or modify parts | Command |
+| 2 | Update library | Agent. Asks only when a datasheet does not carry the pinout |
+| 3 | Update schematic | Agent |
+| 4 | Update board | Agent |
+| 5 | Output | Agent |
+| 6 | Source | Agent |
+
+The files are tool assets and live in this folder, not in `.claude/`. Claude
+Code reads commands, agents and skills only from fixed paths, so the folder
+is carried as a plugin:
 
 | Path | Holds |
 |---|---|
 | `.claude-plugin/plugin.json` | the plugin manifest |
 | `.claude-plugin/marketplace.json` | the local marketplace entry |
-| `agents/<process>.md` | one agent per process |
-| `skills/<name>/SKILL.md` | skills the agents load |
+| `commands/<process>.md` | one command per interactive process |
+| `agents/<process>.md` | one agent per batch process |
+| `skills/<name>/SKILL.md` | skills the commands and agents load |
 
 A fresh clone installs it once:
 
@@ -220,16 +242,15 @@ Each tool document opens with the assets it reads and the assets it writes.
 | `stock-query` | Fetch price, stock and lifecycle | `sourcing.db` — `aml_table`, JLCPCB API | `sourcing.db` — `mpn_table`, `offer_table` |
 | `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
 
-Which process uses which tool is T3.1.
-
 **Layout**
 
 - `board-build-tool.md` — this container
 - `<tool>.md` — one document per tool
 - `scripts/` — shared, called by any tool
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
-- `agents/` — one agent per process, T3.2
-- `skills/` — skills the agents load
+- `commands/` — one per interactive process, T3.2
+- `agents/` — one per batch process, T3.2
+- `skills/` — skills they load
 
 **State**
 
