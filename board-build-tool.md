@@ -57,7 +57,7 @@ never carries the suffix, so a table and its key are never the same word.
 
 | File | Holds | Role |
 |---|---|---|
-| `design.db` | `parts_table` | Master for the design fields. Pushes to KiCad |
+| `design.db` | `parts_table`, `ref_table` | Master for the design fields. Pushes to KiCad |
 | `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
 | `sourcing.db` | `aml_table`, `mpn_table`, `offer_table` | Order time |
 
@@ -76,11 +76,32 @@ hands over.
 
 | Table | Key | Fields |
 |---|---|---|
-| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page`, `room`, `qty`, `status` |
+| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `source`, `status` |
+| `ref_table` | `ref` | `ipn`, `page`, `room` |
+
+`parts_table` is the part. One row per IPN, whatever the board uses it for.
+
+`ref_table` is the instance. `U1` and `U2` are two rows carrying one `ipn`,
+and they are free to sit on different pages and in different rooms. A part
+used forty times is one `parts_table` row and forty `ref_table` rows.
+
+There is no `qty` field. Quantity is `count(*) from ref_table group by ipn`,
+and a field would only be a second place for it to be wrong.
 
 `page` names the schematic page the symbol is placed on. `room` is a tag the
 tool may use in choosing where a footprint goes; it constrains nothing, and a
-KiCad group is nothing more than a list of parts.
+KiCad group is nothing more than a list of parts. Both are properties of the
+instance, not of the part.
+
+`source` records where the library object came from — `stock`, `vendor` or
+`hand`. Once a symbol is copied into `lib/` under the clone rule of section
+2, nothing else distinguishes a copied stock symbol from a drawn one.
+
+**Which way `ref` flows**
+
+Every other field is pushed from the database to KiCad. `ref` is not.
+Annotation happens in the editor, so `ref_table` is written from the sheets
+after annotation, and is the one place the rule of this section is reversed.
 
 **The IPN**
 
