@@ -183,17 +183,19 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 **T4.1 — The tools**
 
-| Tool | Used by | Reads | Writes |
+| Tool | Function | In | Out |
 |---|---|---|---|
-| `datasheet-read` | Define or modify parts | `datasheets/` | Pins, package, physical fields |
-| `symbol-draw` | Define or modify parts | Pins from `datasheet-read` | `lib/*.kicad_sym` |
-| `footprint-draw` | Define or modify parts | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Define or modify parts | Record row, `datasheet-read` | `design.db` — `parts_table` |
-| `sheet-place` | Update schematic | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
-| `board-place` | Update board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
-| `layer-export` | Output | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Source | `sourcing.db` — `aml_table`, JLCPCB API | `sourcing.db` — `mpn_table`, `offer_table` |
-| `clone-check` | Any | A fresh clone of the project | Nothing. A verdict |
+| `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
+| `symbol-draw` | Draw a symbol from a pinout | Pins from `datasheet-read` | `lib/*.kicad_sym` |
+| `footprint-draw` | Draw a footprint and bind a model | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
+| `table-write` | Enter or revise a part | Record row, `datasheet-read` | `design.db` — `parts_table` |
+| `sheet-place` | Place symbols on their page | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
+| `board-place` | Place footprints on the board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
+| `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
+| `stock-query` | Fetch price, stock and lifecycle | `sourcing.db` — `aml_table`, JLCPCB API | `sourcing.db` — `mpn_table`, `offer_table` |
+| `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
+
+Which process uses which tool is T3.1.
 
 **Layout**
 
