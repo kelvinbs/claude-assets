@@ -97,11 +97,12 @@ instance, not of the part.
 `hand`. Once a symbol is copied into `lib/` under the clone rule of section
 2, nothing else distinguishes a copied stock symbol from a drawn one.
 
-**Which way `ref` flows**
+**Who assigns `ref`**
 
-Every other field is pushed from the database to KiCad. `ref` is not.
-Annotation happens in the editor, so `ref_table` is written from the sheets
-after annotation, and is the one place the rule of this section is reversed.
+The tool does, and KiCad never renumbers. A `ref_table` row exists before the
+symbol is placed, because `page` is on the instance and `sheet-place` has
+nothing to read otherwise. Annotation in the editor would overwrite the key
+the placement was made against, so it is not used.
 
 **The IPN**
 

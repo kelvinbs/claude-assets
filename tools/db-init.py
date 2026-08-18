@@ -27,10 +27,14 @@ SCHEMA = {
             "footprint     TEXT",
             "model         TEXT",
             "pins_checked  TEXT",
+            "source        TEXT",
+            "status        TEXT",
+        ),
+        "ref_table": (
+            "ref           TEXT PRIMARY KEY",
+            "ipn           TEXT NOT NULL",
             "page          TEXT",
             "room          TEXT",
-            "qty           INTEGER",
-            "status        TEXT",
         ),
     },
     "sourcing.db": {
