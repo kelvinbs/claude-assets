@@ -30,6 +30,7 @@ answers, or from distributor tables the User downloads and hands over.
 | Entered | At any process, as often as the design needs |
 | Excludes | Connectivity. Nets are drawn in the schematic editor and the tool never reads or writes a wire |
 | Excludes | Routing. The board's copper is the User's |
+| Excludes | Design rules. ERC and DRC are run in KiCad by the User |
 
 **T1.2 — Where the tool works and where the User does**
 
@@ -43,7 +44,7 @@ answers, or from distributor tables the User downloads and hands over.
 | Board outline, stackup | User |
 | Placing footprints in their region | Tool |
 | Routing | User |
-| ERC, DRC | Tool runs them and reports |
+| ERC, DRC | User, in KiCad |
 | Gerbers, drill, centroid, BOM | Tool |
 
 **T1.3 — The parts table**
@@ -115,9 +116,8 @@ fails on any of the above.
 | 1 | Define parts | Datasheet | Table row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | Table | Symbols, on their page | Wires |
 | 3 | Update board | Table<br>Schematic | Footprints, in their region | Routes |
-| 4 | Verify | Schematic<br>Board | ERC report<br>DRC report | — |
-| 5 | Output | Schematic<br>Board | Netlist<br>Gerbers<br>Drill<br>Centroid<br>BOM | — |
-| 6 | Source | Table | Price<br>Stock<br>Lifecycle | — |
+| 4 | Output | Schematic<br>Board | Netlist<br>Gerbers<br>Drill<br>Centroid<br>BOM | — |
+| 5 | Source | Table | Price<br>Stock<br>Lifecycle | — |
 
 **T3.2 — Re-entry**
 
