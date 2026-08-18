@@ -34,7 +34,7 @@ answers, or from distributor tables the User downloads and hands over.
   - Symbols, footprints, models
   - Placing symbols on their page
   - Footprint assignment
-  - Placing footprints in their region
+  - Placing footprints on the board
   - The RF-simulation file
 - User
   - Wiring
@@ -54,7 +54,7 @@ sheet.
 
 | File | Tables | Role | Committed |
 |---|---|---|---|
-| `design.db` | `parts`, `pages`, `rooms` | Master for design fields. Pushes to KiCad | Yes |
+| `design.db` | `parts` | Master for design fields. Pushes to KiCad | Yes |
 | `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` | Yes |
 | `sourcing.db` | `aml`, `mpns`, `offers` | Order time. Fetched, refetchable | `aml` yes. `mpns` and `offers` are cache |
 
@@ -72,16 +72,18 @@ Tables are plural, keys singular. No name does double duty.
 
 | File | Table | Key | Fields |
 |---|---|---|---|
-| `design.db` | `parts` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page_id`, `room_id`, `qty`, `status` |
-| `design.db` | `pages` | `page_id` | `position`, `paper`, `title` |
-| `design.db` | `rooms` | `room_id` | `name`, `layer`, `note` |
+| `design.db` | `parts` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page`, `room`, `qty`, `status` |
 | `sourcing.db` | `aml` | `ipn` + `mpn` | `rank`, `approved`, `approved_by`, `approved_on`, `drop_in`, `note` |
 | `sourcing.db` | `mpns` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
 | `sourcing.db` | `offers` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
-`parts.page_id` names a row of `pages`, `parts.room_id` a row of `rooms`. `aml`
-is the approved manufacturer list: which MPNs may be built against an IPN,
-ranked, each approval dated and attributed.
+`page` and `room` are fields, not tables. `page` names the schematic page the
+symbol is placed on. `room` is a tag the tool may use in choosing where a
+footprint goes; it constrains nothing, and a KiCad group is nothing more than
+a list of parts.
+
+`aml` is the approved manufacturer list: which MPNs may be built against an
+IPN, ranked, each approval dated and attributed.
 
 **What the schematic carries**
 
@@ -139,7 +141,7 @@ the tools in section 4.
 |---|---|---|---|---|
 | 1 | Define parts | Datasheet<br>Record row | `parts` row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | `design.db` | `*.kicad_sch`<br>Symbols, on their page | Wires |
-| 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, in their region | Routes |
+| 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, placed | Routes |
 | 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
 | 5 | Source | `aml` | Price<br>Stock<br>Availability | — |
 
