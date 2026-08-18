@@ -103,7 +103,7 @@ IPN, ranked, each approval dated and attributed.
 |---|---|
 | `design.db` | Hand |
 | `sourcing.db` — `aml` | Hand |
-| `sourcing.db` — `mpns`, `offers` | Fetched. Discardable |
+| `sourcing.db` — `mpn`, `offer` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
