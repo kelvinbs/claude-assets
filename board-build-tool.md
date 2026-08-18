@@ -101,6 +101,7 @@ those is a second MPN against the same one, which is what `aml_table` holds.
 | `MIX` | mixer |
 | `SYN` | synthesizer, PLL |
 | `SWI` | RF switch |
+| `SPL` | splitter, coupler, bias tee |
 | `OSC` | oscillator, reference |
 | `MCU` | processor, memory |
 | `SNS` | sensor |
