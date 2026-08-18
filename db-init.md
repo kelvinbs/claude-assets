@@ -9,7 +9,7 @@ before any process. It is outside the chain — see T3.1.
 | | `sourcing.db` — `aml_table`, `mpn_table`, `offer_table` |
 
 ```
-python3 tools/board-build/scripts/db-init.py <board-dir>
+python3 tools/board-build/tools/db-init.py <board-dir>
 ```
 
 `<board-dir>` is the KiCad project directory. Both databases are written
@@ -18,7 +18,7 @@ there, beside the design files.
 ## The schema
 
 Four tables, and their columns are T1.2 and T1.3 of `board-build-tool.md`.
-`scripts/db-init.py` holds them in executable form and is the only place
+`tools/db-init.py` holds them in executable form and is the only place
 they are written as DDL. A column added to T1.2 or T1.3 is added there in
 the same commit.
 

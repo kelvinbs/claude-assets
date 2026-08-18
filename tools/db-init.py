@@ -4,7 +4,7 @@
 The schema is T1.2 and T1.3 of board-build-tool.md and nothing else. The
 script is the one place it is written down in executable form.
 
-    python3 tools/board-build/scripts/db-init.py <board-dir>
+    python3 tools/board-build/tools/db-init.py <board-dir>
 
 It adds what is missing and leaves what is there. An existing table whose
 columns do not match the schema stops the run and is named. Nothing is
