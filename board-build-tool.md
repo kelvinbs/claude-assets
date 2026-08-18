@@ -170,6 +170,31 @@ A process adds what is missing and leaves what is there. A part already
 placed keeps its position, its wiring and its routing. A process reports
 what it found and did not touch; it deletes nothing.
 
+**T3.2 — One agent per process**
+
+Each process in T3.1 is an agent. The agent is entered on its own, holds its
+own context, and calls the tools T3.1 gives it. Agents are written one at a
+time and each is agreed working before the next is started; the order is
+processes 1 and 2 together, then 3, then 4, then 5.
+
+The agent files are tool assets and live in this folder, not in `.claude/`.
+Claude Code reads agents and skills only from fixed paths, so the folder is
+carried as a plugin:
+
+| Path | Holds |
+|---|---|
+| `.claude-plugin/plugin.json` | the plugin manifest |
+| `.claude-plugin/marketplace.json` | the local marketplace entry |
+| `agents/<process>.md` | one agent per process |
+| `skills/<name>/SKILL.md` | skills the agents load |
+
+A fresh clone installs it once:
+
+```
+/plugin marketplace add ./tools/board-build
+/plugin install board-build
+```
+
 ## 4 — Tools
 
 A tool is a document and a set of Python scripts. The agent follows the
@@ -202,6 +227,9 @@ Which process uses which tool is T3.1.
 - `board-build-tool.md` — this container
 - `<tool>.md` — one document per tool
 - `scripts/` — shared, called by any tool
+- `.claude-plugin/` — `plugin.json`, `marketplace.json`
+- `agents/` — one agent per process, T3.2
+- `skills/` — skills the agents load
 
 **State**
 
