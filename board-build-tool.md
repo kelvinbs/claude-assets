@@ -174,17 +174,17 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 **T4.1 — The tools**
 
-| Tool | Used by |
-|---|---|
-| `datasheet-read` | Define parts |
-| `symbol-draw` | Define parts |
-| `footprint-draw` | Define parts |
-| `table-write` | Define parts |
-| `sheet-place` | Update schematic |
-| `board-place` | Update board |
-| `layer-export` | Output |
-| `stock-query` | Source |
-| `clone-check` | Any |
+| Tool | Used by | Reads | Writes |
+|---|---|---|---|
+| `datasheet-read` | Define parts | `datasheets/` | Pins, package, physical fields |
+| `symbol-draw` | Define parts | Pins from `datasheet-read` | `lib/*.kicad_sym` |
+| `footprint-draw` | Define parts | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
+| `table-write` | Define parts | Record row, `datasheet-read` | `design.db` — `parts` |
+| `sheet-place` | Update schematic | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
+| `board-place` | Update board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
+| `layer-export` | Output | `*.kicad_pcb` | `out/` — the RF-simulation file |
+| `stock-query` | Source | `sourcing.db` — `aml`, JLCPCB API | `sourcing.db` — `mpns`, `offers` |
+| `clone-check` | Any | A fresh clone of the project | Nothing. A verdict |
 
 **Layout**
 
