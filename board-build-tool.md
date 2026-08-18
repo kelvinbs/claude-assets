@@ -11,7 +11,7 @@ entered at whichever step is next, not run end to end.
 
 Design choices are made with the agent's assistance. Availability and price
 come from the JLCPCB API, which is the only distributor interface that
-answers, or from distributor tables the user downloads and hands over.
+answers, or from distributor tables the User downloads and hands over.
 
 ## Contents
 
@@ -29,13 +29,13 @@ answers, or from distributor tables the user downloads and hands over.
 | Covers | The KiCad design process, from the parts table to the fabrication package |
 | Entered | At any process, as often as the design needs |
 | Excludes | Connectivity. Nets are drawn in the schematic editor and the tool never reads or writes a wire |
-| Excludes | Routing. The board's copper is the user's |
+| Excludes | Routing. The board's copper is the User's |
 
-**T1.2 — Where the tool works and where the user does**
+**T1.2 — Where the tool works and where the User does**
 
 | Step | Whose |
 |---|---|
-| Parts table | Tool, with the user's decisions |
+| Parts table | Tool, with the User's decisions |
 | Symbols, footprints, models | Tool |
 | Placing symbols on their page | Tool |
 | Wiring | User |
@@ -83,8 +83,8 @@ held apart from the fields above so it can be discarded and fetched again.
 | `lib/3d/` | Hand |
 | `datasheets/` | Hand |
 | `*.kicad_pro` | Generated once |
-| `*.kicad_sch` | Updated by the tool, wired by the user |
-| `*.kicad_pcb` | Updated by the tool, routed by the user |
+| `*.kicad_sch` | Updated by the tool, wired by the User |
+| `*.kicad_pcb` | Updated by the tool, routed by the User |
 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | `out/` — netlist, gerbers, drill, centroid, BOM, reports | Generated |
 
