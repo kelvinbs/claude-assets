@@ -110,16 +110,14 @@ fails on any of the above.
 
 **T3.1 — In order**
 
-| # | Process | Does |
-|---|---|---|
-| 1 | Define parts | Enters a part in the table from its datasheet, and draws its symbol, footprint and model |
-| 2 | Update schematic | Places every part that is not yet on a page, in the page and position the table gives it |
-| 3 | Update board | Places every footprint that is not yet on the board, in the region the table gives it |
-| 4 | Verify | Runs ERC and DRC, and reports |
-| 5 | Output | Writes the netlist, gerbers, drill, centroid and BOM |
-| 6 | Source | Reads availability and price for what the board needs |
-
-Between 2 and 3 the user wires the schematic. After 3 the user routes.
+| # | Process | Reads | Writes | User then |
+|---|---|---|---|---|
+| 1 | Define parts | Datasheet | Table row<br>Symbol<br>Footprint<br>Model | — |
+| 2 | Update schematic | Table | Symbols, on their page | Wires |
+| 3 | Update board | Table<br>Schematic | Footprints, in their region | Routes |
+| 4 | Verify | Schematic<br>Board | ERC report<br>DRC report | — |
+| 5 | Output | Schematic<br>Board | Netlist<br>Gerbers<br>Drill<br>Centroid<br>BOM | — |
+| 6 | Source | Table | Price<br>Stock<br>Lifecycle | — |
 
 **T3.2 — Re-entry**
 
