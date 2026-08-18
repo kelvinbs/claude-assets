@@ -125,9 +125,9 @@ MPN carries many.
 
 **The clone**
 
-The file organisation exists for one reason. A clone into an empty
-directory, on a fresh KiCad install, must open and edit with nothing
-missing. No library, footprint or model resolves outside the repository.
+A git clone has to work out of the box. Into an empty directory, on a fresh
+KiCad install, the project opens and edits with nothing missing. No library,
+footprint or model resolves outside the repository.
 
 - `sym-lib-table` and `fp-lib-table` sit in the project directory and are committed.
 - Every path in them is `${KIPRJMOD}/lib/...`.
