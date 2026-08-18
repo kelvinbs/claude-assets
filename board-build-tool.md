@@ -150,7 +150,7 @@ the tools in section 4.
 
 | # | Process | In | Out | User then |
 |---|---|---|---|---|
-| 1 | Define parts | Datasheet<br>Record row | `parts_table` row<br>Symbol<br>Footprint<br>Model | — |
+| 1 | Define or modify parts | Datasheet<br>Record row | `parts_table` row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | `design.db` | `*.kicad_sch`<br>Symbols, on their page | Wires |
 | 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, placed | Routes |
 | 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
@@ -185,10 +185,10 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 | Tool | Used by | Reads | Writes |
 |---|---|---|---|
-| `datasheet-read` | Define parts | `datasheets/` | Pins, package, physical fields |
-| `symbol-draw` | Define parts | Pins from `datasheet-read` | `lib/*.kicad_sym` |
-| `footprint-draw` | Define parts | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Define parts | Record row, `datasheet-read` | `design.db` — `parts_table` |
+| `datasheet-read` | Define or modify parts | `datasheets/` | Pins, package, physical fields |
+| `symbol-draw` | Define or modify parts | Pins from `datasheet-read` | `lib/*.kicad_sym` |
+| `footprint-draw` | Define or modify parts | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
+| `table-write` | Define or modify parts | Record row, `datasheet-read` | `design.db` — `parts_table` |
 | `sheet-place` | Update schematic | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Update board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Output | `*.kicad_pcb` | `out/` — the RF-simulation file |
