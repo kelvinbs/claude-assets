@@ -150,7 +150,7 @@ the tools in section 4.
 
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
-| 1 | Define or modify parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
+| 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
 | 2 | Update library | `design.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
 | 3 | Update schematic | `design.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `sheet-place` | Wires |
 | 4 | Update board | `design.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `board-place` | Routes |
@@ -191,7 +191,7 @@ so the split is not a preference.
 
 | # | Process | Form |
 |---|---|---|
-| 1 | Define or modify parts | Command |
+| 1 | Update parts | Command |
 | 2 | Update library | Agent. Asks only when a datasheet does not carry the pinout |
 | 3 | Update schematic | Agent |
 | 4 | Update board | Agent |
