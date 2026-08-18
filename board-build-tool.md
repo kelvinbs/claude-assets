@@ -41,7 +41,7 @@ answers, or from distributor tables the User downloads and hands over.
 | Board outline, stackup | User |
 | Placing footprints in their region | Tool |
 | Routing | User |
-| rf-simulation files | Tool |
+| RF-simulation file | Tool |
 
 **T1.3 — The parts table**
 
@@ -83,7 +83,7 @@ held apart from the fields above so it can be discarded and fetched again.
 | `*.kicad_sch` | Updated by the tool, wired by the User |
 | `*.kicad_pcb` | Updated by the tool, routed by the User |
 | Board setup — stackup, fabricator rules, DRC rules | Hand |
-| `out/` — rf-simulation files | Generated |
+| `out/` — RF-simulation file | Generated |
 
 **T2.2 — The clone**
 
@@ -112,10 +112,10 @@ fails on any of the above.
 | 1 | Define parts | Datasheet | Table row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | Table | Symbols, on their page | Wires |
 | 3 | Update board | Table<br>Schematic | Footprints, in their region | Routes |
-| 4 | Output | Board | rf-simulation files | — |
+| 4 | Output | Board | RF-simulation file | — |
 | 5 | Source | Table | Price<br>Stock<br>Lifecycle | — |
 
-**T3.2 — The rf-simulation files**
+**T3.2 — The RF-simulation file**
 
 Output writes the files `rf-simulation` reads. Geometry in three dimensions
 is carried on the KiCad User layers. Each layer names a vertical position
