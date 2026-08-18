@@ -52,40 +52,49 @@ sheet.
 
 **T1.1 — Where the data lives**
 
-| File | Tables | Role |
-|---|---|---|
-| `design.db` | `parts` | Master for design fields. Pushes to KiCad |
-| `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
-| `sourcing.db` | `aml`, `mpns`, `offers` | Order time. `mpns` and `offers` are fetched and refetchable |
+Two databases and the KiCad files. Every table name ends in `_table`; a key
+never carries the suffix, so a table and its key are never the same word.
 
-Every file is tracked and pushed. Nothing here is untracked.
+| File | Holds | Role |
+|---|---|---|
+| `design.db` | `parts_table` | Master for the design fields. Pushes to KiCad |
+| `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
+| `sourcing.db` | `aml_table`, `mpn_table`, `offer_table` | Order time |
 
 KiCad is the native store for design use, generally updated from the master.
-Ordering reads `sourcing.db` and never writes a design file. Design never
-reads `sourcing.db`. The join between them is `aml.ipn`.
+Design never reads `sourcing.db`; ordering never writes a design file. The
+join between them is `ipn`.
+
+`mpn_table` and `offer_table` are fetched, never typed, and may be discarded
+and fetched again. `aml_table` is an approval and is kept.
 
 Availability and price come from the JLCPCB API, the only distributor
 interface that answers, or from distributor tables the User downloads and
 hands over.
 
-**T1.2 — The tables**
+**T1.2 — `design.db`**
 
-Tables are plural, keys singular. No name does double duty.
+| Table | Key | Fields |
+|---|---|---|
+| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page`, `room`, `qty`, `status` |
 
-| File | Table | Key | Fields |
-|---|---|---|---|
-| `design.db` | `parts` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `page`, `room`, `qty`, `status` |
-| `sourcing.db` | `aml` | `ipn` + `mpn` | `rank`, `approved`, `approved_by`, `approved_on`, `drop_in`, `note` |
-| `sourcing.db` | `mpns` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
-| `sourcing.db` | `offers` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
+`page` names the schematic page the symbol is placed on. `room` is a tag the
+tool may use in choosing where a footprint goes; it constrains nothing, and a
+KiCad group is nothing more than a list of parts.
 
-`page` and `room` are fields, not tables. `page` names the schematic page the
-symbol is placed on. `room` is a tag the tool may use in choosing where a
-footprint goes; it constrains nothing, and a KiCad group is nothing more than
-a list of parts.
+**T1.3 — `sourcing.db`**
 
-`aml` is the approved manufacturer list: which MPNs may be built against an
-IPN, ranked, each approval dated and attributed.
+| Table | Key | Fields |
+|---|---|---|
+| `aml_table` | `ipn` + `mpn` | `rank`, `approved`, `approved_by`, `approved_on`, `drop_in`, `note` |
+| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
+| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
+
+`aml_table` is the approved manufacturer list: which MPNs may be built against
+an IPN, ranked, each approval dated and attributed.
+
+An offer is one distributor's listing of one MPN at one quantity break. One
+MPN carries many.
 
 **What the schematic carries**
 
@@ -93,7 +102,7 @@ IPN, ranked, each approval dated and attributed.
 - `ipn`, the key back to `design.db`, which is not
 
 `Value` is drawn from the IPN, not from a manufacturer part number — which of
-`ipn.description` or the ranked `aml` MPN fills it is not yet settled.
+`ipn.description` or the ranked `aml_table` MPN fills it is not yet settled.
 
 ## 2 — Assets
 
@@ -102,8 +111,8 @@ IPN, ranked, each approval dated and attributed.
 | Asset | Owner |
 |---|---|
 | `design.db` | Hand |
-| `sourcing.db` — `aml` | Hand |
-| `sourcing.db` — `mpn`, `offer` | Fetched. Discardable |
+| `sourcing.db` — `aml_table` | Hand |
+| `sourcing.db` — `mpn_table`, `offer_table` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
@@ -141,11 +150,11 @@ the tools in section 4.
 
 | # | Process | In | Out | User then |
 |---|---|---|---|---|
-| 1 | Define parts | Datasheet<br>Record row | `parts` row<br>Symbol<br>Footprint<br>Model | — |
+| 1 | Define parts | Datasheet<br>Record row | `parts_table` row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | `design.db` | `*.kicad_sch`<br>Symbols, on their page | Wires |
 | 3 | Update board | `design.db`<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, placed | Routes |
 | 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
-| 5 | Source | `aml` | Price<br>Stock<br>Availability | — |
+| 5 | Source | `aml_table` | Price<br>Stock<br>Availability | — |
 
 **The RF-simulation file**
 
@@ -179,11 +188,11 @@ Each tool document opens with the assets it reads and the assets it writes.
 | `datasheet-read` | Define parts | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Define parts | Pins from `datasheet-read` | `lib/*.kicad_sym` |
 | `footprint-draw` | Define parts | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Define parts | Record row, `datasheet-read` | `design.db` — `parts` |
+| `table-write` | Define parts | Record row, `datasheet-read` | `design.db` — `parts_table` |
 | `sheet-place` | Update schematic | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Update board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Output | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Source | `sourcing.db` — `aml`, JLCPCB API | `sourcing.db` — `mpns`, `offers` |
+| `stock-query` | Source | `sourcing.db` — `aml_table`, JLCPCB API | `sourcing.db` — `mpn_table`, `offer_table` |
 | `clone-check` | Any | A fresh clone of the project | Nothing. A verdict |
 
 **Layout**
