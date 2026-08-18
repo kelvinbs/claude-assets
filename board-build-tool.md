@@ -11,8 +11,9 @@ inferential where it must be, and it says which is which at every step.
 ## Contents
 
 1. [Introduction](#1--introduction)
-2. [Processes](#2--processes)
-3. [Tools](#3--tools)
+2. [Assets](#2--assets)
+3. [Processes](#3--processes)
+4. [Tools](#4--tools)
 
 ## 1 — Introduction
 
@@ -63,38 +64,62 @@ Four. Everything else is joined from the database at output time.
 | `board_room` | The region of the board it sits inside |
 | `board_x`, `board_y` | Its position within that region |
 
-## 2 — Processes
+## 2 — Assets
 
-**T2.1 — What each one does**
+**T2.1 — What constitutes a board project**
+
+| Asset | Kind | Owner |
+|---|---|---|
+| `parts.db` | Database — part, aml, sourcing | Hand, hand, generated |
+| `lib/*.kicad_sym` | Symbols | Hand |
+| `lib/*.pretty` | Footprints | Hand |
+| `lib/3d/` | Models | Hand |
+| `datasheets/` | Source documents | Hand |
+| `*.kicad_pro` | Project | Generated once |
+| `*.kicad_sch` | Root sheet and pages | Updated |
+| `*.kicad_pcb` | Board | Updated |
+| `board-setup` | Stackup, fab rules, DRC rule set | Hand |
+| `out/netlist` | Intermediate | Generated |
+| `out/gerber`, `out/drill`, `out/centroid` | Fab package | Generated |
+| `out/bom` | Order table | Generated |
+| `out/erc`, `out/drc` | Reports | Generated |
+
+## 3 — Processes
+
+**T3.1 — What each one does**
 
 | Process | Does |
 |---|---|
 | Define parts | Reads a datasheet, writes a `part` row and its symbol, footprint, 3D |
-| Generate schematic | Writes every page from the database, placing new parts into their sheet room |
-| Generate board | Writes the board, placing new parts into their board room |
+| Update schematic | Writes every page from the database, placing new parts into their sheet room |
+| Update board | Writes the board, placing new parts into their board room |
 | Verify | ERC, DRC |
 | Output | Gerber, drill, centroid, BOM |
 | Source | Joins MPNs to distributor APIs |
 
-Generation writes new parts. A part already placed keeps its placement.
+After a run the file and the database name the same set of parts. The
+database owns what a part is; the file owns where it sits.
 
-## 3 — Tools
+## 4 — Tools
 
 A tool is a document and a set of Python scripts. The agent follows the
 document and calls the scripts; it writes code only to cover a gap in
 them, and declares what it wrote so the gap can be closed.
 
-**T3.1 — Layout**
+Each tool document opens with the assets it reads and the assets it
+writes. The container names no sub-step.
+
+**T4.1 — Layout**
 
 | Path | Holds |
 |---|---|
 | `board-build-tool.md` | This container |
 | `define-parts.md` | One document per tool |
-| `generate-sch.md` | |
-| `generate-pcb.md` | |
+| `update-sch.md` | |
+| `update-pcb.md` | |
 | `scripts/` | Shared, called by any tool |
 
-**T3.2 — State**
+**T4.2 — State**
 
 | | |
 |---|---|
