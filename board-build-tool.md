@@ -41,7 +41,6 @@ answers, or from distributor tables the User downloads and hands over.
 | Board outline, stackup | User |
 | Placing footprints in their region | Tool |
 | Routing | User |
-| Centroid, BOM | Tool |
 | RF model export | Tool |
 
 **T1.3 — The parts table**
@@ -84,7 +83,7 @@ held apart from the fields above so it can be discarded and fetched again.
 | `*.kicad_sch` | Updated by the tool, wired by the User |
 | `*.kicad_pcb` | Updated by the tool, routed by the User |
 | Board setup — stackup, fabricator rules, DRC rules | Hand |
-| `out/` — centroid, BOM, RF model | Generated |
+| `out/` — RF model | Generated |
 
 **T2.2 — The clone**
 
@@ -113,14 +112,14 @@ fails on any of the above.
 | 1 | Define parts | Datasheet | Table row<br>Symbol<br>Footprint<br>Model | — |
 | 2 | Update schematic | Table | Symbols, on their page | Wires |
 | 3 | Update board | Table<br>Schematic | Footprints, in their region | Routes |
-| 4 | Output | Board | Centroid<br>BOM<br>RF model | — |
+| 4 | Output | Board | RF model | — |
 | 5 | Source | Table | Price<br>Stock<br>Lifecycle | — |
 
 **T3.2 — The RF model**
 
-The board exports to `rf-simulation`. Geometry the simulator needs in three
-dimensions is carried on the KiCad User layers. Each layer names a vertical
-position and a height; the objects drawn on it are the boxes at that level,
+Output writes the files `rf-simulation` reads. Geometry in three dimensions
+is carried on the KiCad User layers. Each layer names a vertical position
+and a height; the objects drawn on it are the boxes at that level,
 dielectric or conductor. The naming grammar and the export are defined
 later.
 
