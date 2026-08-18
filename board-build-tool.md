@@ -105,15 +105,18 @@ fails on any of the above.
 
 ## 3 — Processes
 
-**T3.1 — In order**
+**T3.1 — The chain**
 
-| # | Process | Reads | Writes | User then |
+A process takes the output of the one before it. Each uses one or more of
+the tools in section 4.
+
+| # | Process | In | Out | User then |
 |---|---|---|---|---|
-| 1 | Define parts | Datasheet | Table row<br>Symbol<br>Footprint<br>Model | — |
-| 2 | Update schematic | Table | Symbols, on their page | Wires |
-| 3 | Update board | Table<br>Schematic | Footprints, in their region | Routes |
-| 4 | Output | Board | RF-simulation file | — |
-| 5 | Source | Table | Price<br>Stock<br>Lifecycle | — |
+| 1 | Define parts | Datasheet<br>Record row | Table row<br>Symbol<br>Footprint<br>Model | — |
+| 2 | Update schematic | Table | `*.kicad_sch`<br>Symbols, on their page | Wires |
+| 3 | Update board | Table<br>`*.kicad_sch` | `*.kicad_pcb`<br>Footprints, in their region | Routes |
+| 4 | Output | `*.kicad_pcb` | RF-simulation file | — |
+| 5 | Source | Table | Price<br>Stock<br>Availability | — |
 
 **T3.2 — The RF-simulation file**
 
@@ -135,19 +138,34 @@ A tool is a document and a set of Python scripts. The agent follows the
 document and calls the scripts. It writes code only to cover a gap in them,
 and declares what it wrote so the gap can be closed.
 
+A process uses one or more tools. A tool serves one or more processes. The
+two carry different names.
+
 Each tool document opens with the assets it reads and the assets it writes.
 
-**T4.1 — Layout**
+**T4.1 — The tools**
+
+| Tool | Used by |
+|---|---|
+| `datasheet-read` | Define parts |
+| `symbol-draw` | Define parts |
+| `footprint-draw` | Define parts |
+| `table-write` | Define parts |
+| `sheet-place` | Update schematic |
+| `board-place` | Update board |
+| `layer-export` | Output |
+| `stock-query` | Source |
+| `clone-check` | Any |
+
+**T4.2 — Layout**
 
 | Path | Holds |
 |---|---|
 | `board-build-tool.md` | This container |
-| `define-parts.md` | One document per process |
-| `update-sch.md` | |
-| `update-pcb.md` | |
+| `<tool>.md` | One document per tool |
 | `scripts/` | Shared, called by any tool |
 
-**T4.2 — State**
+**T4.3 — State**
 
 | | |
 |---|---|
