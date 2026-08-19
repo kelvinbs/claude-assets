@@ -301,7 +301,8 @@ The check runs against a fresh clone, and fails on any of the above.
 Process 1 gives a part its IPN and its description. Process 2 builds the
 library objects for the rows that lack them.
 
-`db-init` runs once, before process 1. `clone-check` runs after process 2.
+`db-init` runs once, before process 1, and `lib-init` once before
+process 2. `clone-check` runs after process 2.
 
 **The RF-simulation file**
 
@@ -367,6 +368,7 @@ tool document opens with the assets it reads and writes.
 | Tool | Function | In | Out |
 |---|---|---|---|
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
+| `lib-init` | Create the project's symbol library and its table entry | `*.kicad_pro` | `lib/*.kicad_sym`<br>`sym-lib-table` |
 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
@@ -390,9 +392,16 @@ tool document opens with the assets it reads and writes.
 **State**
 
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
-  `tools/table-read.md`.
-- Built: `tools/db-init.py`, `tools/table-write.py`.
+  `tools/table-read.md`, `tools/lib-init.md`, `tools/datasheet-read.md`,
+  `tools/symbol-draw.md`.
+- Built: `tools/db-init.py`, `tools/table-write.py`, `tools/lib-init.py`,
+  `tools/datasheet-read.py`, `tools/symbol-draw.py`.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
+- The symbol half of process 2 passed its initial function test on a copy of
+  that database: a pinout read from a datasheet came back identical to the
+  one the archived proto1 library was drawn from, symbols were drawn and
+  copied into one library, and every symbol in it plots under `kicad-cli`.
+  The footprint half is not written.
 - `builds/proto1/tools` holds the working precedent for the rest.
