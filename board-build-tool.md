@@ -106,7 +106,7 @@ and `U2` are two rows on one `ipn`, each free to carry its own `page` and
 
 `uuid` is KiCad's instance UUID — the `.kicad_sch` symbol carries it and the
 `.kicad_pcb` footprint holds `(path "/<sheet-uuid>/<symbol-uuid>")` back to
-it. `sheet-place` mints it and writes it into the sheet.
+it.
 
 `ref` is a field. Reannotation in the editor is read back into it.
 
@@ -172,9 +172,8 @@ class list; a new class is added here first.
 | 2 | `room` | block of the sheet | region of the board |
 | 3 | family | groups instances whose `room` is blank | groups instances whose `room` is blank |
 
-`sheet-place` and `board-place` follow this order. A family whose instances
-carry two pages is placed on both. `board-place` writes a KiCad group per
-room and per family.
+Placement follows this order. A family whose instances carry two pages is
+placed on both.
 
 Order of rooms and families within a page is arbitrary, subject to the
 re-entry rule of T3.1. Order within a family is defined in the tool
@@ -247,8 +246,7 @@ read from the datasheet by `datasheet-read` and land in the footprint.
 | `Reference`, `Value`, `Footprint` | built in |
 | `ipn` | custom, the key to `parts_table` |
 
-`Value` is drawn from the IPN. `sheet-place.md` defines which of
-`ipn.description` or the ranked `aml_table` MPN fills it.
+`Value` is drawn from the IPN.
 
 ## 2 — Assets
 
@@ -293,23 +291,11 @@ The check runs against a fresh clone, and fails on any of the above.
 |---|---|---|---|---|---|
 | 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
 | 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
-| 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `sheet-place` | Wires |
-| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `board-place` | Routes |
-| 5 | Output | `*.kicad_pcb` | RF-simulation file | `layer-export` | — |
-| 6 | Source | `aml_table` | Price<br>Stock<br>Availability | `stock-query` | — |
 
 Process 1 gives a part its IPN and its description. Process 2 builds the
 library objects for the rows that lack them.
 
-`db-init` runs once, before process 1, and `lib-init` once before
-process 2. `clone-check` runs after process 2.
-
-**The RF-simulation file**
-
-Process 5 writes what `rf-simulation` reads. Three-dimensional geometry is
-carried on the KiCad User layers: each layer names a vertical position and a
-height, and the objects on it are the boxes at that level, dielectric or
-conductor. `layer-export.md` defines the naming grammar and the export.
+`db-init` runs once, before process 1.
 
 **Re-entry**
 
@@ -320,8 +306,7 @@ untouched.
 **T3.2 — One agent per process**
 
 Each process is entered on its own and calls the tools its T3.1 row names.
-They are written in order — 1 and 2, then 3, 4, 5, 6 — each agreed working
-before the next.
+They are written in order, each agreed working before the next.
 
 A process that needs the User mid-run is a command, loaded into the running
 session. A process that runs headless is an agent, holding its own context
@@ -331,10 +316,6 @@ and reporting at the end.
 |---|---|---|
 | 1 | Update parts | Command |
 | 2 | Update library | Agent. Asks when a datasheet withholds the pinout |
-| 3 | Update schematic | Agent |
-| 4 | Update board | Agent |
-| 5 | Output | Agent |
-| 6 | Source | Agent |
 
 Claude Code reads commands, agents and skills from fixed paths, so the folder
 is carried as a plugin and its files stay tool assets:
@@ -365,10 +346,13 @@ tool document opens with the assets it reads and writes.
 
 **T4.1 — The tools**
 
+There are ten. A document, or a version of one, that carries eleven is a
+bug: abort the run, declare the tool unusable, and report it.
+
+
 | Tool | Function | In | Out |
 |---|---|---|---|
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
-| `lib-init` | Create the project's symbol library and its table entry | `*.kicad_pro` | `lib/*.kicad_sym`<br>`sym-lib-table` |
 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
 | `lib-index` | Index the KiCad symbol libraries | the User's `.kicad_sym` files | `lib/kicad-index.json` |
 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
@@ -376,11 +360,8 @@ tool document opens with the assets it reads and writes.
 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
-| `board-place` | Place footprints on the board | `board.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
-| `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Fetch price and stock | `board.db` — `aml_table`, JLCPCB API | `board.db` — `offer_table` |
-| `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
+| `kicad-init` | Create the KiCad project from nothing | `board.db` | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
+| `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
 
 **Layout**
 
@@ -394,13 +375,13 @@ tool document opens with the assets it reads and writes.
 **State**
 
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
-  `tools/table-read.md`, `tools/lib-init.md`, `tools/lib-index.md`,
-  `tools/copy-kicad-part.md`,
-  `tools/datasheet-read.md`, `tools/symbol-draw.md`, `tools/sheet-place.md`.
-- Built: `tools/db-init.py`, `tools/table-write.py`, `tools/lib-init.py`,
+  `tools/table-read.md`, `tools/lib-index.md`,
+  `tools/copy-kicad-part.md`, `tools/datasheet-read.md`,
+  `tools/symbol-draw.md`.
+- Built: `tools/db-init.py`, `tools/table-write.py`,
   `tools/lib-index.py`, `tools/copy-kicad-part.py`,
-  `tools/datasheet-read.py`,
-  `tools/symbol-draw.py`, `tools/sheet-place.py`.
+  `tools/datasheet-read.py`, `tools/symbol-draw.py`.
+- Not written: `footprint-draw`, `kicad-init`, `kicad-update`.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
