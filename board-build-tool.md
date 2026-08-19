@@ -37,15 +37,15 @@ pushed.
 
 | File | Holds |
 |---|---|
-| `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `lifecycle_table`, `offer_table` |
+| `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
 
 `board.db` is master and pushes to KiCad. Table names end in `_table`; keys
 carry the bare word.
 
 Design reads `parts_table` and `ref_table`. Ordering reads `aml_table`,
-`mpn_table`, `lifecycle_table`, `offer_table`. `aml_table` and `mpn_table`
-are kept; `lifecycle_table` and `offer_table` are fetched and discardable.
+`mpn_table` and `offer_table`. `aml_table` and `mpn_table` are kept;
+`offer_table` is fetched and discardable.
 Sources are the JLCPCB API and distributor tables the User supplies.
 
 The tables are a record of the design. Progress is a query:
@@ -156,7 +156,6 @@ documents.
 | `parts_table.parent` | `parts_table.ipn` | set null |
 | `aml_table.ipn` | `parts_table.ipn` | restrict |
 | `aml_table.mpn` | `mpn_table.mpn` | restrict |
-| `lifecycle_table.mpn` | `mpn_table.mpn` | cascade |
 | `offer_table.mpn` | `mpn_table.mpn` | cascade |
 
 All six are declared foreign keys. Every tool sets `PRAGMA foreign_keys = ON`.
@@ -167,7 +166,6 @@ All six are declared foreign keys. Every tool sets `PRAGMA foreign_keys = ON`.
 |---|---|---|
 | `aml_table` | `ipn` + `mpn` | `rank`, `note` |
 | `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `note` |
-| `lifecycle_table` | `mpn` | `lifecycle`, `fetched_at` |
 | `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
 `aml_table` is the approved manufacturer list: the MPNs that may be built
@@ -180,8 +178,8 @@ per IPN, held as a unique index over `ipn` where `rank is null`.
 `mpn_table` is the manufacturer part: maker, package, pin count, pitch,
 datasheet. The row exists from the moment the part number is named.
 
-`lifecycle_table` and `offer_table` are fetched. One lifecycle row per MPN;
-one offer row per distributor per quantity break. `fetched_at` dates each.
+`offer_table` is fetched: one row per distributor per quantity break.
+`fetched_at` dates it.
 
 **What the schematic carries**
 
@@ -200,7 +198,7 @@ one offer row per distributor per quantity break. `fetched_at` dates each.
 | Asset | Owner |
 |---|---|
 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
-| `board.db` — `lifecycle_table`, `offer_table` | Fetched. Discardable |
+| `board.db` — `offer_table` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
@@ -317,7 +315,7 @@ tool document opens with the assets it reads and writes.
 | `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Place footprints on the board | `board.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Fetch price, stock and lifecycle | `board.db` — `aml_table`, JLCPCB API | `board.db` — `lifecycle_table`, `offer_table` |
+| `stock-query` | Fetch price and stock | `board.db` — `aml_table`, JLCPCB API | `board.db` — `offer_table` |
 | `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
 
 **Layout**

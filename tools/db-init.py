@@ -61,12 +61,6 @@ SCHEMA = {
             "PRIMARY KEY (ipn, mpn)",
         ),
         # what a fetch found. Discarded and fetched again
-        "lifecycle_table": (
-            "mpn           TEXT PRIMARY KEY REFERENCES mpn_table(mpn)"
-            " ON DELETE CASCADE",
-            "lifecycle     TEXT",
-            "fetched_at    TEXT",
-        ),
         "offer_table": (
             "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
             " ON DELETE CASCADE",
