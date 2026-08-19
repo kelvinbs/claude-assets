@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """table-write — create or modify a part.
 
-The tool of process 1. It writes `parts_table` and the `ref_table` rows that
-go with a part, and nothing else. It never reads `sourcing.db` and never
-touches a KiCad file.
+The tool of process 1. It writes `parts_table`, the `ref_table` rows that go
+with a part, and the `aml_table` approval that says which manufacturer part
+may be built against it. It never touches a KiCad file.
 
     table-write.py <board-dir> add   --class A --description "..." [options]
     table-write.py <board-dir> set   <ipn> [--field value ...]
     table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
+    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--approved yes|no]
     table-write.py <board-dir> drop  <ref>
     table-write.py <board-dir> show  [<ipn>]
 
@@ -59,14 +60,14 @@ class Bad(SystemExit):
         super().__init__(f"table-write: {message}")
 
 
-def connect(board):
-    path = Path(board) / "design.db"
+def connect(board, name="design.db", need=("parts_table", "ref_table")):
+    path = Path(board) / name
     if not path.exists():
         raise Bad(f"{path} does not exist. Run db-init first")
     con = sqlite3.connect(path)
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
-    if not {"parts_table", "ref_table"} <= have:
+    if not set(need) <= have:
         raise Bad(f"{path} is missing a table. Run db-init")
     return con
 
@@ -198,6 +199,35 @@ def drop(con, args):
     print(f"{args.ref}  removed from {row[0]}")
 
 
+def mpn(con, args):
+    """An approval: this manufacturer part may be built against this IPN.
+    It is kept, unlike the fetched tables beside it."""
+    part(con, args.ipn)
+    if args.approved not in ("yes", "no"):
+        raise Bad("approved must be yes or no")
+    src = connect(args.board, "sourcing.db", ("aml_table",))
+    try:
+        have = src.execute(
+            "select rank, approved from aml_table where ipn = ? and mpn = ?",
+            (args.ipn, args.mpn)).fetchone()
+        if have:
+            src.execute("update aml_table set rank = ?, approved = ?, note = ?"
+                        " where ipn = ? and mpn = ?",
+                        (args.rank, args.approved, args.note, args.ipn, args.mpn))
+            print(f"{args.ipn}  {args.mpn}  rank {have[0]} -> {args.rank},"
+                  f" approved {have[1]} -> {args.approved}")
+        else:
+            src.execute("insert into aml_table values (?,?,?,?,?,?,?,?)",
+                        (args.ipn, args.mpn, args.rank, args.approved,
+                         args.approved_by, args.approved_on, args.drop_in,
+                         args.note))
+            print(f"{args.ipn}  {args.mpn}  rank {args.rank}  "
+                  f"approved {args.approved}")
+        src.commit()
+    finally:
+        src.close()
+
+
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
@@ -213,6 +243,14 @@ def show(con, args):
         if args.ipn:
             print(f"    source: {source or '—'}  symbol: {sym or '—'}"
                   f"  footprint: {fp or '—'}")
+            src = connect(args.board, "sourcing.db", ("aml_table",))
+            try:
+                for m, rank, ok in src.execute(
+                        "select mpn, rank, approved from aml_table"
+                        " where ipn = ? order by rank", (ipn,)):
+                    print(f"    mpn: {m}  rank {rank}  approved {ok}")
+            finally:
+                src.close()
 
 
 # ------------------------------------------------------------------- entry
@@ -248,6 +286,17 @@ def main(argv):
     p.add_argument("--room")
     p.set_defaults(run=place)
 
+    m = sub.add_parser("mpn", help="approve a manufacturer part against an IPN")
+    m.add_argument("ipn")
+    m.add_argument("mpn")
+    m.add_argument("--rank", type=int, default=1)
+    m.add_argument("--approved", default="no")
+    m.add_argument("--approved-by", dest="approved_by")
+    m.add_argument("--approved-on", dest="approved_on")
+    m.add_argument("--drop-in", dest="drop_in")
+    m.add_argument("--note")
+    m.set_defaults(run=mpn)
+
     d = sub.add_parser("drop", help="remove one instance")
     d.add_argument("ref")
     d.set_defaults(run=drop)
@@ -257,7 +306,7 @@ def main(argv):
     w.set_defaults(run=show)
 
     args = ap.parse_args(argv[1:])
-    if args.verb in ("place", "set") and not IPN.match(args.ipn):
+    if args.verb in ("place", "set", "mpn") and not IPN.match(args.ipn):
         raise Bad(f"'{args.ipn}' is not an IPN")
     con = connect(args.board)
     try:

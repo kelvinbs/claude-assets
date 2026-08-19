@@ -5,14 +5,16 @@ Create or modify a part. The tool of process 1.
 | Reads | Writes |
 |---|---|
 | `design.db` — `parts_table`, `ref_table` | `design.db` — `parts_table`, `ref_table` |
+| `sourcing.db` — `aml_table` | `sourcing.db` — `aml_table` |
 
-It never reads `sourcing.db` and never opens a KiCad file. `db-init` must
-have run first.
+It never opens a KiCad file, and it touches no table in `sourcing.db` but
+`aml_table`. `db-init` must have run first.
 
 ```
 table-write.py <board-dir> add   --class A --description "..." [options]
 table-write.py <board-dir> set   <ipn> [--field value ...]
 table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
+table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--approved yes|no]
 table-write.py <board-dir> drop  <ref>
 table-write.py <board-dir> show  [<ipn>]
 ```
@@ -54,6 +56,21 @@ It will not lower a count. An instance is a thing on a sheet with a UUID that
 a footprint may already point at, and losing one silently is how a board
 loses a part. Removing one is `drop`, and it names the reference.
 
+## mpn
+
+Records an approval in `aml_table` — this manufacturer part may be built
+against this IPN. Choosing a part and choosing the part number it is bought
+as are the same act, which is why it is here and not in a sourcing tool.
+
+`--rank` orders the alternatives, default 1. `--approved` is `yes` or `no`,
+default `no` — a part can be named long before anyone approves it.
+`--approved-by`, `--approved-on`, `--drop-in` and `--note` are recorded as
+given.
+
+Naming the same IPN and MPN again updates the rank, the approval and the
+note rather than adding a second row. `aml_table` is kept, unlike the fetched
+tables beside it, so it is never discarded and refetched.
+
 ## drop
 
 Removes one instance by its reference. One at a time, and it says which part
@@ -71,6 +88,7 @@ alone, and its source, symbol and footprint as well.
   the three
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
+- An `--approved` that is not `yes` or `no`
 - Lowering an instance count
 - `add` with no description
 - A board directory with no `design.db`, or one missing a table

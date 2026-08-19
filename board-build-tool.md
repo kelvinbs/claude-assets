@@ -321,7 +321,7 @@ Each tool document opens with the assets it reads and the assets it writes.
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Create or modify symbol | Pins from `datasheet-read` | `lib/*.kicad_sym` |
 | `footprint-draw` | Create or modify footprint | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Create or modify part | Record row, `datasheet-read` | `design.db` — `parts_table` |
+| `table-write` | Create or modify part | Record row, `datasheet-read` | `design.db` — `parts_table`, `ref_table`<br>`sourcing.db` — `aml_table` |
 | `sheet-place` | Place symbols on their page | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Place footprints on the board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
