@@ -432,10 +432,7 @@ def one(con, board, ipn, nickname, args, classes):
     lib_id_given = args.source_lib
     rename = None
     if not lib_id_given:
-        try:
-            candidate = finder.find(con, board, ipn, args.lib)
-        except SystemExit as exc:
-            raise Bad(str(exc))
+        candidate = matched.get(ipn)
         if candidate:
             lib_id_given = f"{candidate['library']}:{candidate['symbol']}"
             rename = candidate.get("rename")
@@ -519,7 +516,7 @@ def main(argv):
     global reader
     reader = sibling("datasheet-read")
     global finder
-    finder = sibling("copy-kicad-part")
+    finder = sibling("symbol-match")
     try:
         nickname = lib_init.nickname_of(board, args.nickname)
         lib_init.make_library(board, nickname)
@@ -552,6 +549,16 @@ def main(argv):
             if not targets:
                 print("every part has a symbol. Nothing to draw")
                 return 0
+
+        # One run matches every target against the libraries. Asked part by
+        # part it was a model run each, each starting cold.
+        global matched
+        matched = {}
+        if not args.source_lib:
+            try:
+                matched = finder.match(con, board, targets, args.lib)
+            except SystemExit as exc:
+                raise Bad(str(exc))
 
         failed = []
         for ipn in targets:
