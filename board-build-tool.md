@@ -70,8 +70,8 @@ An agent that finds it needs one of them changed has found a bug. It aborts,
 declares the tool unusable, and names what it hit. It does not carry on, and
 it does not ask.
 
-A field is working data. Add one where a tool needs it, and record it in T1.2
-or T1.3 in the same commit.
+The fields are the User's too. A tool writes what T1.2 and T1.3 declare and
+adds nothing.
 
 **T1.2 — The design tables**
 
