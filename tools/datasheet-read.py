@@ -335,8 +335,16 @@ def pinout(con, board, ipn, datasheet=None, folder=None):
 def one(con, board, ipn, args):
     spec = pinout(con, board, ipn, args.datasheet, args.datasheets)
     if spec is None:
-        print(f"{ipn}  not read")
+        if args.json:
+            print(json.dumps({"ipn": ipn, "pins": None}))
+        else:
+            print(f"{ipn}  not read")
         return False
+    if args.json:
+        # What another tool reads. `symbol-draw` runs this as a command.
+        print(json.dumps({"ipn": ipn, "datasheet": spec["datasheet"],
+                          "pins": spec["pins"]}))
+        return True
     print(f"{ipn}  {len(spec['pins'])} pins  {spec['datasheet']}")
     for number, name, etype, side in spec["pins"]:
         print(f"    {number:>4}  {name:<16} {etype:<15} {side}")
@@ -351,6 +359,8 @@ def main(argv):
                     help="every part with no symbol yet")
     ap.add_argument("--datasheet", help="the PDF, when the name does not match")
     ap.add_argument("--datasheets", help="the directory to search")
+    ap.add_argument("--json", action="store_true",
+                    help="print the pins as JSON, for another tool to read")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)

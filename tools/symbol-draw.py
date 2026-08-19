@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
-"""symbol-draw — copy or draw a symbol into the project library.
+"""symbol-draw - give every part a symbol in the project library.
 
-    symbol-draw.py <board-dir> <ipn> [--from lib:name] [--redraw]
-    symbol-draw.py <board-dir> --all [--redraw]
+    symbol-draw.py <board-dir> <ipn> [--redraw] [--lib DIR ...]
+    symbol-draw.py <board-dir> --all [--redraw] [--lib DIR ...]
 
-The second tool of process 2. A symbol either exists somewhere already and
-is copied in, or it does not and is drawn from the pinout `datasheet-read`
-hands back. Either way it lands in `lib/<nickname>.kicad_sym`, owned from
-that point, and `parts_table` is told where it is.
+Drawing is the last resort. For each part it runs `copy-kicad-part` first,
+and only when that returns null does it run `datasheet-read` and draw the
+pins that come back. Either way `parts_table` is told where the symbol is.
 
-    --from  copies. The nickname resolves to a KiCad library on disk
-    absent  reads the datasheet and draws what it says
+Both are run as commands. Nothing is imported from another tool.
 
-`source` of T1.2 takes its first letter here: `s` for a KiCad stock library,
-`v` for any other library on disk, `h` for a symbol drawn against the
-datasheet. The footprint letter is left as it was.
+`--all` is every part whose `symbol` is null and whose instances put it on a
+page. A part on no page is not on a sheet and has no symbol.
 
-The library is merged, never rewritten. A symbol already in it is left alone
+The library is merged, never rewritten: a symbol already in it is left alone
 unless `--redraw` names it, because it may have been corrected by hand.
 
 The drawing code is `build-sch.py` of proto1, which drew the archived
@@ -24,11 +21,10 @@ library.
 """
 
 import argparse
-import importlib.util
-import math
-import os
+import json
 import re
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -37,40 +33,15 @@ HERE = Path(__file__).resolve().parent
 GRID = 2.54
 FONT = 1.27
 PIN_LEN = 2.54
-OFFSET = 1.016   # pin_names offset — the gap between the body and a name
+OFFSET = 1.016   # pin_names offset - the gap between the body and a name
 
-PIN_TYPES = {
-    "input", "output", "bidirectional", "tri_state", "passive", "free",
-    "unspecified", "power_in", "power_out", "open_collector",
-    "open_emitter", "no_connect",
-}
 SIDES = {"L", "R", "T", "B"}
-
-IPN = re.compile(r"^([A-Z])\d{4}$")
-
-# Where KiCad keeps its own symbol libraries. KICAD_SYMBOL_DIR overrides.
-STOCK_CANDIDATES = [
-    "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols",
-    "/usr/share/kicad/symbols",
-    "/usr/local/share/kicad/symbols",
-    "C:/Program Files/KiCad/share/kicad/symbols",
-]
+IPN = re.compile(r"^[A-Z]\d{4}$")
 
 
 class Bad(SystemExit):
     def __init__(self, message):
         super().__init__(f"symbol-draw: {message}")
-
-
-def sibling(name):
-    """The tool documents name the scripts with hyphens, so they are loaded
-    rather than imported. The class table and the library are each written
-    once and read from where they live."""
-    spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), HERE / f"{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 # ------------------------------------------------------------------ the record
@@ -83,7 +54,7 @@ def connect(board):
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
-    if not {"parts_table", "aml_table", "mpn_table"} <= have:
+    if not {"parts_table", "ref_table", "aml_table", "mpn_table"} <= have:
         raise Bad(f"{path} is missing a table. Run db-init")
     return con
 
@@ -97,18 +68,28 @@ def part_row(con, ipn):
     return row
 
 
-def datasheet_of(con, ipn):
-    row = con.execute(
-        "select m.datasheet from aml_table a "
-        "left join mpn_table m on m.mpn = a.mpn where a.ipn = ? "
-        "order by a.rank is not null, a.rank", (ipn,)).fetchone()
-    return (row[0] if row else None) or ""
+def prefix_of(con, ipn):
+    """The reference designator prefix, taken off the instances the record
+    already carries. `U1` is a `U`."""
+    row = con.execute("select ref from ref_table where ipn = ? and ref is not "
+                      "null order by ref", (ipn,)).fetchone()
+    if row is None:
+        return "U"
+    return re.match(r"^([A-Za-z]+)", row[0]).group(1)
 
 
 def mpn_of(con, ipn):
     row = con.execute("select mpn from aml_table where ipn = ? "
                       "order by rank is not null, rank", (ipn,)).fetchone()
     return row[0] if row else ""
+
+
+def datasheet_of(con, ipn):
+    row = con.execute(
+        "select m.datasheet from aml_table a "
+        "left join mpn_table m on m.mpn = a.mpn where a.ipn = ? "
+        "order by a.rank is not null, a.rank", (ipn,)).fetchone()
+    return (row[0] if row else None) or ""
 
 
 def write_fields(con, ipn, lib_id, letter, was_source):
@@ -120,7 +101,68 @@ def write_fields(con, ipn, lib_id, letter, was_source):
     con.commit()
 
 
-# ---------------------------------------------------------------- symbols
+# ----------------------------------------------------------------- the library
+
+def library_of(board):
+    """The project's library, found where `sym-lib-table` points, or by the
+    one `.kicad_sym` in `lib/`."""
+    table = Path(board) / "sym-lib-table"
+    if table.exists():
+        for line in table.read_text().splitlines():
+            name = re.search(r'\(name "([^"]+)"\)', line)
+            uri = re.search(r'\(uri "\$\{KIPRJMOD\}/lib/([^"]+)"\)', line)
+            if name and uri:
+                path = Path(board) / "lib" / uri.group(1)
+                if path.exists():
+                    return name.group(1), path
+    found = sorted((Path(board) / "lib").glob("*.kicad_sym"))
+    if len(found) == 1:
+        return found[0].stem, found[0]
+    raise Bad(f"no project library in {board}/lib. Run kicad-init first")
+
+
+def held(library, name):
+    """Whether the library already holds a symbol under this name."""
+    return f'(symbol "{name}"' in library.read_text()
+
+
+def merge(library, name, block, redraw):
+    """Add what is missing, leave what is there. A symbol already in the
+    library may have been corrected by hand."""
+    src = library.read_text()
+    needle = f'(symbol "{name}"'
+    start = src.find(needle)
+    if start >= 0:
+        if not redraw:
+            return False
+        depth, in_string, escaped = 0, False, False
+        for i in range(start, len(src)):
+            char = src[i]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = not in_string
+            elif in_string:
+                continue
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    library.write_text(src[:start] + block.strip()
+                                       + src[i + 1:])
+                    return True
+        raise Bad(f"symbol '{name}' does not close")
+    close = src.rstrip().rfind(")")
+    if close < 0:
+        raise Bad(f"{library} does not read as a kicad_symbol_lib")
+    library.write_text(src[:close] + block + src[close:])
+    return True
+
+
+# ---------------------------------------------------------------- the drawing
 
 def snap(v):
     return round(v / GRID) * GRID
@@ -253,269 +295,82 @@ def build_symbol(spec):
     )
 
 
-# ------------------------------------------------------- reading libraries
 
-def find_stock():
-    for candidate in [os.environ.get("KICAD_SYMBOL_DIR")] + STOCK_CANDIDATES:
-        if candidate and os.path.isdir(candidate):
-            return Path(candidate)
-    raise Bad("KiCad symbol directory not found. Set KICAD_SYMBOL_DIR")
+# ------------------------------------------------------------- the two resorts
 
-
-def children(block):
-    """Top-level sub-expressions of an s-expression, as (tag, text). Quoted
-    strings are skipped, so a bracket inside one opens nothing."""
-    out = []
-    depth, in_str, esc, start = 0, False, False, None
-    body = block[block.index("(") + 1:]
-    for j, c in enumerate(body):
-        if esc:
-            esc = False
-        elif c == "\\":
-            esc = True
-        elif c == '"':
-            in_str = not in_str
-        elif in_str:
-            pass
-        elif c == "(":
-            if depth == 0:
-                start = j
-            depth += 1
-        elif c == ")":
-            depth -= 1
-            if depth == 0:
-                text = body[start:j + 1]
-                out.append((text[1:].split(None, 1)[0].rstrip(")"), text))
-            elif depth < 0:
-                break
-    return out
-
-
-def extract_symbol(path, name):
-    if not os.path.exists(path):
+def try_copy(board, ipn, hint, extra):
+    """`copy-kicad-part`, run as a command. Returns the library id it wrote,
+    or None."""
+    argv = [sys.executable, str(HERE / "copy-kicad-part.py"), str(board),
+            hint, "--name", ipn]
+    for folder in extra or []:
+        argv += ["--lib", folder]
+    run = subprocess.run(argv, capture_output=True, text=True)
+    if run.returncode != 0:
+        raise Bad((run.stderr or run.stdout).strip())
+    first = (run.stdout.strip().splitlines() or ["null"])[0]
+    if first.startswith("null"):
         return None
-    src = open(path).read()
-    needle = f'(symbol "{name}"'
-    i = src.find(needle)
-    if i < 0:
+    return first.split()[0]
+
+
+def try_read(board, ipn, extra):
+    """`datasheet-read --json`, run as a command. Returns the pins, or None."""
+    argv = [sys.executable, str(HERE / "datasheet-read.py"), str(board), ipn,
+            "--json"]
+    if extra:
+        argv += ["--datasheets", extra]
+    run = subprocess.run(argv, capture_output=True, text=True)
+    if run.returncode != 0:
         return None
-    depth, in_str, esc = 0, False, False
-    for j in range(i, len(src)):
-        c = src[j]
-        if esc:
-            esc = False
-        elif c == "\\":
-            esc = True
-        elif c == '"':
-            in_str = not in_str
-        elif in_str:
-            pass
-        elif c == "(":
-            depth += 1
-        elif c == ")":
-            depth -= 1
-            if depth == 0:
-                return src[i:j + 1]
-    raise Bad(f"{path}: symbol '{name}' does not close")
+    for line in run.stdout.strip().splitlines():
+        if line.startswith("{"):
+            answer = json.loads(line)
+            return answer.get("pins")
+    return None
 
 
-def flatten_extends(block, path, name):
-    """KiCad stores a derived symbol with its parent's graphics folded in. A
-    copy that still carries `extends` points outside the library it was
-    copied into, and section 2 does not allow that."""
-    m = re.search(r'\(extends "([^"]+)"\)', block)
-    if not m:
-        return block
-    parent_name = m.group(1)
-    parent = extract_symbol(path, parent_name)
-    if parent is None:
-        raise Bad(f"{path}: '{name}' extends '{parent_name}', which is missing")
-    parent = flatten_extends(parent, path, parent_name)
-
-    settings, props, bodies = {}, {}, []
-    for who, source in (("parent", parent), ("child", block)):
-        for tag, text in children(source):
-            if tag == "extends":
-                continue
-            if tag == "property":
-                props[re.match(r'\(property "([^"]*)"', text).group(1)] = text
-            elif tag == "symbol":
-                if who == "parent":
-                    bodies.append(
-                        text.replace(f'"{parent_name}_', f'"{name}_', 1))
-            else:
-                settings[tag] = text
-
-    head = block[:block.index("\n") + 1]
-    parts = list(settings.values()) + list(props.values()) + bodies
-    return head + "".join("\t\t" + t + "\n" for t in parts) + "\t)"
-
-
-def set_property(block, name, value):
-    """A copied symbol keeps its drawing and takes this project's fields."""
-    pattern = re.compile(r'(\(property "%s" )"[^"]*"' % re.escape(name))
-    if pattern.search(block):
-        return pattern.sub(lambda m: m.group(1) + '"%s"' % value, block, count=1)
-    head = block[:block.index("\n") + 1]
-    return head + f'\t\t(property "{name}" "{value}"\n\t\t\t(at 0 0 0)\n' \
-                  f'{effects(3, hide=True)}\t\t)\n' + block[len(head):]
-
-
-def rename_pins(block, rename):
-    """Give a pin the name the datasheet prints. The symbol is the part; only
-    the label differs, and the label is what a person reads on the sheet."""
-    for number, name in (rename or {}).items():
-        pattern = re.compile(
-            r'(\(pin\b(?:(?!\(pin\b).)*?\(name ")[^"]*("(?:(?!\(pin\b).)*?'
-            r'\(number "%s")' % re.escape(str(number)), re.S)
-        block, count = pattern.subn(
-            lambda m: m.group(1) + str(name) + m.group(2), block, count=1)
-        if not count:
-            raise Bad(f"pin {number} is not in the symbol")
-    return block
-
-
-def copy_symbol(source_path, source_name, ipn, prefix, description,
-                datasheet, rename=None):
-    block = extract_symbol(source_path, source_name)
-    if block is None:
-        raise Bad(f"{source_path} does not hold a symbol '{source_name}'")
-    block = flatten_extends(block, source_path, source_name)
-    block = block.replace(f'(symbol "{source_name}"', f'(symbol "{ipn}"', 1)
-    block = block.replace(f'"{source_name}_', f'"{ipn}_')
-    block = rename_pins(block, rename)
-    block = set_property(block, "Reference", prefix)
-    block = set_property(block, "Value", ipn)
-    block = set_property(block, "Description", description or "")
-    if datasheet:
-        block = set_property(block, "Datasheet", datasheet)
-    # The symbol is this project's from here on, and nothing in it says
-    # where it came from. `origin` says it, so a copy can be read back
-    # against the library it was taken from.
-    block = set_property(block, "origin", f"{source_path.stem}:{source_name}")
-    return "\t" + block.strip() + "\n"
-
-
-# ------------------------------------------------------------- the library
-
-def library_of(board, nickname):
-    return Path(board) / "lib" / f"{nickname}.kicad_sym"
-
-
-def merge(path, ipn, block, redraw):
-    """Add what is missing, leave what is there — T3.1, applied to the
-    library. A symbol already in it may have been corrected by hand."""
-    src = path.read_text()
-    present = extract_symbol(path, ipn)
-    if present is not None:
-        if not redraw:
-            return False
-        src = src.replace(present, block.strip(), 1)
-        path.write_text(src)
-        return True
-    close = src.rstrip().rfind(")")
-    if close < 0:
-        raise Bad(f"{path} does not read as a kicad_symbol_lib")
-    path.write_text(src[:close] + block + src[close:])
-    return True
-
-
-# ------------------------------------------------------------------------ run
-
-def one(con, board, ipn, nickname, args, classes):
+def one(con, board, ipn, nickname, library, args):
     ipn, description, symbol, source = part_row(con, ipn)
-    lib_id = f"{nickname}:{ipn}"
     if symbol and not args.redraw:
         print(f"{ipn}  already {symbol}")
         return True
 
-    prefix = classes[IPN.match(ipn).group(1)][1]
-    datasheet = datasheet_of(con, ipn)
-    datasheet_mpn = mpn_of(con, ipn)
-    path = library_of(board, nickname)
+    mpn = mpn_of(con, ipn)
+    hint = " ".join(filter(None, [mpn, description]))
 
-    # The order of the resorts: a library that already holds the part, then
-    # the datasheet. Drawing is what is done when nothing holds it.
-    # The order of the resorts: a library that already holds the part, then
-    # the datasheet. copy-kicad-part owns the first - it finds the symbol,
-    # copies it in and renames its pins - and returns the library id it
-    # wrote, or None.
-    if not args.source_lib:
-        hint = " ".join(filter(None, [datasheet_mpn or "", description or ""]))
-        try:
-            written, spec = finder.take(board, hint, ipn, nickname, args.lib)
-        except SystemExit as exc:
-            raise Bad(str(exc))
-        if written:
-            write_fields(con, ipn, written, "s", source)
-            renames = spec.get("rename") or {}
-            print(f"{ipn}  {written}  s  copied from {spec['library']}:"
-                  f"{spec['symbol']}"
-                  + (f", {len(renames)} pin(s) renamed" if renames else ""))
-            return True
+    written = try_copy(board, ipn, hint, args.lib)
+    if written:
+        write_fields(con, ipn, written, "s", source)
+        print(f"{ipn}  {written}  s  copied")
+        return True
 
-    lib_id_given = args.source_lib
-    rename = None
-    if lib_id_given:
-        if ":" not in lib_id_given:
-            raise Bad(f"'{lib_id_given}' is not <library>:<symbol>")
-        source_nick, source_name = lib_id_given.split(":", 1)
-        stock = find_stock()
-        path_of_source = stock / f"{source_nick}.kicad_sym"
-        letter = "s"
-        if not path_of_source.exists():
-            path_of_source = Path(source_nick)
-            if path_of_source.suffix != ".kicad_sym":
-                path_of_source = Path(f"{source_nick}.kicad_sym")
-            letter = "v"
-        if not path_of_source.exists():
-            raise Bad(f"no library '{source_nick}' in {stock} or on disk")
-        block = copy_symbol(path_of_source, source_name, ipn, prefix,
-                            description, datasheet, rename)
-        origin = f"copied from {source_nick}:{source_name}"
-        if rename:
-            origin += f", {len(rename)} pin(s) renamed"
-    else:
-        try:
-            spec = reader.pinout(con, board, ipn, args.datasheet,
-                                 args.datasheets)
-        except SystemExit as exc:
-            # datasheet-read raises its own class. Uncaught it would end a
-            # --all pass on the first part that has nothing to read.
-            raise Bad(str(exc))
-        if spec is None:
-            raise Bad(f"{ipn}: no pinout read. Give --from, or a datasheet")
-        spec["name"] = ipn
-        spec["reference"] = prefix
-        spec["description"] = description or ""
-        spec["datasheet"] = datasheet or spec.get("datasheet", "")
-        block = build_symbol(spec)
-        letter = "h"
-        origin = f"drawn, {len(spec['pins'])} pins"
+    pins = try_read(board, ipn, args.datasheets)
+    if not pins:
+        raise Bad(f"{ipn}: no library holds it and no pinout could be read")
 
-    changed = merge(path, ipn, block, args.redraw)
-    write_fields(con, ipn, lib_id, letter, source)
-    print(f"{ipn}  {lib_id}  {letter}  {origin}"
-          + ("" if changed else "  (library already held it)"))
+    spec = {"name": ipn, "reference": prefix_of(con, ipn), "pins": pins,
+            "description": description or "",
+            "datasheet": datasheet_of(con, ipn)}
+    merge(library, ipn, build_symbol(spec), True)
+    write_fields(con, ipn, f"{nickname}:{ipn}", "h", source)
+    print(f"{ipn}  {nickname}:{ipn}  h  drawn, {len(pins)} pins")
     return True
 
+
+# ------------------------------------------------------------------------ run
 
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("ipn", nargs="?")
     ap.add_argument("--all", action="store_true",
-                    help="every part with no symbol yet")
-    ap.add_argument("--from", dest="source_lib", metavar="LIB:NAME",
-                    help="copy this symbol instead of drawing one")
-    ap.add_argument("--nickname", help="the library nickname. Defaults to "
-                                       "the .kicad_pro name")
-    ap.add_argument("--lib", action="append",
-                    help="another directory of .kicad_sym files to search")
-    ap.add_argument("--datasheet", help="the PDF, when the name does not match")
-    ap.add_argument("--datasheets", help="the directory to search")
+                    help="every part on a page with no symbol yet")
     ap.add_argument("--redraw", action="store_true",
                     help="replace a symbol the library already holds")
+    ap.add_argument("--lib", action="append",
+                    help="another directory of .kicad_sym files. Repeatable")
+    ap.add_argument("--datasheets", help="the directory of datasheets")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
@@ -525,54 +380,34 @@ def main(argv):
         raise Bad("name one IPN, or --all")
     if args.ipn and not IPN.match(args.ipn):
         raise Bad(f"'{args.ipn}' is not an IPN")
-    if args.all and args.source_lib:
-        raise Bad("--from names one symbol, so it names one part")
-    if args.all and args.datasheet:
-        raise Bad("--datasheet names one file, so it names one part")
 
-    lib_init = sibling("lib-init")
-    classes = sibling("table-write").CLASSES
-    global reader
-    reader = sibling("datasheet-read")
-    global finder
-    finder = sibling("copy-kicad-part")
-    try:
-        nickname = lib_init.nickname_of(board, args.nickname)
-        lib_init.make_library(board, nickname)
-        lib_init.make_table(board, nickname)
-    except SystemExit as exc:
-        raise Bad(str(exc))
-
+    nickname, library = library_of(board)
     con = connect(board)
     try:
         if args.ipn:
             targets = [args.ipn]
         else:
-            # A part no instance puts on a page is not on a sheet, and a
-            # part not on a sheet has no symbol. `sheet-place` reads a blank
-            # page the same way. Asking for a symbol for a bare board is
-            # asking the wrong question.
+            # A part no instance puts on a page is not on a sheet, and a part
+            # not on a sheet has no symbol.
             targets = [r[0] for r in con.execute(
                 "select p.ipn from parts_table p where p.symbol is null "
                 "and exists (select 1 from ref_table r where r.ipn = p.ipn "
-                "and r.page is not null and trim(r.page) <> '') "
-                "order by p.ipn")]
+                "and trim(coalesce(r.page,'')) <> '') order by p.ipn")]
             skipped = [r[0] for r in con.execute(
                 "select p.ipn from parts_table p where p.symbol is null "
                 "and not exists (select 1 from ref_table r where r.ipn = p.ipn "
-                "and r.page is not null and trim(r.page) <> '') "
-                "order by p.ipn")]
+                "and trim(coalesce(r.page,'')) <> '') order by p.ipn")]
             if skipped:
                 print(f"{len(skipped)} part(s) on no page, not drawn: "
                       + " ".join(skipped))
             if not targets:
-                print("every part has a symbol. Nothing to draw")
+                print("every part on a page has a symbol")
                 return 0
 
         failed = []
         for ipn in targets:
             try:
-                one(con, board, ipn, nickname, args, classes)
+                one(con, board, ipn, nickname, library, args)
             except Bad as exc:
                 if len(targets) == 1:
                     raise

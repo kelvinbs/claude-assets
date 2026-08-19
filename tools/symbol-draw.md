@@ -5,7 +5,7 @@ it is. The second tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>a symbol per part, from `copy-kicad-part`<br>the pins, from `datasheet-read` | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
+| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`<br>`copy-kicad-part`, `datasheet-read` — run as commands | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
 python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
@@ -17,19 +17,14 @@ on a page. A part on no page is not on a sheet and has no symbol — a bare
 board, an enclosure, a host the board plugs into. The run names them and
 leaves them. `sheet-place` reads a blank page the same way.
 
-It calls `lib-init` first, every run, so the library and its `sym-lib-table`
-entry exist before anything is written to them.
-
 ## The order of the resorts
 
 Drawing a symbol is the last thing tried, not the first.
 
 | | |
 |---|---|
-| 1 | `copy-kicad-part` is asked, once for every part in the run, whether a library already holds each. What it returns is copied, and the pins it names are renamed |
+| 1 | `copy-kicad-part` is run. It finds the symbol, copies it into `lib/` and renames its pins, and returns what it wrote |
 | 2 | nothing holds it — `datasheet-read` is called and what it returns is drawn |
-
-`--from <library>:<name>` names a symbol outright and skips the asking.
 
 The library named by `--from` is a stock KiCad library if one of that
 nickname is in the KiCad symbol directory, otherwise a path to a
