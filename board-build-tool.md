@@ -370,6 +370,7 @@ tool document opens with the assets it reads and writes.
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
 | `lib-init` | Create the project's symbol library and its table entry | `*.kicad_pro` | `lib/*.kicad_sym`<br>`sym-lib-table` |
 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
+| `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
@@ -392,10 +393,11 @@ tool document opens with the assets it reads and writes.
 **State**
 
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
-  `tools/table-read.md`, `tools/lib-init.md`, `tools/datasheet-read.md`,
-  `tools/symbol-draw.md`, `tools/sheet-place.md`.
+  `tools/table-read.md`, `tools/lib-init.md`, `tools/copy-kicad-part.md`,
+  `tools/datasheet-read.md`, `tools/symbol-draw.md`, `tools/sheet-place.md`.
 - Built: `tools/db-init.py`, `tools/table-write.py`, `tools/lib-init.py`,
-  `tools/datasheet-read.py`, `tools/symbol-draw.py`, `tools/sheet-place.py`.
+  `tools/copy-kicad-part.py`, `tools/datasheet-read.py`,
+  `tools/symbol-draw.py`, `tools/sheet-place.py`.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
