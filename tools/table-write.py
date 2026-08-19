@@ -105,6 +105,25 @@ def part(con, ipn):
     return dict(zip(("ipn",) + FIELDS, row))
 
 
+def has_mpn(board, ipn):
+    src = connect(board, "sourcing.db", ("aml_table",))
+    try:
+        return src.execute("select 1 from aml_table where ipn = ?",
+                           (ipn,)).fetchone() is not None
+    finally:
+        src.close()
+
+
+def guard_footprint(board, ipn, footprint):
+    """A footprint is a land pattern. A land pattern is a package, and a
+    package is a manufacturer part. Until one is named against the IPN there
+    is nothing for a footprint to be."""
+    if footprint and not has_mpn(board, ipn):
+        raise Bad(f"{ipn} has no MPN in aml_table. A footprint is a package, "
+                  f"and a package needs a part number — name one with mpn "
+                  f"first")
+
+
 def check(field, value):
     if value is None:
         return None
@@ -132,6 +151,8 @@ def add(con, args):
     values["category"] = category
     values["status"] = values["status"] or "chosen"
 
+    guard_footprint(args.board, ipn, values["footprint"])
+
     con.execute(
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
         f"values (?, {', '.join('?' * len(FIELDS))})",
@@ -157,6 +178,7 @@ def setf(con, args):
         raise Bad("no field given")
     if "category" in changes:
         raise Bad("category follows the IPN letter and is not set by hand")
+    guard_footprint(args.board, args.ipn, changes.get("footprint"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()
