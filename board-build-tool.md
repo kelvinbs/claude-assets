@@ -72,11 +72,25 @@ Availability and price come from the JLCPCB API, the only distributor
 interface that answers, or from distributor tables the User downloads and
 hands over.
 
+**A record, not a tracker**
+
+These tables say what the design is. They do not say what has been done to
+it, who did it, or what is left.
+
+Progress is not a field. Whether a part has a symbol is `symbol is null`.
+Whether it has a footprint is `footprint is null`. Whether it has a part
+number is whether `aml_table` holds a row for it. A field that restates one
+of those is a second place for it to be wrong, and the two disagree the first
+time somebody writes one and not the other.
+
+So there is no `status`, no `pins_checked`, no `approved`. What a process
+still owes is read off the record, in one query, at the moment it is asked.
+
 **T1.2 — `design.db`**
 
 | Table | Key | Fields |
 |---|---|---|
-| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `source`, `status` |
+| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `source` |
 | `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room` |
 
 `parts_table` is the part. One row per IPN, whatever the board uses it for.
@@ -102,19 +116,6 @@ instance, not of the part.
 `source` records where the library object came from — `stock`, `vendor` or
 `hand`. Once a symbol is copied into `lib/` under the clone rule of section
 2, nothing else distinguishes a copied stock symbol from a drawn one.
-
-`status` says what the part still owes, and is one of five:
-
-| Value | Meaning |
-|---|---|
-| `chosen` | the part is picked. No library object yet |
-| `drawn` | symbol and footprint exist and resolve |
-| `checked` | the pinout has been read against the datasheet, and `pins_checked` says against what |
-| `provisional` | a stand-in is in place and is known to be wrong |
-| `blocked` | the part cannot advance, for a reason that is not the tool's |
-
-A part climbs `chosen`, `drawn`, `checked`. `provisional` and `blocked` are
-off that line and say so.
 
 **`ref` is a field, not a key**
 
@@ -170,12 +171,14 @@ class is recorded. A class the list does not hold is added here first.
 
 | Table | Key | Fields |
 |---|---|---|
-| `aml_table` | `ipn` + `mpn` | `rank`, `approved`, `approved_by`, `approved_on`, `drop_in`, `note` |
+| `aml_table` | `ipn` + `mpn` | `rank`, `drop_in`, `note` |
 | `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
 | `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
-`aml_table` is the approved manufacturer list: which MPNs may be built against
-an IPN, ranked, each approval dated and attributed.
+`aml_table` is the approved manufacturer list: which MPNs may be built
+against an IPN, ranked. The row is the approval — a part number that may not
+be built is not in the table. `drop_in` says whether an alternative needs a
+design change to take.
 
 An offer is one distributor's listing of one MPN at one quantity break. One
 MPN carries many.

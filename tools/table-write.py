@@ -8,7 +8,7 @@ may be built against it. It never touches a KiCad file.
     table-write.py <board-dir> add   --class A --description "..." [options]
     table-write.py <board-dir> set   <ipn> [--field value ...]
     table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
-    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--approved yes|no]
+    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--drop-in yes|no]
     table-write.py <board-dir> drop  <ref>
     table-write.py <board-dir> show  [<ipn>]
 
@@ -45,14 +45,13 @@ CLASSES = {
     "Y": ("oscillator", "Y"),
 }
 
-STATUS = ("chosen", "drawn", "checked", "provisional", "blocked")
 SOURCE = ("stock", "vendor", "hand")
 
 IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 FIELDS = ("description", "category", "symbol", "footprint", "model",
-          "pins_checked", "source", "status")
+          "source")
 
 
 class Bad(SystemExit):
@@ -127,8 +126,6 @@ def guard_footprint(board, ipn, footprint):
 def check(field, value):
     if value is None:
         return None
-    if field == "status" and value not in STATUS:
-        raise Bad(f"status must be one of {', '.join(STATUS)}, found '{value}'")
     if field == "source" and value not in SOURCE:
         raise Bad(f"source must be one of {', '.join(SOURCE)}, found '{value}'")
     return value
@@ -149,7 +146,6 @@ def add(con, args):
     values = {f: check(f, getattr(args, f, None)) for f in FIELDS}
     values["description"] = args.description
     values["category"] = category
-    values["status"] = values["status"] or "chosen"
 
     guard_footprint(args.board, ipn, values["footprint"])
 
@@ -157,7 +153,7 @@ def add(con, args):
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
         f"values (?, {', '.join('?' * len(FIELDS))})",
         (ipn,) + tuple(values[f] for f in FIELDS))
-    print(f"{ipn}  {category}  {values['status']}")
+    print(f"{ipn}  {category}")
 
     for _ in range(args.count):
         ref = next_ref(con, prefix)
@@ -225,26 +221,22 @@ def mpn(con, args):
     """An approval: this manufacturer part may be built against this IPN.
     It is kept, unlike the fetched tables beside it."""
     part(con, args.ipn)
-    if args.approved not in ("yes", "no"):
-        raise Bad("approved must be yes or no")
     src = connect(args.board, "sourcing.db", ("aml_table",))
     try:
         have = src.execute(
-            "select rank, approved from aml_table where ipn = ? and mpn = ?",
+            "select rank from aml_table where ipn = ? and mpn = ?",
             (args.ipn, args.mpn)).fetchone()
         if have:
-            src.execute("update aml_table set rank = ?, approved = ?, note = ?"
+            src.execute("update aml_table set rank = ?, drop_in = ?, note = ?"
                         " where ipn = ? and mpn = ?",
-                        (args.rank, args.approved, args.note, args.ipn, args.mpn))
-            print(f"{args.ipn}  {args.mpn}  rank {have[0]} -> {args.rank},"
-                  f" approved {have[1]} -> {args.approved}")
+                        (args.rank, args.drop_in, args.note,
+                         args.ipn, args.mpn))
+            print(f"{args.ipn}  {args.mpn}  rank {have[0]} -> {args.rank}")
         else:
-            src.execute("insert into aml_table values (?,?,?,?,?,?,?,?)",
-                        (args.ipn, args.mpn, args.rank, args.approved,
-                         args.approved_by, args.approved_on, args.drop_in,
+            src.execute("insert into aml_table values (?,?,?,?,?)",
+                        (args.ipn, args.mpn, args.rank, args.drop_in,
                          args.note))
-            print(f"{args.ipn}  {args.mpn}  rank {args.rank}  "
-                  f"approved {args.approved}")
+            print(f"{args.ipn}  {args.mpn}  rank {args.rank}")
         src.commit()
     finally:
         src.close()
@@ -253,24 +245,24 @@ def mpn(con, args):
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
-        f"select ipn, description, category, status, source, symbol, footprint"
+        f"select ipn, description, category, source, symbol, footprint"
         f" from parts_table {where} order by ipn", vals).fetchall()
     if not rows:
         raise Bad("nothing to show")
-    for ipn, desc, cat, status, source, sym, fp in rows:
+    for ipn, desc, cat, source, sym, fp in rows:
         refs = [r[0] for r in con.execute(
             "select ref from ref_table where ipn = ? order by ref", (ipn,))]
-        print(f"{ipn}  {cat:12s} {status or '—':12s} {(desc or '')[:44]}")
+        print(f"{ipn}  {cat:12s} {(desc or '')[:52]}")
         print(f"    refs: {' '.join(refs) or '—'}")
         if args.ipn:
             print(f"    source: {source or '—'}  symbol: {sym or '—'}"
                   f"  footprint: {fp or '—'}")
             src = connect(args.board, "sourcing.db", ("aml_table",))
             try:
-                for m, rank, ok in src.execute(
-                        "select mpn, rank, approved from aml_table"
+                for m, rank in src.execute(
+                        "select mpn, rank from aml_table"
                         " where ipn = ? order by rank", (ipn,)):
-                    print(f"    mpn: {m}  rank {rank}  approved {ok}")
+                    print(f"    mpn: {m}  rank {rank}")
             finally:
                 src.close()
 
@@ -312,9 +304,6 @@ def main(argv):
     m.add_argument("ipn")
     m.add_argument("mpn")
     m.add_argument("--rank", type=int, default=1)
-    m.add_argument("--approved", default="no")
-    m.add_argument("--approved-by", dest="approved_by")
-    m.add_argument("--approved-on", dest="approved_on")
     m.add_argument("--drop-in", dest="drop_in")
     m.add_argument("--note")
     m.set_defaults(run=mpn)

@@ -14,7 +14,7 @@ It never opens a KiCad file, and it touches no table in `sourcing.db` but
 table-write.py <board-dir> add   --class A --description "..." [options]
 table-write.py <board-dir> set   <ipn> [--field value ...]
 table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
-table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--approved yes|no]
+table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--drop-in yes|no]
 table-write.py <board-dir> drop  <ref>
 table-write.py <board-dir> show  [<ipn>]
 ```
@@ -34,11 +34,12 @@ free number for its class's reference prefix and a fresh UUID.
 `--description` is required. A part with no description is a row nobody can
 read six months later.
 
-`--status` defaults to `chosen`.
-
 Every other `parts_table` field may be given: `--symbol`, `--footprint`,
-`--model`, `--pins-checked`, `--source`, `--status`. `--page` and `--room`
-are properties of the instance and go on the `ref_table` rows.
+`--model`, `--source`. `--page` and `--room` are properties of the instance
+and go on the `ref_table` rows.
+
+There is no status to set. The record says what the design is, not how far
+along it is — see T1.2.
 
 ## set
 
@@ -62,13 +63,14 @@ Records an approval in `aml_table` — this manufacturer part may be built
 against this IPN. Choosing a part and choosing the part number it is bought
 as are the same act, which is why it is here and not in a sourcing tool.
 
-`--rank` orders the alternatives, default 1. `--approved` is `yes` or `no`,
-default `no` — a part can be named long before anyone approves it.
-`--approved-by`, `--approved-on`, `--drop-in` and `--note` are recorded as
-given.
+The row is the approval. A part number that may not be built does not get a
+row, so there is no flag to set and none to forget.
 
-Naming the same IPN and MPN again updates the rank, the approval and the
-note rather than adding a second row. `aml_table` is kept, unlike the fetched
+`--rank` orders the alternatives, default 1. `--drop-in` says whether an
+alternative takes without a design change. `--note` is recorded as given.
+
+Naming the same IPN and MPN again updates the rank, the drop-in and the note
+rather than adding a second row. `aml_table` is kept, unlike the fetched
 tables beside it, so it is never discarded and refetched.
 
 ## drop
@@ -98,11 +100,9 @@ sometimes known before the part is chosen.
 ## What it refuses
 
 - A class letter that is not in T1.2
-- A `status` that is not one of the five, or a `source` that is not one of
-  the three
+- A `source` that is not one of the three
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
-- An `--approved` that is not `yes` or `no`
 - A footprint on a part with no MPN
 - Lowering an instance count
 - `add` with no description
