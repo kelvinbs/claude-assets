@@ -72,8 +72,9 @@ def part_numbers(con, ipn):
         raise Bad(f"{ipn} is not in parts_table")
     rows = con.execute("select mpn from aml_table where ipn = ? "
                        "order by rank is not null, rank", (ipn,)).fetchall()
-    if not rows:
-        raise Bad(f"{ipn} has no row in aml_table. Name a part number first")
+    # A part number is not required. A resistor is drawn as a resistor
+    # before anybody decides which one to buy, and the description is what
+    # the search has to go on.
     return [r[0] for r in rows]
 
 
@@ -115,19 +116,45 @@ PROMPT = """Find the KiCad symbol for {mpn} in the libraries on this machine.
 
 The part is {ipn}, {description}. Its reference designator is {prefix}.
 
-The libraries are `.kicad_sym` files in these directories:
+Work it out, do not search blindly. The libraries are named for what they
+hold, and there are hundreds of them:
 
 {folders}
 
-Each is s-expression text. A symbol is a top-level `(symbol "NAME"` block
-carrying `(pin <type> line ... (name "X") (number "N"))` for every pin, and
-`(property "Description" "...")`. Search them however you like - grep for
-the part number, for the family, for words from the description.
+The library files there are:
 
-A library does not organise itself by order code. The symbol may carry the
-family name with a trailing `x` for the package letters, the die name, a
-package suffix the order code does not have, or a generic name with the part
-number only in its description. Look past the file names.
+{files}
+
+Say what the part is - an operational amplifier, a GaAs MMIC driver, an ARM
+microcontroller, a USB PHY, a SAW filter - and that tells you which one or
+two files could hold it. A general-purpose part sits in a general library
+under its own name; a part a manufacturer never submitted is in none of
+them.
+
+Then read those files. Each is s-expression text: a symbol is a top-level
+`(symbol "NAME"` block carrying `(pin <type> line ... (name "X")
+(number "N"))` for every pin, and a `(property "Description" "...")`. List
+the symbol names, find the part, and check its pins against the datasheet
+before you answer.
+
+Judge the near ones too. A library holding a family usually holds several
+members, and the one named for the order code you were given may not be
+there while the same die under another name is. The near ones are also how
+you rule the library out: if the family is there and your part is not, that
+is an answer, not a reason to keep searching.
+
+If no symbol is the part, ask whether the part is one that is *drawn* as a
+generic symbol rather than as itself. A resistor is drawn as a resistor, a
+capacitor as a capacitor - an inductor, a diode, an LED, a crystal, a test
+point, a jumper, a mounting hole, a coaxial receptacle, the same. For those
+the generic symbol in `Device`, `Connector`, `Mechanical` or the like is the
+right symbol and the part number is a field on it, not a different drawing.
+Return it.
+
+That holds only where the generic drawing is the whole truth of the part. An
+integrated circuit is not a generic anything: a symbol whose pins are not
+this part's pins is wrong however close the family. When the part is a
+specific device and no symbol is that device, the answer is null.
 
 Return one of two things, written to {out} and nothing else.
 
@@ -137,7 +164,7 @@ The part, when a symbol is it:
       "library": "the .kicad_sym file's name, without the extension",
       "symbol": "the symbol's name, exactly",
       "rename": {{"3": "VCC"}},
-      "why": "one line - what makes this symbol this part"
+      "why": "one line - the library you reasoned to, and what makes this symbol this part"
     }}
 
 `rename` is for a symbol that is the part but names a pin differently from
@@ -147,7 +174,7 @@ a symbol: if the pins are not the part's pins, this is not the part.
 
 Nothing, when no symbol is it:
 
-    {{"library": null, "why": "one line - what you searched and what was there"}}
+    {{"library": null, "why": "one line - the library you reasoned to, what it held, and the nearest thing in it"}}
 
 Null is the right answer more often than not, and it is not a failure. A
 symbol for a different member of a family, a part with the same pin count,
@@ -196,10 +223,15 @@ def ask(ipn, description, mpn, prefix, folders, root):
     os.close(handle)
     out = Path(path)
     out.unlink()
+    names = sorted({path.stem for folder in folders
+                    for path in folder.glob("*.kicad_sym")})
     prompt = PROMPT.format(
-        ipn=ipn, description=description or "no description", mpn=mpn,
+        ipn=ipn, description=description or "no description",
+        mpn=mpn or "not named yet",
         prefix=prefix, out=out,
-        folders="\n".join(f"    {f}" for f in folders))
+        folders="\n".join(f"    {f}" for f in folders),
+        files="\n".join("    " + "  ".join(names[i:i + 4])
+                        for i in range(0, len(names), 4)))
     try:
         run = subprocess.run(
             ["claude", "-p", prompt,
@@ -233,7 +265,8 @@ def find(con, board, ipn, extra=None):
     mpns = part_numbers(con, ipn)
     classes = sibling("table-write").CLASSES
     prefix = classes[IPN.match(ipn).group(1)][1]
-    spec = ask(ipn, row[0], mpns[0], prefix, folders(extra), repo_root(board))
+    spec = ask(ipn, row[0], mpns[0] if mpns else "", prefix,
+               folders(extra), repo_root(board))
     return spec if spec.get("library") else None
 
 
@@ -264,7 +297,7 @@ def main(argv):
 
     classes = sibling("table-write").CLASSES
     prefix = classes[IPN.match(args.ipn).group(1)][1]
-    spec = ask(args.ipn, description[0], mpns[0], prefix,
+    spec = ask(args.ipn, description[0], mpns[0] if mpns else "", prefix,
                folders(args.lib), repo_root(board))
 
     if not spec.get("library"):
