@@ -26,6 +26,7 @@ library.
 import argparse
 import importlib.util
 import json
+import math
 import os
 import re
 import sqlite3
@@ -37,6 +38,7 @@ HERE = Path(__file__).resolve().parent
 GRID = 2.54
 FONT = 1.27
 PIN_LEN = 2.54
+OFFSET = 1.016   # pin_names offset — the gap between the body and a name
 
 PIN_TYPES = {
     "input", "output", "bidirectional", "tri_state", "passive", "free",
@@ -119,6 +121,12 @@ def snap(v):
     return round(v / GRID) * GRID
 
 
+def rise(v):
+    """Up to the next grid line, never down. A body sized by rounding to the
+    nearest one can come back smaller than the text it has to hold."""
+    return math.ceil(v / GRID - 1e-9) * GRID
+
+
 def sexp(tag, *body, indent=2):
     pad = "\t" * indent
     inner = "".join(body)
@@ -176,15 +184,20 @@ def body_size(spec):
 
     # Left and right names read across the body, so they set its width. Top
     # and bottom names read up it, so they take a band off the top and the
-    # bottom that the side pins have to start clear of.
+    # bottom that the side pins have to start clear of. A name starts OFFSET
+    # inside the edge the pin enters by, and every band is rounded up — a
+    # band rounded down is a name sitting on the one beside it.
     w = max(len(sides["T"]), len(sides["B"])) * 2 * GRID + 4 * GRID
-    w = max(w, (longest("L") + longest("R")) * text + 3 * GRID, 4 * GRID)
+    w = max(w, (longest("L") + longest("R")) * text + 2 * OFFSET + GRID,
+            4 * GRID)
 
-    top = snap(longest("T") * text + GRID) if sides["T"] else GRID
-    bottom = snap(longest("B") * text + GRID) if sides["B"] else GRID
+    # FONT is the height of the side name, which is centred on its own row,
+    # so half of it reaches up into the band above.
+    top = rise(longest("T") * text + OFFSET + FONT) if sides["T"] else GRID
+    bottom = rise(longest("B") * text + OFFSET + FONT) if sides["B"] else GRID
     h = max(len(sides["L"]), len(sides["R"])) * GRID + top + bottom + GRID
     h = max(h, 4 * GRID)
-    return snap(w / 2), snap(h / 2), sides, top
+    return rise(w / 2), rise(h / 2), sides, top
 
 
 def build_symbol(spec):
