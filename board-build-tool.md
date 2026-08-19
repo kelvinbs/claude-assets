@@ -393,9 +393,9 @@ tool document opens with the assets it reads and writes.
 
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
   `tools/table-read.md`, `tools/lib-init.md`, `tools/datasheet-read.md`,
-  `tools/symbol-draw.md`.
+  `tools/symbol-draw.md`, `tools/sheet-place.md`.
 - Built: `tools/db-init.py`, `tools/table-write.py`, `tools/lib-init.py`,
-  `tools/datasheet-read.py`, `tools/symbol-draw.py`.
+  `tools/datasheet-read.py`, `tools/symbol-draw.py`, `tools/sheet-place.py`.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
@@ -404,4 +404,9 @@ tool document opens with the assets it reads and writes.
   one the archived proto1 library was drawn from, symbols were drawn and
   copied into one library, and every symbol in it plots under `kicad-cli`.
   The footprint half is not written.
+- Process 3 passed its initial function test against `builds/proto1`: the
+  project, the root and one page written, the instances of the parts that
+  have symbols placed on it, ERC reporting unconnected and undriven pins and
+  no other class, the BOM read back carrying them, and a second run leaving
+  the page byte-identical.
 - `builds/proto1/tools` holds the working precedent for the rest.
