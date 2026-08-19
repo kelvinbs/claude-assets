@@ -27,6 +27,8 @@ import sqlite3
 import subprocess
 import tempfile
 import sys
+import threading
+import time
 from pathlib import Path
 
 PIN_TYPES = {
@@ -38,6 +40,7 @@ SIDES = {"L", "R", "T", "B"}
 
 IPN = re.compile(r"^[A-Z]\d{4}$")
 TIMEOUT = 900
+LABEL = "reading the datasheet"
 
 # The instruction the reader is given. It is the thing to change when a
 # pinout comes out wrong — not the checks below, which only say whether what
@@ -86,6 +89,20 @@ Before you finish, read your file back against the figure pin by pin. A
 wrong pin number passes ERC, passes the netlist, passes layout, and is
 found on the bench with a board in your hand.
 """
+
+
+def heartbeat(label):
+    """A run that prints nothing for minutes cannot be told from a hung one."""
+    stop = threading.Event()
+
+    def tick():
+        start = time.monotonic()
+        while not stop.wait(15):
+            print(f"    {label}  {int(time.monotonic() - start)}s",
+                  flush=True)
+    thread = threading.Thread(target=tick, daemon=True)
+    thread.start()
+    return stop
 
 
 class Bad(SystemExit):
@@ -265,12 +282,14 @@ def read(ipn, description, mpn, datasheet, root, quiet=False):
     out.unlink()
     prompt = PROMPT.format(ipn=ipn, description=description or "no description",
                            mpn=mpn, datasheet=datasheet, out=out)
+    beat = heartbeat(f"{ipn} " + LABEL)
     try:
         run = subprocess.run(
             ["claude", "-p", prompt,
              "--permission-mode", "acceptEdits",
              "--allowedTools", "Bash,Read,Write,WebSearch,WebFetch"],
             cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
+        beat.set()
 
         if not out.exists():
             if not quiet:
@@ -284,6 +303,7 @@ def read(ipn, description, mpn, datasheet, root, quiet=False):
                 print(f"    {ipn}: not JSON - {exc}")
             return None
     finally:
+        beat.set()
         if out.exists():
             out.unlink()
 

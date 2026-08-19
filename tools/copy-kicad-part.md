@@ -28,48 +28,31 @@ failure and the run exits zero saying `null`. The exit codes are for a
 question that could not be asked at all — an IPN that names no row, a part
 with no part number, no library directory to search.
 
-## It reasons to the library, it does not grep
+## The index, then one question
 
-A library is not organised by order code, and there are hundreds of files. A
-symbol may carry the family name with a trailing `x` for the package
-letters, the die name, a package suffix the order code does not have, or a
-generic name with the part number only in its description. Searching every
-file for a string finds the easy half and misses the rest.
+`lib-index` parses every library on the machine into one file — 22k symbols,
+two seconds, no model. This tool scores that index against the part's number
+and the words of its description, takes the candidates, and puts them and
+their pins in the prompt.
 
-So the search is handed to `claude -p`, and the instruction is to work out
-what the part *is* — an operational amplifier, a GaAs MMIC driver, an ARM
-microcontroller, a SAW filter — and let that name the one or two libraries
-that could hold it. It is given the list of library files and reads only
-those. The near members of a family are judged too: they are how a library
-is ruled out, and sometimes the same die is there under another name.
+The model reads nothing. It is given the candidates and asked which of them
+is the part, so a part costs one short run rather than a search across
+hundreds of files.
 
-The instruction is the `PROMPT` string in `copy-kicad-part.py`, and that is
-the thing to change when the search comes back wrong.
+What comes back is checked against the candidate list: the symbol was one of
+them, and every renamed pin is a pin it has.
 
-The instruction is explicit that a symbol for a different member of a
-family, a part with the same pin count, or the same kind of part from
-another maker is **not** this part, and that null is the right answer when
-in doubt. A wrong symbol passes every check downstream and is found on the
-bench.
+## What counts as the part
 
-What comes back is checked here against the library file: the symbol exists,
-and every renamed pin is a pin it has.
+A similar part's symbol is this part's symbol when its pins do the same job.
+The package and the maker belong to the footprint, not the symbol, so a
+donor in another package is not a reason to refuse.
 
-## The primitives
+Null only when nothing has pins that do the same job. Pin count alone is
+never the test. A part that is not on a schematic at all — a bare board, an
+enclosure, a host the board plugs into — is null.
 
-A part with no specific symbol may still not need drawing. A resistor is
-drawn as a resistor, a capacitor as a capacitor — an inductor, a diode, an
-LED, a crystal, a test point, a jumper, a mounting hole, a coaxial
-receptacle, the same. For those the generic symbol is the right symbol and
-the part number is a field on it, not a different drawing.
-
-That holds only where the generic drawing is the whole truth of the part. An
-integrated circuit is not a generic anything, and a symbol whose pins are
-not this part's pins is wrong however close the family.
-
-A part number is not required. A resistor is drawn as a resistor before
-anybody decides which one to buy, so a part with no row in `aml_table` is
-searched on its description.
+`fit` comes back with the answer: `exact`, `family` or `generic`.
 
 ## Renaming a pin
 
