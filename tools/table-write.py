@@ -50,8 +50,8 @@ SOURCE = re.compile(r"^[svh-]/[svh-]$")   # symbol/footprint — T1.2
 IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
-FIELDS = ("description", "category", "symbol", "footprint", "model",
-          "source", "note")
+FIELDS = ("description", "category", "parent", "symbol", "footprint",
+          "model", "source", "note")
 
 
 class Bad(SystemExit):
@@ -123,6 +123,18 @@ def guard_footprint(board, ipn, footprint):
                   f"first")
 
 
+def guard_parent(con, ipn, parent):
+    if parent is None:
+        return
+    if not IPN.match(parent):
+        raise Bad(f"'{parent}' is not an IPN")
+    if parent == ipn:
+        raise Bad(f"{ipn} cannot be its own parent")
+    if con.execute("select 1 from parts_table where ipn = ?",
+                   (parent,)).fetchone() is None:
+        raise Bad(f"parent {parent} is not in parts_table")
+
+
 def check(field, value):
     if value is None:
         return None
@@ -148,6 +160,7 @@ def add(con, args):
     values["description"] = args.description
     values["category"] = category
 
+    guard_parent(con, ipn, values["parent"])
     guard_footprint(args.board, ipn, values["footprint"])
 
     con.execute(
@@ -175,6 +188,7 @@ def setf(con, args):
         raise Bad("no field given")
     if "category" in changes:
         raise Bad("category follows the IPN letter and is not set by hand")
+    guard_parent(con, args.ipn, changes.get("parent"))
     guard_footprint(args.board, args.ipn, changes.get("footprint"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
@@ -244,18 +258,24 @@ def mpn(con, args):
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
-        f"select ipn, description, category, source, symbol, footprint"
+        f"select ipn, description, category, parent, source, symbol, footprint"
         f" from parts_table {where} order by ipn", vals).fetchall()
     if not rows:
         raise Bad("nothing to show")
-    for ipn, desc, cat, source, sym, fp in rows:
+    for ipn, desc, cat, parent, source, sym, fp in rows:
         refs = [r[0] for r in con.execute(
             "select ref from ref_table where ipn = ? order by ref", (ipn,))]
-        print(f"{ipn}  {cat:12s} {(desc or '')[:52]}")
+        print(f"{ipn}  {cat:12s} {(desc or '')[:52]}"
+              + (f"   parent {parent}" if parent else ""))
         print(f"    refs: {' '.join(refs) or '—'}")
         if args.ipn:
             print(f"    source: {source or '—'}  symbol: {sym or '—'}"
                   f"  footprint: {fp or '—'}")
+            kids = [r[0] for r in con.execute(
+                "select ipn from parts_table where parent = ? order by ipn",
+                (ipn,))]
+            if kids:
+                print(f"    children: {' '.join(kids)}")
             src = connect(args.board, "sourcing.db", ("aml_table",))
             try:
                 for m, rank in src.execute(

@@ -106,7 +106,7 @@ Blank is the normal state.
 
 | Table | Key | Fields |
 |---|---|---|
-| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `source`, `note` |
+| `parts_table` | `ipn` | `description`, `category`, `parent`, `symbol`, `footprint`, `model`, `source`, `note` |
 | `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room`, `note` |
 
 `parts_table` is the part. One row per IPN, whatever the board uses it for.
@@ -124,10 +124,30 @@ mean storing it as well.
 There is no `qty` field. Quantity is `count(*) from ref_table group by ipn`,
 and a field would only be a second place for it to be wrong.
 
-`page` names the schematic page the symbol is placed on. `room` is a tag the
-tool may use in choosing where a footprint goes; it constrains nothing, and a
-KiCad group is nothing more than a list of parts. Both are properties of the
-instance, not of the part.
+`page` names the schematic page the symbol is placed on. `room` is the
+User's tag for where a footprint goes; it constrains nothing, and a KiCad
+group is nothing more than a list of parts. No tool invents one. Both are
+properties of the instance, not of the part.
+
+**`parent`**
+
+An IPN, or blank. It names the part this one exists to serve.
+
+A discrete is not a part on its own — a 10 k resistor is nothing until you
+say which loop it closes. `parent` says it. The feedback resistor and the
+feedback capacitor around an op-amp carry the op-amp's IPN, and so do its
+bypass capacitors.
+
+The parent names the function and is the primary part of it. Ask for its
+children and what comes back is the assembly: the op-amp, the two feedback
+parts, the bypass capacitors. Nothing has to be declared an assembly — a part
+with children is one, and a part with none is not.
+
+Blank is a top-level part. One level of parent is enough for a board; a
+parent that is itself a child is not refused, but nothing here needs it.
+
+`parent` is the design's own hierarchy and is not placement. Placement is
+`room`, on the instance, and it is the User's.
 
 `source` records where the library objects came from. Two letters, the symbol
 then the footprint, separated by a slash — `s/h` is a stock symbol with a

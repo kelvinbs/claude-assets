@@ -34,8 +34,12 @@ free number for its class's reference prefix and a fresh UUID.
 `--description` is required. A part with no description is a row nobody can
 read six months later.
 
-Every other `parts_table` field may be given: `--symbol`, `--footprint`,
-`--model`, `--source`, `--note`. `--page` and `--room` are properties of the instance
+Every other `parts_table` field may be given: `--parent`, `--symbol`,
+`--footprint`, `--model`, `--source`, `--note`.
+
+`--parent` names the part this one serves — the op-amp a feedback resistor
+closes the loop around. It must name a part that exists and cannot be the
+part itself. `show <ipn>` lists a part's children, which is its assembly. `--page` and `--room` are properties of the instance
 and go on the `ref_table` rows.
 
 There is no status to set. The record says what the design is, not how far
@@ -102,6 +106,7 @@ sometimes known before the part is chosen.
 
 - A class letter that is not in T1.2
 - A `source` that is not two letters from `s`, `v`, `h` or `-`, as `s/h`
+- A `parent` that is not an IPN, names no row, or is the part itself
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
 - A footprint on a part with no MPN

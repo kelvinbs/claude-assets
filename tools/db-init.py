@@ -23,6 +23,7 @@ SCHEMA = {
             "ipn           TEXT PRIMARY KEY",
             "description   TEXT",
             "category      TEXT",
+            "parent        TEXT",
             "symbol        TEXT",
             "footprint     TEXT",
             "model         TEXT",
