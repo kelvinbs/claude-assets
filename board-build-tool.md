@@ -94,8 +94,12 @@ is top level. One level.
 | `h` | drawn here, against the datasheet |
 | `-` | absent |
 
-`h/-` is a hand-drawn symbol and no footprint. Section 2 copies every object
-into `lib/`; `source` is its origin.
+`h/-` is a hand-drawn symbol and no footprint.
+
+`symbol` and `footprint` are `<project>:<name>`, resolving inside `lib/` per
+section 2. `symbol-draw` and `footprint-draw` copy the object in and write
+the field. A KiCad library is an input to those tools; `source` records it as
+the origin.
 
 **The IPN**
 
@@ -307,9 +311,9 @@ tool document opens with the assets it reads and writes.
 |---|---|---|---|
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| `symbol-draw` | Create or modify symbol | Pins from `datasheet-read` | `lib/*.kicad_sym` |
-| `footprint-draw` | Create or modify footprint | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Create or modify part | Record row, `datasheet-read` | `board.db` — `parts_table`, `ref_table`, `aml_table` |
+| `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `model`, `source` |
+| `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
+| `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
 | `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Place footprints on the board | `board.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |

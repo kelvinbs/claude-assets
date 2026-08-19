@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """table-write — create or modify a part.
 
-The tool of process 1. It writes `parts_table`, the `ref_table` rows that go
-with a part, and the `aml_table` approval that says which manufacturer part
-may be built against it. It never touches a KiCad file.
+The tool of process 1. It writes the part, its instances, and the approval
+that says which manufacturer part may be built against it. The library
+fields of `parts_table` belong to process 2, which copies each object into
+`lib/` before naming it.
 
     table-write.py <board-dir> add   --class A --description "..." [options]
     table-write.py <board-dir> set   <ipn> [--field value ...]
@@ -45,13 +46,12 @@ CLASSES = {
     "Y": ("oscillator", "Y"),
 }
 
-SOURCE = re.compile(r"^[svh-]/[svh-]$")   # symbol/footprint — T1.2
-
 IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
-FIELDS = ("description", "category", "parent", "symbol", "footprint",
-          "model", "source", "note")
+# process 1 writes the part. The library objects are process 2's, written by
+# symbol-draw and footprint-draw once the object is copied into lib/
+FIELDS = ("description", "category", "parent", "note")
 
 
 class Bad(SystemExit):
@@ -106,21 +106,6 @@ def part(con, ipn):
     return dict(zip(("ipn",) + FIELDS, row))
 
 
-def has_mpn(con, ipn):
-    return con.execute("select 1 from aml_table where ipn = ?",
-                       (ipn,)).fetchone() is not None
-
-
-def guard_footprint(con, ipn, footprint):
-    """A footprint is a land pattern. A land pattern is a package, and a
-    package is a manufacturer part. Until one is named against the IPN there
-    is nothing for a footprint to be."""
-    if footprint and not has_mpn(con, ipn):
-        raise Bad(f"{ipn} has no MPN in aml_table. A footprint is a package, "
-                  f"and a package needs a part number — name one with mpn "
-                  f"first")
-
-
 def guard_parent(con, ipn, parent):
     if parent is None:
         return
@@ -136,9 +121,6 @@ def guard_parent(con, ipn, parent):
 def check(field, value):
     if value is None:
         return None
-    if field == "source" and not SOURCE.match(value):
-        raise Bad(f"source is two letters, symbol then footprint, from "
-                  f"s v h or -, as in 's/h'. Found '{value}'")
     return value
 
 
@@ -159,7 +141,6 @@ def add(con, args):
     values["category"] = category
 
     guard_parent(con, ipn, values["parent"])
-    guard_footprint(con, ipn, values["footprint"])
 
     con.execute(
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
@@ -187,7 +168,6 @@ def setf(con, args):
     if "category" in changes:
         raise Bad("category follows the IPN letter and is not set by hand")
     guard_parent(con, args.ipn, changes.get("parent"))
-    guard_footprint(con, args.ipn, changes.get("footprint"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()

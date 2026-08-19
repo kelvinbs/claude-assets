@@ -36,8 +36,7 @@ free number for its class's reference prefix and a fresh UUID.
 `--description` is required. A part with no description is a row nobody can
 read six months later.
 
-Every other `parts_table` field may be given: `--parent`, `--symbol`,
-`--footprint`, `--model`, `--source`, `--note`.
+`--parent` and `--note` are the other `parts_table` fields it writes.
 
 `--parent` names the part this one serves — the op-amp a feedback resistor
 closes the loop around. It must name a part that exists and cannot be the
@@ -99,28 +98,18 @@ it came out of.
 Every part, its class, its status and its instances. With an IPN, that part
 alone, and its source, symbol and footprint as well.
 
-## A footprint needs a part number
+## The library fields
 
-A footprint is a land pattern, a land pattern is a package, and a package is
-a manufacturer part. Until an MPN is named against the IPN there is nothing
-for a footprint to be, and one taken off a description is a placeholder that
-looks exactly like a finished one.
-
-So `--footprint` is refused on a part with no `aml_table` row, whether on
-`add` or on `set`. The order is: create the part, name the MPN, then set the
-footprint.
-
-A symbol is not refused. A symbol follows the pinout, and a generic pinout is
-sometimes known before the part is chosen.
+`symbol`, `footprint`, `model` and `source` are written by `symbol-draw` and
+`footprint-draw` in process 2, after the object is copied into `lib/` and
+given the project nickname. This tool leaves them alone.
 
 ## What it refuses
 
 - A class letter that is not in T1.2
-- A `source` that is not two letters from `s`, `v`, `h` or `-`, as `s/h`
 - A `parent` that is not an IPN, names no row, or is the part itself
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
-- A footprint on a part with no MPN
 - Lowering an instance count
 - `add` with no description
 - A board directory with no `board.db`, or one missing a table
