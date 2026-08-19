@@ -61,13 +61,14 @@ The tables are a record of the design. Progress is a query:
 `note` is a person's sentence, on `parts_table` and `aml_table`. Normally
 blank. Tools write the columns.
 
-**The schema is the User's**
+**What is fixed and what is not**
 
-Tables, columns, types, keys and relations are set by the User. An agent
-proposes a change and waits. It adds no column, removes none, and infers
-none.
+The tables, their keys and the relations of T1.5 are the structure. They are
+enforced, and a tool that needs one of them changed is broken — the defect is
+in the tool.
 
-T1.2, T1.3 and T1.5 are the schema. `db-init` builds what they declare.
+A field is working data. Add one where a tool needs it, and record it in T1.2
+or T1.3 in the same commit.
 
 **T1.2 — The design tables**
 
