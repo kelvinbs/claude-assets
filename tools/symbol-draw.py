@@ -105,6 +105,12 @@ def datasheet_of(con, ipn):
     return (row[0] if row else None) or ""
 
 
+def mpn_of(con, ipn):
+    row = con.execute("select mpn from aml_table where ipn = ? "
+                      "order by rank is not null, rank", (ipn,)).fetchone()
+    return row[0] if row else ""
+
+
 def write_fields(con, ipn, lib_id, letter, was_source):
     """`source` is two letters, symbol then footprint. This tool owns the
     first and does not touch the second."""
@@ -425,18 +431,31 @@ def one(con, board, ipn, nickname, args, classes):
 
     prefix = classes[IPN.match(ipn).group(1)][1]
     datasheet = datasheet_of(con, ipn)
+    datasheet_mpn = mpn_of(con, ipn)
     path = library_of(board, nickname)
 
     # The order of the resorts: a library that already holds the part, then
     # the datasheet. Drawing is what is done when nothing holds it.
+    # The order of the resorts: a library that already holds the part, then
+    # the datasheet. copy-kicad-part owns the first - it finds the symbol,
+    # copies it in and renames its pins - and returns the library id it
+    # wrote, or None.
+    if not args.source_lib:
+        hint = " ".join(filter(None, [datasheet_mpn or "", description or ""]))
+        try:
+            written, spec = finder.take(board, hint, ipn, nickname, args.lib)
+        except SystemExit as exc:
+            raise Bad(str(exc))
+        if written:
+            write_fields(con, ipn, written, "s", source)
+            renames = spec.get("rename") or {}
+            print(f"{ipn}  {written}  s  copied from {spec['library']}:"
+                  f"{spec['symbol']}"
+                  + (f", {len(renames)} pin(s) renamed" if renames else ""))
+            return True
+
     lib_id_given = args.source_lib
     rename = None
-    if not lib_id_given:
-        candidate = matched.get(ipn)
-        if candidate:
-            lib_id_given = f"{candidate['library']}:{candidate['symbol']}"
-            rename = candidate.get("rename")
-
     if lib_id_given:
         if ":" not in lib_id_given:
             raise Bad(f"'{lib_id_given}' is not <library>:<symbol>")
@@ -549,16 +568,6 @@ def main(argv):
             if not targets:
                 print("every part has a symbol. Nothing to draw")
                 return 0
-
-        # One run matches every target against the libraries. Asked part by
-        # part it was a model run each, each starting cold.
-        global matched
-        matched = {}
-        if not args.source_lib:
-            try:
-                matched = finder.match(con, board, targets, args.lib)
-            except SystemExit as exc:
-                raise Bad(str(exc))
 
         failed = []
         for ipn in targets:

@@ -1,42 +1,37 @@
 # copy-kicad-part
 
-Match the board's parts to symbols in the KiCad libraries. One run for the
-whole board.
+Copy a KiCad symbol into the project library. Give it a part number or a
+description; it writes the symbol and prints what it wrote, or `null`.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/kicad-index.json` | nothing |
+| `lib/kicad-index.json`<br>the KiCad libraries | `lib/<nickname>.kicad_sym` |
 
 ```
-python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --all [--lib DIR ...]
-python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <ipn> [<ipn> ...]
+python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
 ```
 
-`--all` is every part the record puts on a page and that has no symbol yet.
+`<hint>` is a part number, a description, or both. `--ipn` names the copy;
+without it the copy is named after the hint.
 
-`symbol-draw` calls it once before it draws anything, and copies what comes
-back. Drawing a symbol is the last resort; this is asked first.
+It does not read `board.db` and does not write it. `symbol-draw` calls it,
+and `symbol-draw` owns the record.
 
-## One run, not one per part
+Drawing a symbol is the last resort. This is asked first.
 
-Asked part by part, the question costs a model run each and every run starts
-cold. Asked once, the run sees the whole board: the families that repeat
-across it, the parts that are the same silicon under two IPNs, the generic
-that serves six passives. It answers them together and consistently.
+## Five steps
 
-That is what the index buys — not the same work done faster, but a question
-that could not be asked before.
+| # | Step | Model |
+|---|---|---|
+| 1 | Take the hint | no |
+| 2 | Build or load the index, through `lib-index` | no |
+| 3 | Score the index against the hint, take the candidates with their pins | no |
+| 4 | Ask once which candidate is the part, and what its pins should be called | yes |
+| 5 | Copy it into `lib/`, rename the pins, set `origin`, print the library id | no |
 
-## The index does the finding, the model does the judging
-
-`lib-index` parses every library on the machine into `lib/kicad-index.json`,
-built automatically when it is missing or out of date. This tool scores that
-index against each part's number and the words of its description, and takes
-the best candidates.
-
-The prompt carries every part and its candidates, each with its pins. The
-model reads no files. It is given what there is and asked which of it is the
-part.
+Only step 4 runs a model, and it reads nothing — the candidates and their
+pins are in the prompt. A part costs one short run, not a search across
+hundreds of files.
 
 ## What counts as the part
 
@@ -45,23 +40,33 @@ Take it, and rename the pins to the names the datasheet prints. The package
 and the maker belong to the footprint, not the symbol, so a candidate in
 another package is not a reason to refuse.
 
-Null when nothing listed has pins that do the same job. Pin count alone is
-never the test. A part that is not on a schematic at all — a bare board, an
+Null when nothing has pins that do the same job. Pin count alone is never
+the test. A part that is not on a schematic at all — a bare board, an
 enclosure, a host the board plugs into — is null.
 
-`fit` comes back with each answer: `exact`, `family` or `generic`.
+`fit` comes back with the answer: `exact`, `family` or `generic`.
+
+## What it writes
+
+The symbol, under the name given, into `lib/<nickname>.kicad_sym`. Its
+`Value` is that name, its `Footprint` is emptied — the package belongs to
+`footprint-draw` — and an `origin` property names the library and symbol it
+came from.
+
+`lib-init` must have made the library first.
 
 ## What comes back is checked
 
-Every part named in the run has an answer, every named symbol was one of
-that part's candidates, and every renamed pin is a pin that symbol has. A
-run that fails any of these stops and names the part.
+The named symbol was one of the candidates, and every renamed pin is a pin
+it has. A run that fails either stops and says so.
 
 ## What it refuses
 
-- An IPN that does not read as one, or names no row
-- IPNs named together with `--all`
-- A `--lib` that is not a directory
-- A board directory with no `board.db`, or one missing a table
+- A board directory that does not exist, or with no `lib/<nickname>.kicad_sym`
+- No `.kicad_pro` and no `--nickname`
+- A library the answer names that is not on disk
+- A symbol the library does not hold
+- An answer naming a symbol that was not a candidate, or a pin the symbol
+  does not have
 
 Each exits non-zero and names what it found.
