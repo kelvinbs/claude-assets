@@ -58,15 +58,15 @@ The tables are a record of the design. Progress is a query:
 | quantity | `count(*) from ref_table group by ipn` |
 | the assembly | rows whose `parent` is this IPN |
 
-`note` is a person's sentence, on `parts_table`, `ref_table`, `aml_table` and
-`mpn_table`. Normally blank. Tools write the columns.
+`note` is a person's sentence, on `parts_table` and `aml_table`. Normally
+blank. Tools write the columns.
 
 **T1.2 — The design tables**
 
 | Table | Key | Fields |
 |---|---|---|
-| `parts_table` | `ipn` | `description`, `category`, `parent`, `symbol`, `footprint`, `model`, `source`, `note` |
-| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room`, `note` |
+| `parts_table` | `ipn` | `description`, `parent`, `symbol`, `footprint`, `source`, `note` |
+| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room` |
 
 `parts_table` is the part, one row per IPN. `ref_table` is the instance: `U1`
 and `U2` are two rows on one `ipn`, each free to carry its own `page` and
@@ -129,8 +129,8 @@ function change takes a new IPN; any other change is a second MPN in
 | `Y` | oscillator, reference |
 
 Ten letters match the KiCad reference designator for the same class. Four
-digits mark the IPN: `U0001` is a part, `U1` an instance. `category` carries
-the class word; a new class is added to this table first.
+digits mark the IPN: `U0001` is a part, `U1` an instance. This table is the
+class list; a new class is added here first.
 
 **T1.4 — Where a thing is placed**
 
@@ -165,7 +165,7 @@ All six are declared foreign keys. Every tool sets `PRAGMA foreign_keys = ON`.
 | Table | Key | Fields |
 |---|---|---|
 | `aml_table` | `ipn` + `mpn` | `rank`, `note` |
-| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `note` |
+| `mpn_table` | `mpn` | `manufacturer`, `datasheet` |
 | `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
 `aml_table` is the approved manufacturer list: the MPNs that may be built
@@ -175,8 +175,9 @@ as designed.
 `rank` orders the alternatives, blank on the one designed against. One blank
 per IPN, held as a unique index over `ipn` where `rank is null`.
 
-`mpn_table` is the manufacturer part: maker, package, pin count, pitch,
-datasheet. The row exists from the moment the part number is named.
+`mpn_table` is the manufacturer part: maker and datasheet. The row exists
+from the moment the part number is named. Package, pin count and pitch are
+read from the datasheet by `datasheet-read` and land in the footprint.
 
 `offer_table` is fetched: one row per distributor per quantity break.
 `fetched_at` dates it.
@@ -309,7 +310,7 @@ tool document opens with the assets it reads and writes.
 |---|---|---|---|
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `model`, `source` |
+| `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
 | `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |

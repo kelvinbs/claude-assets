@@ -24,11 +24,9 @@ SCHEMA = {
         "parts_table": (
             "ipn           TEXT PRIMARY KEY",
             "description   TEXT",
-            "category      TEXT",
             "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
             "symbol        TEXT",
             "footprint     TEXT",
-            "model         TEXT",
             "source        TEXT",
             "note          TEXT",
         ),
@@ -39,17 +37,12 @@ SCHEMA = {
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
-            "note          TEXT",
         ),
         # the manufacturer part itself. Kept, and never fetched away
         "mpn_table": (
             "mpn           TEXT PRIMARY KEY",
             "manufacturer  TEXT",
-            "package       TEXT",
-            "pin_count     INTEGER",
-            "pitch_mm      REAL",
             "datasheet     TEXT",
-            "note          TEXT",
         ),
         "aml_table": (
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"

@@ -51,7 +51,7 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 # process 1 writes the part. The library objects are process 2's, written by
 # symbol-draw and footprint-draw once the object is copied into lib/
-FIELDS = ("description", "category", "parent", "note")
+FIELDS = ("description", "parent", "note")
 
 
 class Bad(SystemExit):
@@ -138,7 +138,6 @@ def add(con, args):
     ipn = next_ipn(con, letter)
     values = {f: check(f, getattr(args, f, None)) for f in FIELDS}
     values["description"] = args.description
-    values["category"] = category
 
     guard_parent(con, ipn, values["parent"])
 
@@ -165,8 +164,6 @@ def setf(con, args):
             changes[f] = check(f, v)
     if not changes:
         raise Bad("no field given")
-    if "category" in changes:
-        raise Bad("category follows the IPN letter and is not set by hand")
     guard_parent(con, args.ipn, changes.get("parent"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
@@ -244,14 +241,14 @@ def mpn(con, args):
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
-        f"select ipn, description, category, parent, source, symbol, footprint"
+        f"select ipn, description, parent, source, symbol, footprint"
         f" from parts_table {where} order by ipn", vals).fetchall()
     if not rows:
         raise Bad("nothing to show")
-    for ipn, desc, cat, parent, source, sym, fp in rows:
+    for ipn, desc, parent, source, sym, fp in rows:
         refs = [r[0] for r in con.execute(
             "select ref from ref_table where ipn = ? order by ref", (ipn,))]
-        print(f"{ipn}  {cat:12s} {(desc or '')[:52]}"
+        print(f"{ipn}  {CLASSES[ipn[0]][0]:12s} {(desc or '')[:52]}"
               + (f"   parent {parent}" if parent else ""))
         print(f"    refs: {' '.join(refs) or '—'}")
         if args.ipn:
@@ -278,8 +275,7 @@ def main(argv):
 
     def fields(p):
         for f in FIELDS:
-            if f != "category":
-                p.add_argument(f"--{f.replace('_', '-')}", dest=f)
+            p.add_argument(f"--{f.replace('_', '-')}", dest=f)
 
     a = sub.add_parser("add", help="create a part")
     a.add_argument("--class", dest="cls", required=True)

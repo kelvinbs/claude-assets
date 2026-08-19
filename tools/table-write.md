@@ -26,9 +26,7 @@ table-write.py <board-dir> show  [<ipn>]
 Creates one `parts_table` row and the `ref_table` rows that go with it.
 
 `--class` is the IPN letter of T1.2. The tool takes the next free number in
-that class, so the IPN is never given on the command line. `category` follows
-from the letter and cannot be set by hand — one class word for one letter, in
-one place.
+that class, so the IPN is given by the tool.
 
 `--count` is how many instances to create, default 1. Each takes the lowest
 free number for its class's reference prefix and a fresh UUID.
@@ -50,8 +48,6 @@ along it is — see T1.2.
 
 Changes fields on a part that exists. Prints what each field was and what it
 became, so a change is legible in the terminal as well as in the database.
-
-`category` is refused — it follows the IPN letter.
 
 ## place
 
@@ -100,7 +96,7 @@ alone, and its source, symbol and footprint as well.
 
 ## The library fields
 
-`symbol`, `footprint`, `model` and `source` are written by `symbol-draw` and
+`symbol`, `footprint` and `source` are written by `symbol-draw` and
 `footprint-draw` in process 2, after the object is copied into `lib/` and
 given the project nickname. This tool leaves them alone.
 
