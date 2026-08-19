@@ -425,7 +425,13 @@ def one(con, board, ipn, nickname, args, classes):
                             description, datasheet)
         origin = f"copied from {source_nick}:{source_name}"
     else:
-        spec = reader.pinout(con, board, ipn, args.datasheet, args.datasheets)
+        try:
+            spec = reader.pinout(con, board, ipn, args.datasheet,
+                                 args.datasheets)
+        except SystemExit as exc:
+            # datasheet-read raises its own class. Uncaught it would end a
+            # --all pass on the first part that has nothing to read.
+            raise Bad(str(exc))
         if spec is None:
             raise Bad(f"{ipn}: no pinout read. Give --from, or a datasheet")
         spec["name"] = ipn
