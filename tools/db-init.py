@@ -41,7 +41,6 @@ SCHEMA = {
             "ipn           TEXT NOT NULL",
             "mpn           TEXT NOT NULL",
             "rank          INTEGER",
-            "drop_in       TEXT",
             "note          TEXT",
             "PRIMARY KEY (ipn, mpn)",
         ),

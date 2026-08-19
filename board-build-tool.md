@@ -171,14 +171,14 @@ class is recorded. A class the list does not hold is added here first.
 
 | Table | Key | Fields |
 |---|---|---|
-| `aml_table` | `ipn` + `mpn` | `rank`, `drop_in`, `note` |
+| `aml_table` | `ipn` + `mpn` | `rank`, `note` |
 | `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
 | `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
 `aml_table` is the approved manufacturer list: which MPNs may be built
 against an IPN, ranked. The row is the approval — a part number that may not
-be built is not in the table. `drop_in` says whether an alternative needs a
-design change to take.
+be built is not in the table, and one that would need the board changed to
+take is not either. Every MPN in it drops in, or it is not in it.
 
 An offer is one distributor's listing of one MPN at one quantity break. One
 MPN carries many.

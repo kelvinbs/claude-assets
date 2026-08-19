@@ -14,7 +14,7 @@ It never opens a KiCad file, and it touches no table in `sourcing.db` but
 table-write.py <board-dir> add   --class A --description "..." [options]
 table-write.py <board-dir> set   <ipn> [--field value ...]
 table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
-table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--drop-in yes|no]
+table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--note ...]
 table-write.py <board-dir> drop  <ref>
 table-write.py <board-dir> show  [<ipn>]
 ```
@@ -64,13 +64,13 @@ against this IPN. Choosing a part and choosing the part number it is bought
 as are the same act, which is why it is here and not in a sourcing tool.
 
 The row is the approval. A part number that may not be built does not get a
-row, so there is no flag to set and none to forget.
+row, and neither does one that would need the board changed to take — every
+MPN in the table drops in. There is no flag to set and none to forget.
 
-`--rank` orders the alternatives, default 1. `--drop-in` says whether an
-alternative takes without a design change. `--note` is recorded as given.
+`--rank` orders the alternatives, default 1. `--note` is recorded as given.
 
-Naming the same IPN and MPN again updates the rank, the drop-in and the note
-rather than adding a second row. `aml_table` is kept, unlike the fetched
+Naming the same IPN and MPN again updates the rank and the note rather than
+adding a second row. `aml_table` is kept, unlike the fetched
 tables beside it, so it is never discarded and refetched.
 
 ## drop

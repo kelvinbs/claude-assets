@@ -8,7 +8,7 @@ may be built against it. It never touches a KiCad file.
     table-write.py <board-dir> add   --class A --description "..." [options]
     table-write.py <board-dir> set   <ipn> [--field value ...]
     table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
-    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--drop-in yes|no]
+    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--note ...]
     table-write.py <board-dir> drop  <ref>
     table-write.py <board-dir> show  [<ipn>]
 
@@ -227,15 +227,13 @@ def mpn(con, args):
             "select rank from aml_table where ipn = ? and mpn = ?",
             (args.ipn, args.mpn)).fetchone()
         if have:
-            src.execute("update aml_table set rank = ?, drop_in = ?, note = ?"
+            src.execute("update aml_table set rank = ?, note = ?"
                         " where ipn = ? and mpn = ?",
-                        (args.rank, args.drop_in, args.note,
-                         args.ipn, args.mpn))
+                        (args.rank, args.note, args.ipn, args.mpn))
             print(f"{args.ipn}  {args.mpn}  rank {have[0]} -> {args.rank}")
         else:
-            src.execute("insert into aml_table values (?,?,?,?,?)",
-                        (args.ipn, args.mpn, args.rank, args.drop_in,
-                         args.note))
+            src.execute("insert into aml_table values (?,?,?,?)",
+                        (args.ipn, args.mpn, args.rank, args.note))
             print(f"{args.ipn}  {args.mpn}  rank {args.rank}")
         src.commit()
     finally:
@@ -304,7 +302,6 @@ def main(argv):
     m.add_argument("ipn")
     m.add_argument("mpn")
     m.add_argument("--rank", type=int, default=1)
-    m.add_argument("--drop-in", dest="drop_in")
     m.add_argument("--note")
     m.set_defaults(run=mpn)
 
