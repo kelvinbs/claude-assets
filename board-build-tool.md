@@ -237,31 +237,16 @@ fixed digits mark an IPN as one: `U0001` is a part, `U1` an instance.
 
 **T1.5 — The relations**
 
-Six, and every one is declared.
-
 | From | To | On delete |
 |---|---|---|
-| `ref_table.ipn` | `parts_table.ipn` | restricted |
+| `ref_table.ipn` | `parts_table.ipn` | restrict |
 | `parts_table.parent` | `parts_table.ipn` | set null |
-| `aml_table.ipn` | `parts_table.ipn` | restricted |
-| `aml_table.mpn` | `mpn_table.mpn` | restricted |
+| `aml_table.ipn` | `parts_table.ipn` | restrict |
+| `aml_table.mpn` | `mpn_table.mpn` | restrict |
 | `lifecycle_table.mpn` | `mpn_table.mpn` | cascade |
 | `offer_table.mpn` | `mpn_table.mpn` | cascade |
 
-`parts_table.ipn` and `mpn_table.mpn` are the two hubs — the part you
-designed and the part number you buy. `aml_table` is the only table that
-touches both, and that is what it is for.
-
-Foreign keys in SQLite are off unless a connection turns them on, so every
-tool sets `PRAGMA foreign_keys = ON` before it writes.
-
-A part is deleted once its instances and its approvals are gone: the
-instances sit on a sheet, and an approval is a decision.
-
-Deleting a parent leaves its children, with `parent` cleared.
-
-A manufacturer part is deleted once no approval names it, and takes its
-lifecycle and its offers with it. Discarding a fetch is exactly that.
+All six are declared foreign keys. Every tool sets `PRAGMA foreign_keys = ON`.
 
 **T1.3 — The sourcing tables**
 
