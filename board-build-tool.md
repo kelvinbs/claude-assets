@@ -63,10 +63,27 @@ blank. Tools write the columns.
 
 **T1.2 — The design tables**
 
-| Table | Key | Fields |
-|---|---|---|
-| `parts_table` | `ipn` | `description`, `parent`, `symbol`, `footprint`, `source`, `note` |
-| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room` |
+`parts_table`
+
+| Column | Type | Key | Null |
+|---|---|---|---|
+| `ipn` | TEXT | key | |
+| `description` | TEXT | | yes |
+| `parent` | TEXT | | yes |
+| `symbol` | TEXT | | yes |
+| `footprint` | TEXT | | yes |
+| `source` | TEXT | | yes |
+| `note` | TEXT | | yes |
+
+`ref_table`
+
+| Column | Type | Key | Null |
+|---|---|---|---|
+| `uuid` | TEXT | key | |
+| `ipn` | TEXT | | |
+| `ref` | TEXT | | yes |
+| `page` | TEXT | | yes |
+| `room` | TEXT | | yes |
 
 `parts_table` is the part, one row per IPN. `ref_table` is the instance: `U1`
 and `U2` are two rows on one `ipn`, each free to carry its own `page` and
@@ -150,23 +167,49 @@ documents.
 
 **T1.5 — The relations**
 
-| From | To | On delete |
-|---|---|---|
-| `ref_table.ipn` | `parts_table.ipn` | restrict |
-| `parts_table.parent` | `parts_table.ipn` | set null |
-| `aml_table.ipn` | `parts_table.ipn` | restrict |
-| `aml_table.mpn` | `mpn_table.mpn` | restrict |
-| `offer_table.mpn` | `mpn_table.mpn` | cascade |
+| From | To | Cardinality | On delete |
+|---|---|---|---|
+| `ref_table.ipn` | `parts_table.ipn` | many-to-one | restrict |
+| `parts_table.parent` | `parts_table.ipn` | many-to-one, self | set null |
+| `aml_table.ipn` | `parts_table.ipn` | many-to-one | restrict |
+| `aml_table.mpn` | `mpn_table.mpn` | many-to-one | restrict |
+| `offer_table.mpn` | `mpn_table.mpn` | many-to-one | cascade |
 
 All six are declared foreign keys. Every tool sets `PRAGMA foreign_keys = ON`.
 
 **T1.3 — The sourcing tables**
 
-| Table | Key | Fields |
-|---|---|---|
-| `aml_table` | `ipn` + `mpn` | `rank`, `note` |
-| `mpn_table` | `mpn` | `manufacturer`, `datasheet` |
-| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
+`aml_table`
+
+| Column | Type | Key | Null |
+|---|---|---|---|
+| `ipn` | TEXT | key | |
+| `mpn` | TEXT | key | |
+| `rank` | INTEGER | | yes |
+| `note` | TEXT | | yes |
+
+`mpn_table`
+
+| Column | Type | Key | Null |
+|---|---|---|---|
+| `mpn` | TEXT | key | |
+| `manufacturer` | TEXT | | yes |
+| `datasheet` | TEXT | | yes |
+
+`offer_table`
+
+| Column | Type | Key | Null |
+|---|---|---|---|
+| `mpn` | TEXT | key | |
+| `distributor` | TEXT | key | |
+| `break_qty` | INTEGER | key | |
+| `sku` | TEXT | | yes |
+| `currency` | TEXT | | yes |
+| `price` | REAL | | yes |
+| `stock` | INTEGER | | yes |
+| `moq` | INTEGER | | yes |
+| `lead_days` | INTEGER | | yes |
+| `fetched_at` | TEXT | | yes |
 
 `aml_table` is the approved manufacturer list: the MPNs that may be built
 against an IPN. The row is the approval, and every MPN in it takes the board
