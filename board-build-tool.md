@@ -406,7 +406,6 @@ tool document opens with the assets it reads and writes.
   The footprint half is not written.
 - Process 3 passed its initial function test against `builds/proto1`: the
   project, the root and one page written, the instances of the parts that
-  have symbols placed on it, ERC reporting unconnected and undriven pins and
-  no other class, the BOM read back carrying them, and a second run leaving
-  the page byte-identical.
+  have symbols placed on it, and a second run leaving the page
+  byte-identical.
 - `builds/proto1/tools` holds the working precedent for the rest.

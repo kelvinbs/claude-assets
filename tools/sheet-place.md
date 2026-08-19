@@ -99,19 +99,8 @@ the size it has.
 
 Each exits non-zero and names what it found.
 
-## After a run
+## What it is not
 
-```
-kicad-cli sch erc        --output /tmp/erc.rpt <board-dir>/<project>.kicad_sch
-kicad-cli sch export bom --output /tmp/bom.csv <board-dir>/<project>.kicad_sch
-```
-
-Both run on the root and reach every page through it.
-
-On sheets with no wires ERC reports unconnected and undriven pins, and that
-is all it can report. The BOM read back is the check that the pages carry the
-references and values the record asked for — a page not reachable from the
-root has its parts missing from that list.
-
-Neither catches a wrong pin number. That check is reading the datasheet, and
-it belongs to `datasheet-read`.
+It does not run ERC and it does not run DRC. Electrical checking is not this
+tool's business — the tool puts parts where the record says they go, and the
+verdict on a design belongs to the User and to KiCad.
