@@ -392,4 +392,7 @@ tool document opens with the assets it reads and writes.
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
   `tools/table-read.md`.
 - Built: `tools/db-init.py`, `tools/table-write.py`.
+- Process 1 passed its initial function test against `builds/proto1`, on a
+  database created from empty: 46 parts, 57 instances, 21 approvals, 21
+  manufacturer parts, every relation held.
 - `builds/proto1/tools` holds the working precedent for the rest.
