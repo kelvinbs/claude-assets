@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""db-init — create the databases and their tables.
+"""db-init — create the database and its tables.
 
 The schema is T1.2 and T1.3 of board-build-tool.md and nothing else. The
 script is the one place it is written down in executable form.
@@ -18,7 +18,9 @@ from pathlib import Path
 # ------------------------------------------------------------------ schema
 
 SCHEMA = {
-    "design.db": {
+    # one file. A foreign key cannot cross two, and the split enforced
+    # nothing. Order matters — a table is created after the one it references
+    "board.db": {
         "parts_table": (
             "ipn           TEXT PRIMARY KEY",
             "description   TEXT",
@@ -39,15 +41,6 @@ SCHEMA = {
             "room          TEXT",
             "note          TEXT",
         ),
-    },
-    "sourcing.db": {
-        "aml_table": (
-            "ipn           TEXT NOT NULL",
-            "mpn           TEXT NOT NULL",
-            "rank          INTEGER",
-            "note          TEXT",
-            "PRIMARY KEY (ipn, mpn)",
-        ),
         "mpn_table": (
             "mpn           TEXT PRIMARY KEY",
             "manufacturer  TEXT",
@@ -58,6 +51,14 @@ SCHEMA = {
             "lifecycle     TEXT",
             "fetched_at    TEXT",
             "note          TEXT",
+        ),
+        "aml_table": (
+            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
+            " ON DELETE RESTRICT",
+            "mpn           TEXT NOT NULL",
+            "rank          INTEGER",
+            "note          TEXT",
+            "PRIMARY KEY (ipn, mpn)",
         ),
         "offer_table": (
             "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
@@ -75,6 +76,14 @@ SCHEMA = {
             "PRIMARY KEY (mpn, distributor, break_qty)",
         ),
     },
+}
+
+# an index a table needs to hold a rule its columns cannot
+INDEXES = {
+    "aml_table": (
+        "create unique index aml_one_default on aml_table(ipn)"
+        " where rank is null",
+    ),
 }
 
 

@@ -59,7 +59,8 @@ class Bad(SystemExit):
         super().__init__(f"table-write: {message}")
 
 
-def connect(board, name="design.db", need=("parts_table", "ref_table")):
+def connect(board, name="board.db",
+            need=("parts_table", "ref_table", "aml_table")):
     path = Path(board) / name
     if not path.exists():
         raise Bad(f"{path} does not exist. Run db-init first")
@@ -105,20 +106,16 @@ def part(con, ipn):
     return dict(zip(("ipn",) + FIELDS, row))
 
 
-def has_mpn(board, ipn):
-    src = connect(board, "sourcing.db", ("aml_table",))
-    try:
-        return src.execute("select 1 from aml_table where ipn = ?",
-                           (ipn,)).fetchone() is not None
-    finally:
-        src.close()
+def has_mpn(con, ipn):
+    return con.execute("select 1 from aml_table where ipn = ?",
+                       (ipn,)).fetchone() is not None
 
 
-def guard_footprint(board, ipn, footprint):
+def guard_footprint(con, ipn, footprint):
     """A footprint is a land pattern. A land pattern is a package, and a
     package is a manufacturer part. Until one is named against the IPN there
     is nothing for a footprint to be."""
-    if footprint and not has_mpn(board, ipn):
+    if footprint and not has_mpn(con, ipn):
         raise Bad(f"{ipn} has no MPN in aml_table. A footprint is a package, "
                   f"and a package needs a part number — name one with mpn "
                   f"first")
@@ -162,7 +159,7 @@ def add(con, args):
     values["category"] = category
 
     guard_parent(con, ipn, values["parent"])
-    guard_footprint(args.board, ipn, values["footprint"])
+    guard_footprint(con, ipn, values["footprint"])
 
     con.execute(
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
@@ -190,7 +187,7 @@ def setf(con, args):
     if "category" in changes:
         raise Bad("category follows the IPN letter and is not set by hand")
     guard_parent(con, args.ipn, changes.get("parent"))
-    guard_footprint(args.board, args.ipn, changes.get("footprint"))
+    guard_footprint(con, args.ipn, changes.get("footprint"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()
@@ -237,31 +234,27 @@ def mpn(con, args):
     """An approval: this manufacturer part may be built against this IPN.
     It is kept, unlike the fetched tables beside it."""
     part(con, args.ipn)
-    src = connect(args.board, "sourcing.db", ("aml_table",))
+    have = con.execute(
+        "select rank from aml_table where ipn = ? and mpn = ?",
+        (args.ipn, args.mpn)).fetchone()
+    shown = args.rank if args.rank is not None else "default"
     try:
-        have = src.execute(
-            "select rank from aml_table where ipn = ? and mpn = ?",
-            (args.ipn, args.mpn)).fetchone()
-        shown = args.rank if args.rank is not None else "default"
-        try:
-            if have:
-                src.execute("update aml_table set rank = ?, note = ?"
-                            " where ipn = ? and mpn = ?",
-                            (args.rank, args.note, args.ipn, args.mpn))
-                was = have[0] if have[0] is not None else "default"
-                print(f"{args.ipn}  {args.mpn}  rank {was} -> {shown}")
-            else:
-                src.execute("insert into aml_table values (?,?,?,?)",
-                            (args.ipn, args.mpn, args.rank, args.note))
-                print(f"{args.ipn}  {args.mpn}  rank {shown}")
-        except sqlite3.IntegrityError:
-            other = src.execute("select mpn from aml_table where ipn = ?"
-                                " and rank is null", (args.ipn,)).fetchone()
-            raise Bad(f"{args.ipn} already has a default — {other[0]}. Rank "
-                      f"this one, or rank that one first")
-        src.commit()
-    finally:
-        src.close()
+        if have:
+            con.execute("update aml_table set rank = ?, note = ?"
+                        " where ipn = ? and mpn = ?",
+                        (args.rank, args.note, args.ipn, args.mpn))
+            was = have[0] if have[0] is not None else "default"
+            print(f"{args.ipn}  {args.mpn}  rank {was} -> {shown}")
+        else:
+            con.execute("insert into aml_table values (?,?,?,?)",
+                        (args.ipn, args.mpn, args.rank, args.note))
+            print(f"{args.ipn}  {args.mpn}  rank {shown}")
+    except sqlite3.IntegrityError:
+        other = con.execute("select mpn from aml_table where ipn = ?"
+                            " and rank is null", (args.ipn,)).fetchone()
+        raise Bad(f"{args.ipn} already has a default — {other[0]}. Rank "
+                  f"this one, or rank that one first")
+    con.commit()
 
 
 def show(con, args):
@@ -285,15 +278,11 @@ def show(con, args):
                 (ipn,))]
             if kids:
                 print(f"    children: {' '.join(kids)}")
-            src = connect(args.board, "sourcing.db", ("aml_table",))
-            try:
-                for m, rank in src.execute(
-                        "select mpn, rank from aml_table"
-                        " where ipn = ? order by rank", (ipn,)):
-                    print(f"    mpn: {m}  rank "
-                          f"{rank if rank is not None else 'default'}")
-            finally:
-                src.close()
+            for m, rank in con.execute(
+                    "select mpn, rank from aml_table"
+                    " where ipn = ? order by rank", (ipn,)):
+                print(f"    mpn: {m}  rank "
+                      f"{rank if rank is not None else 'default'}")
 
 
 # ------------------------------------------------------------------- entry

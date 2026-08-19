@@ -4,10 +4,9 @@ Create or modify a part. The tool of process 1.
 
 | Reads | Writes |
 |---|---|
-| `design.db` — `parts_table`, `ref_table` | `design.db` — `parts_table`, `ref_table` |
-| `sourcing.db` — `aml_table` | `sourcing.db` — `aml_table` |
+| `board.db` — `parts_table`, `ref_table`, `aml_table` | `board.db` — `parts_table`, `ref_table`, `aml_table` |
 
-It never opens a KiCad file, and it touches no table in `sourcing.db` but
+It never opens a KiCad file, and of the sourcing tables it touches only
 `aml_table`. `db-init` must have run first.
 
 It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves
@@ -119,7 +118,7 @@ sometimes known before the part is chosen.
 - A footprint on a part with no MPN
 - Lowering an instance count
 - `add` with no description
-- A board directory with no `design.db`, or one missing a table
+- A board directory with no `board.db`, or one missing a table
 
 Each exits non-zero and names what it found.
 

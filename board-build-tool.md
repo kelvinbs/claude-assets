@@ -57,13 +57,17 @@ never carries the suffix, so a table and its key are never the same word.
 
 | File | Holds | Role |
 |---|---|---|
-| `design.db` | `parts_table`, `ref_table` | Master for the design fields. Pushes to KiCad |
+| `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` | Master for the design fields. Pushes to KiCad |
 | `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
-| `sourcing.db` | `aml_table`, `mpn_table`, `offer_table` | Order time |
 
 KiCad is the native store for design use, generally updated from the master.
-Design never reads `sourcing.db`; ordering never writes a design file. The
-join between them is `ipn`.
+
+One file, because a foreign key cannot cross two. The design tables and the
+sourcing tables were split into two files once, and that split
+enforced nothing — it only made `aml_table.ipn` impossible to declare. The
+rule it was meant to carry survives as a rule: a design process does not read
+`aml_table`, `mpn_table` or `offer_table`, and ordering writes none of the
+others. The join is `ipn`.
 
 `mpn_table` and `offer_table` are fetched, never typed, and may be discarded
 and fetched again. `aml_table` is an approval and is kept.
@@ -102,7 +106,7 @@ the one sentence that mattered is lost in it.
 
 Blank is the normal state.
 
-**T1.2 — `design.db`**
+**T1.2 — The design tables**
 
 | Table | Key | Fields |
 |---|---|---|
@@ -254,14 +258,15 @@ class is recorded. A class the list does not hold is added here first.
 
 **T1.5 — The relations**
 
-Five, and `parts_table.ipn` is the hub of three.
+Five, and `parts_table.ipn` is the hub of three. All but one are declared —
+they live in one file now, which is what makes that possible.
 
 | From | To | Declared | On delete |
 |---|---|---|---|
 | `ref_table.ipn` | `parts_table.ipn` | yes | restricted |
 | `parts_table.parent` | `parts_table.ipn` | yes | set null |
 | `offer_table.mpn` | `mpn_table.mpn` | yes | cascade |
-| `aml_table.ipn` | `parts_table.ipn` | no — the two are different files | — |
+| `aml_table.ipn` | `parts_table.ipn` | yes | restricted |
 | `aml_table.mpn` | `mpn_table.mpn` | no — see below | — |
 
 The three that can be declared are declared, so the database refuses the
@@ -275,9 +280,9 @@ still parts, they have simply lost the thing they served. Deleting a fetched
 `mpn_table` row takes its offers with it, which is what discarding a fetch
 means.
 
-`aml_table.ipn` cannot be declared because SQLite has no foreign key across
-two database files, and the design and the sourcing data are deliberately
-two.
+Deleting a part that is approved against a manufacturer part is refused for
+the same reason as an instance: the approval is a decision, and a decision
+does not evaporate because a row was removed. Drop the approval first.
 
 `aml_table.mpn` must not be declared even though it could be. `aml_table` is
 kept and `mpn_table` is thrown away and refetched; a key pointing from the
@@ -285,9 +290,9 @@ kept table into the discardable one would make an approval depend on a fetch,
 and discarding the fetch would take the approval with it. You name a part
 number long before anything has looked it up.
 
-Those two stay conventions, and a tool that writes them checks them itself.
+That one stays a convention, and the tool that writes it checks it itself.
 
-**T1.3 — `sourcing.db`**
+**T1.3 — The sourcing tables**
 
 | Table | Key | Fields |
 |---|---|---|
@@ -312,7 +317,7 @@ where `rank is null`.
 **What the schematic carries**
 
 - `Reference`, `Value` and `Footprint`, all built in
-- `ipn`, the key back to `design.db`, which is not
+- `ipn`, the key back to `parts_table`, which is not
 
 `Value` is drawn from the IPN, not from a manufacturer part number — which of
 `ipn.description` or the ranked `aml_table` MPN fills it is not yet settled.
@@ -323,9 +328,8 @@ where `rank is null`.
 
 | Asset | Owner |
 |---|---|
-| `design.db` | Hand |
-| `sourcing.db` — `aml_table` | Hand |
-| `sourcing.db` — `mpn_table`, `offer_table` | Fetched. Discardable |
+| `board.db` — `parts_table`, `ref_table`, `aml_table` | Hand |
+| `board.db` — `mpn_table`, `offer_table` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
@@ -364,9 +368,9 @@ the tools in section 4.
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
 | 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
-| 2 | Update library | `design.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
-| 3 | Update schematic | `design.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `sheet-place` | Wires |
-| 4 | Update board | `design.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `board-place` | Routes |
+| 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
+| 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `sheet-place` | Wires |
+| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `board-place` | Routes |
 | 5 | Output | `*.kicad_pcb` | RF-simulation file | `layer-export` | — |
 | 6 | Source | `aml_table` | Price<br>Stock<br>Availability | `stock-query` | — |
 
@@ -446,15 +450,15 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 | Tool | Function | In | Out |
 |---|---|---|---|
-| `db-init` | Create the databases and their tables | T1.2, T1.3 | `design.db`, `sourcing.db` |
+| `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Create or modify symbol | Pins from `datasheet-read` | `lib/*.kicad_sym` |
 | `footprint-draw` | Create or modify footprint | Package from `datasheet-read` | `lib/*.pretty`, `lib/3d/` |
-| `table-write` | Create or modify part | Record row, `datasheet-read` | `design.db` — `parts_table`, `ref_table`<br>`sourcing.db` — `aml_table` |
-| `sheet-place` | Place symbols on their page | `design.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
-| `board-place` | Place footprints on the board | `design.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
+| `table-write` | Create or modify part | Record row, `datasheet-read` | `board.db` — `parts_table`, `ref_table`, `aml_table` |
+| `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
+| `board-place` | Place footprints on the board | `board.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Fetch price, stock and lifecycle | `sourcing.db` — `aml_table`, JLCPCB API | `sourcing.db` — `mpn_table`, `offer_table` |
+| `stock-query` | Fetch price, stock and lifecycle | `board.db` — `aml_table`, JLCPCB API | `board.db` — `mpn_table`, `offer_table` |
 | `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
 
 **Layout**
