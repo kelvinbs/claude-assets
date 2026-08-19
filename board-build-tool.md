@@ -64,8 +64,11 @@ blank. Tools write the columns.
 **What is fixed and what is not**
 
 The tables, their keys and the relations of T1.5 are the structure. They are
-enforced, and a tool that needs one of them changed is broken — the defect is
-in the tool.
+enforced.
+
+An agent that finds it needs one of them changed has found a bug. It aborts,
+declares the tool unusable, and names what it hit. It does not carry on, and
+it does not ask.
 
 A field is working data. Add one where a tool needs it, and record it in T1.2
 or T1.3 in the same commit.
