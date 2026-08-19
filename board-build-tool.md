@@ -4,8 +4,8 @@ A framework for agent-assisted hardware design. It holds the processes that
 carry a board through KiCad, the documents that describe them, and the
 scripts they call. Nothing in it is specific to one product.
 
-The board is not specified in advance. It is designed by working the
-processes in order, and revised by re-entering them — a part is added, a
+The board takes its specification from the processes themselves. It is
+designed by working them in order, and revised by re-entering them — a part is added, a
 specification changes, the affected processes run again. The tool is
 entered at whichever step is next, not run end to end.
 
@@ -44,16 +44,16 @@ answers, or from distributor tables the User downloads and hands over.
 **The data**
 
 The design keys to an **IPN** — an internal part number, this project's own
-handle for a part. It is not a manufacturer part number. An MPN is data
-hanging off an IPN, and several MPNs may satisfy one.
+handle for a part. An MPN is data hanging off an IPN, and several MPNs may
+satisfy one.
 
-Parameters flow one way, database to design. A field is never edited on the
-sheet.
+Parameters flow one way, database to design. A field is edited in the
+database and pushed.
 
 **T1.1 — Where the data lives**
 
-Two databases and the KiCad files. Every table name ends in `_table`; a key
-never carries the suffix, so a table and its key are never the same word.
+Two databases and the KiCad files. Every table name ends in `_table`, and a key
+carries the bare word, so a table and its key read apart.
 
 | File | Holds | Role |
 |---|---|---|
@@ -62,50 +62,42 @@ never carries the suffix, so a table and its key are never the same word.
 
 KiCad is the native store for design use, generally updated from the master.
 
-One file, because a foreign key cannot cross two. The design tables and the
-sourcing tables were split into two files once, and that split
-enforced nothing — it only made `aml_table.ipn` impossible to declare. The
-rule it was meant to carry survives as a rule: a design process does not read
-`aml_table`, `mpn_table` or `offer_table`, and ordering writes none of the
-others. The join is `ipn`.
+One file, so that every relation of T1.5 is a declared foreign key.
 
-`lifecycle_table` and `offer_table` are fetched, never typed, and may be
-discarded and fetched again. `aml_table` is an approval and is kept, and
-`mpn_table` is the part number's identity and is kept with it.
+A design process reads `parts_table` and `ref_table`. Ordering reads
+`aml_table`, `mpn_table`, `lifecycle_table` and `offer_table`. The join
+is `ipn`.
+
+`lifecycle_table` and `offer_table` are fetched, and may be discarded and
+fetched again. `aml_table` is an approval and is kept, and `mpn_table` is the
+part number's identity and is kept with it.
 
 Availability and price come from the JLCPCB API, the only distributor
 interface that answers, or from distributor tables the User downloads and
 hands over.
 
-**A record, not a tracker**
+**A record**
 
-These tables say what the design is. They do not say what has been done to
-it, who did it, or what is left.
+These tables say what the design is.
 
-Progress is not a field. Whether a part has a symbol is `symbol is null`.
-Whether it has a footprint is `footprint is null`. Whether it has a part
-number is whether `aml_table` holds a row for it. A field that restates one
-of those is a second place for it to be wrong, and the two disagree the first
-time somebody writes one and not the other.
+Progress is a query against them, asked at the moment it matters:
 
-So there is no `status`, no `pins_checked`, no `approved`. What a process
-still owes is read off the record, in one query, at the moment it is asked.
+| Question | Answer |
+|---|---|
+| has this part a symbol | `symbol is null` |
+| has it a footprint | `footprint is null` |
+| has it a part number | a row in `aml_table` |
+| what does the board use | `count(*) from ref_table group by ipn` |
+| what is this assembly | the rows whose `parent` is this IPN |
 
 **`note`**
 
-Every table carries one, and it is normally blank.
+A person's sentence about a row, held by `parts_table`, `ref_table`,
+`aml_table` and `mpn_table`. Why this part over the obvious one, what the
+datasheet gets wrong, what to check before ordering again. A person writes
+it, a person reads it, and blank is its normal state.
 
-It is for a person to write a sentence a column cannot hold — why this part
-and not the obvious one, what the datasheet gets wrong, what to check before
-ordering again. It is read by a person and by nothing else.
-
-A tool does not write it. Not where a value came from, not which document a
-row was imported out of, not when it was touched — a tool that has something
-to say about a row says it in the column that holds that fact, or does not
-say it. A `note` full of machine bookkeeping is a `note` nobody reads, and
-the one sentence that mattered is lost in it.
-
-Blank is the normal state.
+A tool records what it knows in the column that holds that fact.
 
 **T1.2 — The design tables**
 
@@ -120,19 +112,17 @@ Blank is the normal state.
 and they are free to sit on different pages and in different rooms. A part
 used forty times is one `parts_table` row and forty `ref_table` rows.
 
-The key is the KiCad UUID, because that is what KiCad already keys an
-instance on. Every symbol in a `.kicad_sch` carries one, and the footprint in
-the `.kicad_pcb` carries `(path "/<sheet-uuid>/<symbol-uuid>")` back to it.
-It is the join the files themselves use, and keying on anything else would
-mean storing it as well.
+The key is the KiCad UUID, which is what KiCad keys an instance on. Every
+symbol in a `.kicad_sch` carries one, and the footprint in the `.kicad_pcb`
+carries `(path "/<sheet-uuid>/<symbol-uuid>")` back to it. It is the join the
+files themselves use.
 
-There is no `qty` field. Quantity is `count(*) from ref_table group by ipn`,
-and a field would only be a second place for it to be wrong.
+Quantity is `count(*) from ref_table group by ipn`.
 
 `page` names the schematic page the symbol is placed on. `room` is the
 User's tag for where the instance goes — a block of the sheet and a region of
-the board, one name read by both. No tool invents one. Both are properties of
-the instance, not of the part.
+the board, one name read by both. The User sets it. Both are properties of
+the instance.
 
 **T1.4 — Where a thing is placed**
 
@@ -145,46 +135,39 @@ it, and neither has a rule of its own.
 | 2 | `room` | which block of the sheet | which region of the board |
 | 3 | family | groups what `room` has not already placed | groups what `room` has not already placed |
 
-`page` is not a preference. It selects the file the symbol is written into,
-and there is nowhere else to put it, so a family split across two pages stays
-split.
+`page` selects the file the symbol is written into. A family whose instances
+carry two pages is placed on both.
 
-`room` outranks family. An instance with a `room` goes there, and it leaves
-its family's block to do it. Nothing is reported — it was set by hand and the
-hand meant it.
+`room` outranks family. An instance with a `room` goes there.
 
-Family is the default. A part and its children are placed together wherever
-`room` has not already spoken, which today is every instance.
+Family is the default: a part and its children are placed together wherever
+`room` is blank.
 
 A KiCad group is what `board-place` writes when it puts a room or a family
-together. It is a list of footprints that move as one, and nothing more.
+together — a list of footprints that move as one.
 
-The order of rooms and families within a page is arbitrary. Nothing in the
-record ranks them and nothing needs to — a sheet is read by what is on it,
-not by what came first. A tool picks an order, and is free to pick a
-different one next run as long as what is already placed stays where it is.
+The order of rooms and families within a page is arbitrary. A tool picks one,
+and picks freely on the next run within the re-entry rule of T3.1: what is
+already placed keeps its position.
 
-The order of parts within a family belongs to the tool documents.
+The order of parts within a family is defined in the tool documents.
 
 **`parent`**
 
 An IPN, or blank. It names the part this one exists to serve.
 
-A discrete is not a part on its own — a 10 k resistor is nothing until you
-say which loop it closes. `parent` says it. The feedback resistor and the
-feedback capacitor around an op-amp carry the op-amp's IPN, and so do its
+A discrete takes its meaning from what it serves. The feedback resistor and
+the feedback capacitor around an op-amp carry the op-amp's IPN, and so do its
 bypass capacitors.
 
-The parent names the function and is the primary part of it. Ask for its
-children and what comes back is the assembly: the op-amp, the two feedback
-parts, the bypass capacitors. Nothing has to be declared an assembly — a part
-with children is one, and a part with none is not.
+The parent names the function and is the primary part of it. Its children are
+the assembly: the op-amp, the two feedback parts, the bypass capacitors. A
+part with children is an assembly.
 
-Blank is a top-level part. One level of parent is enough for a board; a
-parent that is itself a child is not refused, but nothing here needs it.
+Blank is a top-level part. One level carries a board.
 
-`parent` is the design's own hierarchy and is not placement. Placement is
-`room`, on the instance, and it is the User's.
+`parent` is the design's hierarchy. Placement is `page` and `room`, on the
+instance, and they are the User's.
 
 `source` records where the library objects came from. Two letters, the symbol
 then the footprint, separated by a slash — `s/h` is a stock symbol with a
@@ -196,22 +179,20 @@ hand-drawn footprint.
 | `v` | the manufacturer, or a service that publishes for them |
 | `h` | drawn here, against the datasheet |
 
-They are recorded apart because they are chosen apart. A stock symbol is
-usually fine — a pinout is a pinout. A stock footprint for a specific part
-number rarely is, and the two are almost never taken from the same place.
+Two letters because the two objects are chosen separately: a pinout is a
+pinout, and a land pattern belongs to one part number.
 
-Where a part has only one of the two, the other letter is `-`: `h/-` is a
-symbol drawn here and no footprint yet.
+`-` stands where an object is absent. `h/-` is a symbol drawn here, and a
+footprint yet to come.
 
-Once a symbol is copied into `lib/` under the clone rule of section 2,
-nothing else distinguishes a copied stock symbol from a drawn one, which is
-why this field exists at all.
+Section 2 copies every object into `lib/` and owns it from that point.
+`source` is the record of where it came from.
 
 **`ref` is a field, not a key**
 
 Annotate and reannotate in the editor as you please. `ref` is read back off
-the sheets and updated; the UUID does not move, so nothing that points at an
-instance is disturbed.
+the sheets and updated, and the UUID holds, so everything that points at an
+instance still finds it.
 
 The instance row exists before the symbol is placed — `page` is on the
 instance, and `sheet-place` has nothing to read otherwise. The tool mints the
@@ -220,12 +201,13 @@ UUID at that point and writes it into the sheet it creates.
 **The IPN**
 
 `ANNNN`. One letter for the part class, from the list below, then four
-digits. The digits are sequential inside that letter, from `0001`, and are
-never reused.
+digits. The digits are sequential inside that letter, from `0001`. Each
+number belongs to one part for the life of the design.
 
-No project prefix — the database is the project. No revision suffix — a
-change of form, fit or function is a new IPN, and a change that is none of
-those is a second MPN against the same one, which is what `aml_table` holds.
+The letter and the digits are the whole of it: the database is the project,
+and the IPN is the part within it. A change of form, fit or function takes a
+new IPN. Any other change is a second MPN against the same one, held in
+`aml_table`.
 
 | Letter | Class |
 |---|---|
@@ -248,14 +230,10 @@ those is a second MPN against the same one, which is what `aml_table` holds.
 | `Y` | oscillator, reference |
 
 Ten of them are the KiCad reference-designator letter for the same thing, so
-the letter reads as itself to anyone who has opened a schematic.
+the letter reads as itself to anyone who has opened a schematic. The four
+fixed digits mark an IPN as one: `U0001` is a part, `U1` an instance.
 
-An IPN therefore looks like a reference designator — `U0001` beside `U1`.
-The four fixed digits are what keep them apart, and the IPN never reaches the
-`Value` field in any case.
-
-`category` carries the class word, so the letter is not the only place the
-class is recorded. A class the list does not hold is added here first.
+`category` carries the class word. A new class is added to this list first.
 
 **T1.5 — The relations**
 
@@ -277,18 +255,13 @@ touches both, and that is what it is for.
 Foreign keys in SQLite are off unless a connection turns them on, so every
 tool sets `PRAGMA foreign_keys = ON` before it writes.
 
-Deleting a part that still has instances is refused — the instances are on a
-sheet. Deleting a part that is approved against a manufacturer part is
-refused too: the approval is a decision, and a decision does not evaporate
-because a row was removed. Drop the approval first.
+A part is deleted once its instances and its approvals are gone: the
+instances sit on a sheet, and an approval is a decision.
 
-Deleting a parent leaves its children with `parent` cleared. They are still
-parts, they have simply lost the thing they served.
+Deleting a parent leaves its children, with `parent` cleared.
 
-Deleting a manufacturer part is refused while an approval names it, and
-takes its lifecycle and its offers with it once none does. That is what
-discarding a fetch means, and it is why the fetched tables cascade and the
-approval does not.
+A manufacturer part is deleted once no approval names it, and takes its
+lifecycle and its offers with it. Discarding a fetch is exactly that.
 
 **T1.3 — The sourcing tables**
 
@@ -300,41 +273,34 @@ approval does not.
 | `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
 `aml_table` is the approved manufacturer list: which MPNs may be built
-against an IPN, ranked. The row is the approval — a part number that may not
-be built is not in the table, and one that would need the board changed to
-take is not either. Every MPN in it drops in, or it is not in it.
+against an IPN, ranked. The row is the approval. Every MPN in it drops in —
+it takes the board as designed.
 
-`mpn_table` is the manufacturer part itself. Who makes it, what package it
-comes in, how many pins, at what pitch, and the datasheet. None of that
-changes, none of it is fetched from anywhere in particular, and none of it is
-thrown away. The row exists from the moment the part number is named — with
-every field but the key empty, if that is all that is known yet.
+`mpn_table` is the manufacturer part itself: who makes it, what package it
+comes in, how many pins, at what pitch, and the datasheet. It is kept. The
+row exists from the moment the part number is named, with the fields filled
+in as they become known.
 
-`lifecycle_table` and `offer_table` are what a fetch found. Whether the
+`lifecycle_table` and `offer_table` hold what a fetch found — whether the
 manufacturer still makes it, what a distributor charges, what is on the
-shelf. All of it goes stale, all of it is discarded and fetched again, and
-`fetched_at` says when it was true.
-
-An approval names a part number and outlives every fetch. A price does not.
-That is why the two are separate tables.
+shelf. Each is discarded and fetched again, and `fetched_at` says when it was
+true.
 
 An offer is one distributor's listing of one MPN at one quantity break. One
-MPN carries many. Lifecycle is per part number, not per distributor, so it is
-its own table and not a column on the offer.
+MPN carries many. Lifecycle is per part number, and holds one row per MPN.
 
 `rank` orders the alternatives, and is blank on the one you designed against.
-A number appears only when there is something to order — an IPN with one
-approved part number has one row and nothing to say about it. At most one row
-per IPN may be blank, which the database holds as a unique index over `ipn`
-where `rank is null`.
+A number appears where there is something to order. One row per IPN carries
+the blank, which the database holds as a unique index over `ipn` where
+`rank is null`.
 
 **What the schematic carries**
 
-- `Reference`, `Value` and `Footprint`, all built in
-- `ipn`, the key back to `parts_table`, which is not
+- `Reference`, `Value` and `Footprint`, built-in fields
+- `ipn`, a custom field, the key back to `parts_table`
 
-`Value` is drawn from the IPN, not from a manufacturer part number — which of
-`ipn.description` or the ranked `aml_table` MPN fills it is not yet settled.
+`Value` is drawn from the IPN. Which of `ipn.description` or the ranked
+`aml_table` MPN fills it is defined in `sheet-place.md`.
 
 ## 2 — Assets
 
@@ -357,20 +323,19 @@ where `rank is null`.
 **The clone**
 
 A git clone has to work out of the box. Into an empty directory, on a fresh
-KiCad install, the project opens and edits with nothing missing. No library,
-footprint or model resolves outside the repository.
+KiCad install, the project opens and edits with nothing missing. Every
+library, footprint and model resolves inside the repository.
 
 - `sym-lib-table` and `fp-lib-table` sit in the project directory and are committed.
 - Every path in them is `${KIPRJMOD}/lib/...`.
 - Every model path in every `.kicad_mod` is `${KIPRJMOD}/lib/3d/...`.
 - Nicknames are prefixed to the project, so a global entry on another
   machine cannot collide.
-- No other path variable appears, and no absolute path.
+- `${KIPRJMOD}` is the only path variable, and every path is relative to it.
 - Symbols, footprints and models are copied into `lib/`, and owned from that
   point.
 
-The check runs against a fresh clone rather than the working copy, and
-fails on any of the above.
+The check runs against a fresh clone, and fails on any of the above.
 
 ## 3 — Processes
 
@@ -418,13 +383,13 @@ started: 1 and 2, then 3, then 4, then 5, then 6.
 
 A process that needs the User mid-run is a command, loaded into the running
 session. A process that runs to completion on its own is an agent, holding
-its own context and reporting at the end. A subagent cannot ask a question,
-so the split is not a preference.
+its own context and reporting at the end. A subagent runs headless, which is
+what places each process on one side or the other.
 
 | # | Process | Form |
 |---|---|---|
 | 1 | Update parts | Command |
-| 2 | Update library | Agent. Asks only when a datasheet does not carry the pinout |
+| 2 | Update library | Agent. Asks when a datasheet withholds the pinout |
 | 3 | Update schematic | Agent |
 | 4 | Update board | Agent |
 | 5 | Output | Agent |
