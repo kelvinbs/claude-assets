@@ -154,9 +154,12 @@ Family is the default. A part and its children are placed together wherever
 A KiCad group is what `board-place` writes when it puts a room or a family
 together. It is a list of footprints that move as one, and nothing more.
 
-What this table does not settle: the order of rooms and families within a
-page, and the order of parts within a family. Those belong to the tool
-documents, not here.
+The order of rooms and families within a page is arbitrary. Nothing in the
+record ranks them and nothing needs to — a sheet is read by what is on it,
+not by what came first. A tool picks an order, and is free to pick a
+different one next run as long as what is already placed stays where it is.
+
+The order of parts within a family belongs to the tool documents.
 
 **`parent`**
 
