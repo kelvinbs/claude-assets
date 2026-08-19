@@ -303,6 +303,12 @@ take is not either. Every MPN in it drops in, or it is not in it.
 An offer is one distributor's listing of one MPN at one quantity break. One
 MPN carries many.
 
+`rank` orders the alternatives, and is blank on the one you designed against.
+A number appears only when there is something to order — an IPN with one
+approved part number has one row and nothing to say about it. At most one row
+per IPN may be blank, which the database holds as a unique index over `ipn`
+where `rank is null`.
+
 **What the schematic carries**
 
 - `Reference`, `Value` and `Footprint`, all built in

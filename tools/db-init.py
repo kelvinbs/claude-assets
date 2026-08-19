@@ -88,6 +88,16 @@ def columns_of(spec):
     return [line.split()[0] for line in spec if not line.startswith("PRIMARY KEY")]
 
 
+# an index a table needs to hold a rule its columns cannot
+INDEXES = {
+    "aml_table": (
+        ("aml_one_default",
+         "create unique index aml_one_default on aml_table(ipn)"
+         " where rank is null"),
+    ),
+}
+
+
 def create_sql(table, spec):
     body = ",\n    ".join(spec)
     return f"CREATE TABLE {table} (\n    {body}\n)"
@@ -107,6 +117,8 @@ def init_file(path, tables):
         for table, spec in tables.items():
             if table not in have:
                 con.execute(create_sql(table, spec))
+                for name, sql in INDEXES.get(table, ()):
+                    con.execute(sql)
                 report.append((table, "created"))
                 continue
             found = [r[1] for r in con.execute(f"PRAGMA table_info({table})")]

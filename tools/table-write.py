@@ -242,15 +242,23 @@ def mpn(con, args):
         have = src.execute(
             "select rank from aml_table where ipn = ? and mpn = ?",
             (args.ipn, args.mpn)).fetchone()
-        if have:
-            src.execute("update aml_table set rank = ?, note = ?"
-                        " where ipn = ? and mpn = ?",
-                        (args.rank, args.note, args.ipn, args.mpn))
-            print(f"{args.ipn}  {args.mpn}  rank {have[0]} -> {args.rank}")
-        else:
-            src.execute("insert into aml_table values (?,?,?,?)",
-                        (args.ipn, args.mpn, args.rank, args.note))
-            print(f"{args.ipn}  {args.mpn}  rank {args.rank}")
+        shown = args.rank if args.rank is not None else "default"
+        try:
+            if have:
+                src.execute("update aml_table set rank = ?, note = ?"
+                            " where ipn = ? and mpn = ?",
+                            (args.rank, args.note, args.ipn, args.mpn))
+                was = have[0] if have[0] is not None else "default"
+                print(f"{args.ipn}  {args.mpn}  rank {was} -> {shown}")
+            else:
+                src.execute("insert into aml_table values (?,?,?,?)",
+                            (args.ipn, args.mpn, args.rank, args.note))
+                print(f"{args.ipn}  {args.mpn}  rank {shown}")
+        except sqlite3.IntegrityError:
+            other = src.execute("select mpn from aml_table where ipn = ?"
+                                " and rank is null", (args.ipn,)).fetchone()
+            raise Bad(f"{args.ipn} already has a default — {other[0]}. Rank "
+                      f"this one, or rank that one first")
         src.commit()
     finally:
         src.close()
@@ -282,7 +290,8 @@ def show(con, args):
                 for m, rank in src.execute(
                         "select mpn, rank from aml_table"
                         " where ipn = ? order by rank", (ipn,)):
-                    print(f"    mpn: {m}  rank {rank}")
+                    print(f"    mpn: {m}  rank "
+                          f"{rank if rank is not None else 'default'}")
             finally:
                 src.close()
 
@@ -323,7 +332,8 @@ def main(argv):
     m = sub.add_parser("mpn", help="approve a manufacturer part against an IPN")
     m.add_argument("ipn")
     m.add_argument("mpn")
-    m.add_argument("--rank", type=int, default=1)
+    m.add_argument("--rank", type=int,
+                   help="blank on the one you designed against")
     m.add_argument("--note")
     m.set_defaults(run=mpn)
 

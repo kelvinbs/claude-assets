@@ -74,8 +74,12 @@ The row is the approval. A part number that may not be built does not get a
 row, and neither does one that would need the board changed to take — every
 MPN in the table drops in. There is no flag to set and none to forget.
 
-`--rank` orders the alternatives, default 1. `--note` is a sentence a person
-writes, and is normally left alone — see T1.2. The tool never fills it in.
+`--rank` orders the alternatives and is left blank on the one you designed
+against — see T1.3. Give a number only when there is something to order. The
+database refuses a second blank rank for one IPN.
+
+`--note` is a sentence a person writes, and is normally left alone — see
+T1.2. The tool never fills it in.
 
 Naming the same IPN and MPN again updates the rank and the note rather than
 adding a second row. `aml_table` is kept, unlike the fetched
