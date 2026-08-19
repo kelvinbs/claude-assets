@@ -355,14 +355,29 @@ def set_property(block, name, value):
                   f'{effects(3, hide=True)}\t\t)\n' + block[len(head):]
 
 
+def rename_pins(block, rename):
+    """Give a pin the name the datasheet prints. The symbol is the part; only
+    the label differs, and the label is what a person reads on the sheet."""
+    for number, name in (rename or {}).items():
+        pattern = re.compile(
+            r'(\(pin\b(?:(?!\(pin\b).)*?\(name ")[^"]*("(?:(?!\(pin\b).)*?'
+            r'\(number "%s")' % re.escape(str(number)), re.S)
+        block, count = pattern.subn(
+            lambda m: m.group(1) + str(name) + m.group(2), block, count=1)
+        if not count:
+            raise Bad(f"pin {number} is not in the symbol")
+    return block
+
+
 def copy_symbol(source_path, source_name, ipn, prefix, description,
-                datasheet):
+                datasheet, rename=None):
     block = extract_symbol(source_path, source_name)
     if block is None:
         raise Bad(f"{source_path} does not hold a symbol '{source_name}'")
     block = flatten_extends(block, source_path, source_name)
     block = block.replace(f'(symbol "{source_name}"', f'(symbol "{ipn}"', 1)
     block = block.replace(f'"{source_name}_', f'"{ipn}_')
+    block = rename_pins(block, rename)
     block = set_property(block, "Reference", prefix)
     block = set_property(block, "Value", ipn)
     block = set_property(block, "Description", description or "")
@@ -412,23 +427,38 @@ def one(con, board, ipn, nickname, args, classes):
     datasheet = datasheet_of(con, ipn)
     path = library_of(board, nickname)
 
-    if args.source_lib:
-        if ":" not in args.source_lib:
-            raise Bad(f"'{args.source_lib}' is not <library>:<symbol>")
-        source_nick, source_name = args.source_lib.split(":", 1)
+    # The order of the resorts: a library that already holds the part, then
+    # the datasheet. Drawing is what is done when nothing holds it.
+    lib_id_given = args.source_lib
+    rename = None
+    if not lib_id_given:
+        try:
+            candidate = finder.find(con, board, ipn, args.lib)
+        except SystemExit as exc:
+            raise Bad(str(exc))
+        if candidate:
+            lib_id_given = f"{candidate['library']}:{candidate['symbol']}"
+            rename = candidate.get("rename")
+
+    if lib_id_given:
+        if ":" not in lib_id_given:
+            raise Bad(f"'{lib_id_given}' is not <library>:<symbol>")
+        source_nick, source_name = lib_id_given.split(":", 1)
         stock = find_stock()
-        candidate = stock / f"{source_nick}.kicad_sym"
+        path_of_source = stock / f"{source_nick}.kicad_sym"
         letter = "s"
-        if not candidate.exists():
-            candidate = Path(source_nick)
-            if candidate.suffix != ".kicad_sym":
-                candidate = Path(f"{source_nick}.kicad_sym")
+        if not path_of_source.exists():
+            path_of_source = Path(source_nick)
+            if path_of_source.suffix != ".kicad_sym":
+                path_of_source = Path(f"{source_nick}.kicad_sym")
             letter = "v"
-        if not candidate.exists():
+        if not path_of_source.exists():
             raise Bad(f"no library '{source_nick}' in {stock} or on disk")
-        block = copy_symbol(candidate, source_name, ipn, prefix,
-                            description, datasheet)
+        block = copy_symbol(path_of_source, source_name, ipn, prefix,
+                            description, datasheet, rename)
         origin = f"copied from {source_nick}:{source_name}"
+        if rename:
+            origin += f", {len(rename)} pin(s) renamed"
     else:
         try:
             spec = reader.pinout(con, board, ipn, args.datasheet,
@@ -464,6 +494,8 @@ def main(argv):
                     help="copy this symbol instead of drawing one")
     ap.add_argument("--nickname", help="the library nickname. Defaults to "
                                        "the .kicad_pro name")
+    ap.add_argument("--lib", action="append",
+                    help="another directory of .kicad_sym files to search")
     ap.add_argument("--datasheet", help="the PDF, when the name does not match")
     ap.add_argument("--datasheets", help="the directory to search")
     ap.add_argument("--redraw", action="store_true",
@@ -486,6 +518,8 @@ def main(argv):
     classes = sibling("table-write").CLASSES
     global reader
     reader = sibling("datasheet-read")
+    global finder
+    finder = sibling("copy-kicad-part")
     try:
         nickname = lib_init.nickname_of(board, args.nickname)
         lib_init.make_library(board, nickname)

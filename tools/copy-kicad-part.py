@@ -223,6 +223,20 @@ def ask(ipn, description, mpn, prefix, folders, root):
     return spec
 
 
+def find(con, board, ipn, extra=None):
+    """The symbol for a part, with the renames it needs, or None. This is
+    what `symbol-draw` calls before it draws anything."""
+    row = con.execute("select description from parts_table where ipn = ?",
+                      (ipn,)).fetchone()
+    if row is None:
+        raise Bad(f"{ipn} is not in parts_table")
+    mpns = part_numbers(con, ipn)
+    classes = sibling("table-write").CLASSES
+    prefix = classes[IPN.match(ipn).group(1)][1]
+    spec = ask(ipn, row[0], mpns[0], prefix, folders(extra), repo_root(board))
+    return spec if spec.get("library") else None
+
+
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")

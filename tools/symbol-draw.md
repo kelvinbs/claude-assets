@@ -17,12 +17,16 @@ python3 tools/board-build/tools/symbol-draw.py <board-dir> --all
 It calls `lib-init` first, every run, so the library and its `sym-lib-table`
 entry exist before anything is written to them.
 
-## Two ways in
+## The order of the resorts
+
+Drawing a symbol is the last thing tried, not the first.
 
 | | |
 |---|---|
-| `--from <library>:<name>` | the symbol exists. It is copied in |
-| absent | it does not. `datasheet-read` is called and what it returns is drawn |
+| 1 | `copy-kicad-part` is asked whether a library already holds the part. What it returns is copied, and the pins it names are renamed |
+| 2 | nothing holds it — `datasheet-read` is called and what it returns is drawn |
+
+`--from <library>:<name>` names a symbol outright and skips the asking.
 
 The library named by `--from` is a stock KiCad library if one of that
 nickname is in the KiCad symbol directory, otherwise a path to a
@@ -83,8 +87,9 @@ have been corrected by hand in the symbol editor.
 ## What it refuses
 
 - An IPN that does not read as one, or names no row
-- No `--from` and no pinout read — the part has no part number, or no
-  datasheet was found for it
+- No library holds the part and no pinout could be read — the part has no
+  part number, or no datasheet was found for it
+- A rename naming a pin the symbol does not have
 - A `--from` that is not `<library>:<name>`
 - A library nickname that resolves nowhere
 - A symbol the named library does not hold
