@@ -259,8 +259,7 @@ class is recorded. A class the list does not hold is added here first.
 
 **T1.5 — The relations**
 
-Six, and every one is declared. There are no exemptions. A relation that is
-real and cannot be declared means a table is wrong, and the table gets fixed.
+Six, and every one is declared.
 
 | From | To | On delete |
 |---|---|---|
@@ -316,10 +315,8 @@ manufacturer still makes it, what a distributor charges, what is on the
 shelf. All of it goes stale, all of it is discarded and fetched again, and
 `fetched_at` says when it was true.
 
-The split is the point. An approval names a part number and must outlive
-every fetch; a price must not. Keeping identity and fetched state in one
-table forced the approval to depend on a fetch, and the last two versions of
-this document wrote an exemption instead of the split.
+An approval names a part number and outlives every fetch. A price does not.
+That is why the two are separate tables.
 
 An offer is one distributor's listing of one MPN at one quantity break. One
 MPN carries many. Lifecycle is per part number, not per distributor, so it is
