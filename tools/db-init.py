@@ -31,8 +31,9 @@ SCHEMA = {
             "status        TEXT",
         ),
         "ref_table": (
-            "ref           TEXT PRIMARY KEY",
+            "uuid          TEXT PRIMARY KEY",
             "ipn           TEXT NOT NULL",
+            "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
         ),

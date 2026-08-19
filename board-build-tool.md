@@ -77,13 +77,19 @@ hands over.
 | Table | Key | Fields |
 |---|---|---|
 | `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `pins_checked`, `source`, `status` |
-| `ref_table` | `ref` | `ipn`, `page`, `room` |
+| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room` |
 
 `parts_table` is the part. One row per IPN, whatever the board uses it for.
 
 `ref_table` is the instance. `U1` and `U2` are two rows carrying one `ipn`,
 and they are free to sit on different pages and in different rooms. A part
 used forty times is one `parts_table` row and forty `ref_table` rows.
+
+The key is the KiCad UUID, because that is what KiCad already keys an
+instance on. Every symbol in a `.kicad_sch` carries one, and the footprint in
+the `.kicad_pcb` carries `(path "/<sheet-uuid>/<symbol-uuid>")` back to it.
+It is the join the files themselves use, and keying on anything else would
+mean storing it as well.
 
 There is no `qty` field. Quantity is `count(*) from ref_table group by ipn`,
 and a field would only be a second place for it to be wrong.
@@ -97,12 +103,15 @@ instance, not of the part.
 `hand`. Once a symbol is copied into `lib/` under the clone rule of section
 2, nothing else distinguishes a copied stock symbol from a drawn one.
 
-**Who assigns `ref`**
+**`ref` is a field, not a key**
 
-The tool does, and KiCad never renumbers. A `ref_table` row exists before the
-symbol is placed, because `page` is on the instance and `sheet-place` has
-nothing to read otherwise. Annotation in the editor would overwrite the key
-the placement was made against, so it is not used.
+Annotate and reannotate in the editor as you please. `ref` is read back off
+the sheets and updated; the UUID does not move, so nothing that points at an
+instance is disturbed.
+
+The instance row exists before the symbol is placed — `page` is on the
+instance, and `sheet-place` has nothing to read otherwise. The tool mints the
+UUID at that point and writes it into the sheet it creates.
 
 **The IPN**
 
