@@ -22,7 +22,7 @@ SCHEMA = {
     # nothing. Order matters — a table is created after the one it references
     "board.db": {
         "parts_table": (
-            "ipn           TEXT PRIMARY KEY",
+            "ipn           TEXT PRIMARY KEY NOT NULL",
             "description   TEXT",
             "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
             "symbol        TEXT",
@@ -31,7 +31,7 @@ SCHEMA = {
             "note          TEXT",
         ),
         "ref_table": (
-            "uuid          TEXT PRIMARY KEY",
+            "uuid          TEXT PRIMARY KEY NOT NULL",
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
             "ref           TEXT",
@@ -40,7 +40,7 @@ SCHEMA = {
         ),
         # the manufacturer part itself. Kept, and never fetched away
         "mpn_table": (
-            "mpn           TEXT PRIMARY KEY",
+            "mpn           TEXT PRIMARY KEY NOT NULL",
             "manufacturer  TEXT",
             "datasheet     TEXT",
         ),
