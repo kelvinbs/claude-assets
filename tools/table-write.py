@@ -149,8 +149,8 @@ def add(con, args):
 
     for _ in range(args.count):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?,?)",
-                    (str(uuid.uuid4()), ipn, ref, args.page, args.room, None))
+        con.execute("insert into ref_table values (?,?,?,?,?)",
+                    (str(uuid.uuid4()), ipn, ref, args.page, args.room))
         print(f"    {ref}  {args.page or '—'}")
     con.commit()
 
@@ -182,8 +182,8 @@ def place(con, args):
                   f"remove them — name the reference with drop")
     for _ in range(args.count - have):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?,?)",
-                    (str(uuid.uuid4()), args.ipn, ref, args.page, args.room, None))
+        con.execute("insert into ref_table values (?,?,?,?,?)",
+                    (str(uuid.uuid4()), args.ipn, ref, args.page, args.room))
         print(f"{args.ipn}  {ref}  {args.page or '—'}")
     if args.page or args.room:
         sets, vals = [], []
