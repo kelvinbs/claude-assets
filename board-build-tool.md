@@ -313,6 +313,19 @@ Every file in the board directory is made by a tool, so a full init deletes
 all of them and starts from nothing. The init functions are steps of process
 1, not something run ahead of it.
 
+**Initialisation**
+
+From the init state, three steps, in this order:
+
+| # | Tool | Makes |
+|---|---|---|
+| 1 | `db-init` | `board.db` and its five empty tables |
+| 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
+| 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
+
+They are process 1. After them the board directory holds the record and an
+empty project, and process 2 has somewhere to put a symbol.
+
 **T3.2 — One agent per process**
 
 Each process is entered on its own and calls the tools its T3.1 row names.
