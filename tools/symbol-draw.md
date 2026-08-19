@@ -12,7 +12,10 @@ python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAM
 python3 tools/board-build/tools/symbol-draw.py <board-dir> --all
 ```
 
-`--all` is every part whose `symbol` is null.
+`--all` is every part whose `symbol` is null **and** whose instances put it
+on a page. A part on no page is not on a sheet and has no symbol — a bare
+board, an enclosure, a host the board plugs into. The run names them and
+leaves them. `sheet-place` reads a blank page the same way.
 
 It calls `lib-init` first, every run, so the library and its `sym-lib-table`
 entry exist before anything is written to them.

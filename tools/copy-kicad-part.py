@@ -143,8 +143,13 @@ there while the same die under another name is. The near ones are also how
 you rule the library out: if the family is there and your part is not, that
 is an answer, not a reason to keep searching.
 
-If no symbol is the part, ask whether the part is one that is *drawn* as a
-generic symbol rather than as itself. A resistor is drawn as a resistor, a
+First ask whether the part is drawn at all. A bare board, an enclosure, a
+bracket, a radome, a cable, a piece of bench equipment, a host computer the
+board plugs into - these are lines on a bill of materials and nothing on a
+sheet. They have no symbol and no generic stands in for them. Return null.
+
+If the part is drawn but no symbol is the part, ask whether it is one that
+is *drawn* as a generic symbol rather than as itself. A resistor is drawn as a resistor, a
 capacitor as a capacitor - an inductor, a diode, an LED, a crystal, a test
 point, a jumper, a mounting hole, a coaxial receptacle, the same. For those
 the generic symbol in `Device`, `Connector`, `Mechanical` or the like is the

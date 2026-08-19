@@ -532,8 +532,23 @@ def main(argv):
         if args.ipn:
             targets = [args.ipn]
         else:
+            # A part no instance puts on a page is not on a sheet, and a
+            # part not on a sheet has no symbol. `sheet-place` reads a blank
+            # page the same way. Asking for a symbol for a bare board is
+            # asking the wrong question.
             targets = [r[0] for r in con.execute(
-                "select ipn from parts_table where symbol is null order by ipn")]
+                "select p.ipn from parts_table p where p.symbol is null "
+                "and exists (select 1 from ref_table r where r.ipn = p.ipn "
+                "and r.page is not null and trim(r.page) <> '') "
+                "order by p.ipn")]
+            skipped = [r[0] for r in con.execute(
+                "select p.ipn from parts_table p where p.symbol is null "
+                "and not exists (select 1 from ref_table r where r.ipn = p.ipn "
+                "and r.page is not null and trim(r.page) <> '') "
+                "order by p.ipn")]
+            if skipped:
+                print(f"{len(skipped)} part(s) on no page, not drawn: "
+                      + " ".join(skipped))
             if not targets:
                 print("every part has a symbol. Nothing to draw")
                 return 0
