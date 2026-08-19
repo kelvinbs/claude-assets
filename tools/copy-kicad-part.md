@@ -28,28 +28,40 @@ failure and the run exits zero saying `null`. The exit codes are for a
 question that could not be asked at all — an IPN that names no row, a part
 with no part number, no library directory to search.
 
-## What counts as a match
+## There is no name matcher
 
-The part number, and nothing else. Three ways, in order:
+A library is not organised by order code. A symbol may carry the family name
+with a trailing `x` for the package letters, the die name, a package suffix
+the order code does not have, or a generic name with the part number only in
+its description. Matching strings finds the easy half and misses the rest.
 
-| | Example |
-|---|---|
-| the symbol's name is the part number | `ADA4807-4ARUZ` |
-| the name is the part number without its ordering suffix | `USB3343` for `USB3343-CP-TR` |
-| the name is a KiCad family the part number completes | `STM32H735VGTx` for `STM32H735VGT6` |
+So the search is handed to `claude -p`, which reads the libraries the way a
+person would and says which symbol is the part. The instruction it is given
+is the `PROMPT` string in `copy-kicad-part.py`, and that is the thing to
+change when the search comes back wrong.
 
-The trailing `x` is KiCad's own convention for the letters that choose a
-package or a temperature grade. It stands for what the part number
-completes, and up to three characters of it.
+The instruction is explicit that a symbol for a different member of a
+family, a part with the same pin count, or the same kind of part from
+another maker is **not** this part, and that null is the right answer when
+in doubt. A wrong symbol passes every check downstream and is found on the
+bench.
 
-Nothing looser. A symbol that is the same kind of part is not this part, and
-a wrong symbol on a sheet costs more than drawing the right one. A part that
-is genuinely similar and needs its pins edited is a copy the User asks for by
-name, through `--from`.
+What comes back is checked here against the library file: the symbol exists,
+and every renamed pin is a pin it has.
 
-Every approved part number is tried, not only the one designed against. The
-alternatives of T1.3 take the board as designed, so a symbol for one is a
-symbol for all.
+## Renaming a pin
+
+`rename` carries the pins whose names differ from the datasheet — pin number
+to the name it should carry. It is for a symbol that **is** the part and
+names a pin its own way. It is not a way to reshape a symbol: if the pins are
+not the part's pins, the answer is null.
+
+## The origin
+
+A copied symbol carries an `origin` property naming the library and symbol it
+was taken from. `symbol-draw` writes it. The symbol belongs to the project
+from the moment it is copied, and nothing else in it would say where it came
+from.
 
 ## Which libraries
 

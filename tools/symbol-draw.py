@@ -355,7 +355,8 @@ def set_property(block, name, value):
                   f'{effects(3, hide=True)}\t\t)\n' + block[len(head):]
 
 
-def copy_symbol(source_path, source_name, ipn, prefix, description, datasheet):
+def copy_symbol(source_path, source_name, ipn, prefix, description,
+                datasheet):
     block = extract_symbol(source_path, source_name)
     if block is None:
         raise Bad(f"{source_path} does not hold a symbol '{source_name}'")
@@ -367,6 +368,10 @@ def copy_symbol(source_path, source_name, ipn, prefix, description, datasheet):
     block = set_property(block, "Description", description or "")
     if datasheet:
         block = set_property(block, "Datasheet", datasheet)
+    # The symbol is this project's from here on, and nothing in it says
+    # where it came from. `origin` says it, so a copy can be read back
+    # against the library it was taken from.
+    block = set_property(block, "origin", f"{source_path.stem}:{source_name}")
     return "\t" + block.strip() + "\n"
 
 
