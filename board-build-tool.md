@@ -70,8 +70,11 @@ An agent that finds it needs one of them changed has found a bug. It aborts,
 declares the tool unusable, and names what it hit. It does not carry on, and
 it does not ask.
 
-The fields are the User's too. A tool writes what T1.2 and T1.3 declare and
-adds nothing.
+The core tables are immutable. At runtime the User may add a field to any of
+them at will.
+
+A tool changes the schema on the User's request and on nothing else. Not to
+carry a task, and never on an inference.
 
 **T1.2 — The design tables**
 
