@@ -5,7 +5,7 @@ it is. The second tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>`<board-dir>/parts/<IPN>.json`<br>KiCad symbol libraries | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
+| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>the pins, from `datasheet-read`<br>KiCad symbol libraries | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
 python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
@@ -22,7 +22,7 @@ entry exist before anything is written to them.
 | | |
 |---|---|
 | `--from <library>:<name>` | the symbol exists. It is copied in |
-| absent | it does not. It is drawn from `parts/<IPN>.json` |
+| absent | it does not. `datasheet-read` is called and what it returns is drawn |
 
 The library named by `--from` is a stock KiCad library if one of that
 nickname is in the KiCad symbol directory, otherwise a path to a
@@ -63,9 +63,6 @@ the first and leaves the second as it found it.
 | `v` | copied from any other library on disk |
 | `h` | drawn here, from the pinout |
 
-`--source s|v|h` overrides it — a vendor library sitting in the stock
-directory, or a stock symbol fetched from elsewhere.
-
 ## The drawing
 
 The body is sized to its own pins. Left and right run down the sides in the
@@ -86,7 +83,8 @@ have been corrected by hand in the symbol editor.
 ## What it refuses
 
 - An IPN that does not read as one, or names no row
-- No `--from` and no pinout on disk — run `datasheet-read` first
+- No `--from` and no pinout read — the part has no part number, or no
+  datasheet was found for it
 - A `--from` that is not `<library>:<name>`
 - A library nickname that resolves nowhere
 - A symbol the named library does not hold

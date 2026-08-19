@@ -1,21 +1,22 @@
 #!/usr/bin/env python3
-"""datasheet-read — read a pinout out of a datasheet.
+"""datasheet-read - read a pinout out of a datasheet.
 
-    datasheet-read.py <board-dir> <ipn> [--datasheet PATH] [--force]
-    datasheet-read.py <board-dir> --all [--force]
+    datasheet-read.py <board-dir> <ipn> [--datasheet PATH]
+    datasheet-read.py <board-dir> --all
 
 The first tool of process 2. It reads the part out of `board.db`, finds its
-datasheet, and writes what the datasheet says to `parts/<IPN>.json`, which
-is what `symbol-draw` draws from.
+datasheet, and hands back the pins. `symbol-draw` calls it and draws them.
+Run alone it prints them.
 
-There is no parser here. Datasheets do not share a layout — a table, a
-package drawing, a column beside prose, a scan with no text in it — so a
+It writes no file of its own. The pins belong in the symbol, and the symbol
+is where `symbol-draw` puts them.
+
+There is no parser here. Datasheets do not share a layout - a table, a
+package drawing, a column beside prose, a scan with no text in it - so a
 parser is a new special case for every part and never converges. Reading a
 pinout is looking at the page, which is what `claude -p` is handed the job
-of doing. What comes back is checked here, and a file that does not hold up
-is deleted, so a bad pinout never reaches a symbol.
-
-`parts/` is derived. Delete it and run this again.
+of doing. What comes back is checked here, and a pinout that does not hold
+up is thrown away, so a bad one never reaches a symbol.
 """
 
 import argparse
@@ -24,6 +25,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -63,7 +65,6 @@ not guess a pin.
 Write this to {out} and nothing else:
 
     {{
-      "source": "the figure or table you read, by number and page",
       "pins": [[1, "GND", "power_in", "B"], [2, "RFIN", "input", "L"]]
     }}
 
@@ -79,10 +80,7 @@ An exposed pad is a pin. It numbers after the last numbered pin.
 
 Where the part number names a package variant the datasheet tabulates
 separately — a suffix that means MSOP against LFCSP, or one member of a
-family — take that variant's pinout and say which in "source".
-
-The IPN, the description and the path to the datasheet are the database's.
-The tool fills them in around what you write.
+family — take that variant's pinout.
 
 Before you finish, read your file back against the figure pin by pin. A
 wrong pin number passes ERC, passes the netlist, passes layout, and is
@@ -255,75 +253,73 @@ def faults(spec):
     return bad
 
 
-def read(ipn, description, mpn, datasheet, out, root, quiet=False):
-    """Hand the datasheet over and take back a pinout, or None."""
-    if out.exists():
-        out.unlink()
+def read(ipn, description, mpn, datasheet, root, quiet=False):
+    """Hand the datasheet over and take back a pinout, or None.
+
+    The reader writes a file because that is how it is told what to produce.
+    The file is scratch: it is read back here and deleted, and nothing of it
+    reaches the project."""
+    handle, path = tempfile.mkstemp(suffix=".json")
+    os.close(handle)
+    out = Path(path)
+    out.unlink()
     prompt = PROMPT.format(ipn=ipn, description=description or "no description",
                            mpn=mpn, datasheet=datasheet, out=out)
-    run = subprocess.run(
-        ["claude", "-p", prompt,
-         "--permission-mode", "acceptEdits",
-         "--allowedTools", "Bash,Read,Write,WebSearch,WebFetch"],
-        cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
-
-    if not out.exists():
-        if not quiet:
-            tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
-            print(f"    {ipn}: nothing written. " + " / ".join(tail))
-        return None
-
     try:
-        spec = json.load(open(out))
-    except json.JSONDecodeError as exc:
-        out.unlink()
-        if not quiet:
-            print(f"    {ipn}: not JSON — {exc}")
-        return None
+        run = subprocess.run(
+            ["claude", "-p", prompt,
+             "--permission-mode", "acceptEdits",
+             "--allowedTools", "Bash,Read,Write,WebSearch,WebFetch"],
+            cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
+
+        if not out.exists():
+            if not quiet:
+                tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
+                print(f"    {ipn}: nothing written. " + " / ".join(tail))
+            return None
+        try:
+            spec = json.load(open(out))
+        except json.JSONDecodeError as exc:
+            if not quiet:
+                print(f"    {ipn}: not JSON - {exc}")
+            return None
+    finally:
+        if out.exists():
+            out.unlink()
 
     bad = faults(spec)
     if bad:
-        out.unlink()
         if not quiet:
             for fault in bad:
                 print(f"    {ipn}: {fault}")
         return None
+    return {"pins": sorted(spec["pins"], key=lambda row: row[0])}
+
+
+def pinout(con, board, ipn, datasheet=None, folder=None):
+    """The pins of one part, and the datasheet they came from, or None.
+    This is what `symbol-draw` calls."""
+    ipn, description = part_row(con, ipn)
+    mpn, recorded = designed_mpn(con, ipn)
+    path, stored = resolve_sheet(con, board, ipn, mpn, recorded,
+                                 datasheet, folder)
+    spec = read(ipn, description, mpn, stored, repo_root(board))
+    if spec is None:
+        return None
+    spec["datasheet"] = stored
     return spec
 
 
 # ------------------------------------------------------------------------ run
 
 def one(con, board, ipn, args):
-    ipn, description = part_row(con, ipn)
-    out = Path(board) / "parts" / f"{ipn}.json"
-    if out.exists() and not args.force:
-        print(f"{ipn}  already read — {out}")
-        return True
-
-    mpn, recorded = designed_mpn(con, ipn)
-    path, stored = resolve_sheet(con, board, ipn, mpn, recorded,
-                                 args.datasheet, args.datasheets)
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    spec = read(ipn, description, mpn, stored, out, repo_root(board))
+    spec = pinout(con, board, ipn, args.datasheet, args.datasheets)
     if spec is None:
         print(f"{ipn}  not read")
         return False
-
-    # The identity is the database's. Only "source" and "pins" came from the
-    # reader, and they are the only things it is allowed to have written.
-    spec = {
-        "ipn": ipn,
-        "description": description,
-        "mpn": mpn,
-        "datasheet": stored,
-        "source": spec.get("source", ""),
-        "pins": sorted(spec["pins"], key=lambda row: row[0]),
-    }
-    with open(out, "w") as f:
-        json.dump(spec, f, indent=2)
-        f.write("\n")
-    print(f"{ipn}  {len(spec['pins'])} pins  {stored}")
+    print(f"{ipn}  {len(spec['pins'])} pins  {spec['datasheet']}")
+    for number, name, etype, side in spec["pins"]:
+        print(f"    {number:>4}  {name:<16} {etype:<15} {side}")
     return True
 
 
@@ -335,8 +331,6 @@ def main(argv):
                     help="every part with no symbol yet")
     ap.add_argument("--datasheet", help="the PDF, when the name does not match")
     ap.add_argument("--datasheets", help="the directory to search")
-    ap.add_argument("--force", action="store_true",
-                    help="read again over a pinout already on disk")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)

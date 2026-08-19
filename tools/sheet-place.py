@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """sheet-place — place symbols on their page.
 
-    sheet-place.py <board-dir> [--project NAME] [--paper A-E]
+    sheet-place.py <board-dir> [--project NAME]
 
 The tool of process 3. Every instance in `ref_table` that carries a page and
 whose part carries a symbol is drawn on that page, in the order of T1.4:
@@ -413,8 +413,6 @@ def main(argv):
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("--project", help="the project name. Defaults to the "
                                       ".kicad_pro already there")
-    ap.add_argument("--paper", choices=PAPER_ORDER,
-                    help="fix every new page at this ANSI size")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
@@ -445,14 +443,14 @@ def main(argv):
     root = uid(project, "root")
 
     made = write_project_file(board, project)
-    added = write_root(board, project, root, pages, args.paper)
+    added = write_root(board, project, root, pages, None)
     print(f"{project}.kicad_pro  {'written' if made else 'kept'}")
     print(f"{project}.kicad_sch  {added} page(s) added, {len(pages)} in all")
 
     for page in pages:
         on_page = [r for r in drawable if r["page"] == page]
         name, new, kept = write_page(board, project, root, page, on_page,
-                                     blocks, args.paper)
+                                     blocks, None)
         print(f"    {name}  {new} placed, {kept} left as they were")
 
     if nosymbol:

@@ -6,11 +6,11 @@
 
 The second tool of process 2. A symbol either exists somewhere already and
 is copied in, or it does not and is drawn from the pinout `datasheet-read`
-wrote. Either way it lands in `lib/<nickname>.kicad_sym`, owned from that
-point, and `parts_table` is told where it is.
+hands back. Either way it lands in `lib/<nickname>.kicad_sym`, owned from
+that point, and `parts_table` is told where it is.
 
     --from  copies. The nickname resolves to a KiCad library on disk
-    absent  draws, from `parts/<IPN>.json`
+    absent  reads the datasheet and draws what it says
 
 `source` of T1.2 takes its first letter here: `s` for a KiCad stock library,
 `v` for any other library on disk, `h` for a symbol drawn against the
@@ -25,7 +25,6 @@ library.
 
 import argparse
 import importlib.util
-import json
 import math
 import os
 import re
@@ -426,11 +425,9 @@ def one(con, board, ipn, nickname, args, classes):
                             description, datasheet)
         origin = f"copied from {source_nick}:{source_name}"
     else:
-        spec_path = Path(board) / "parts" / f"{ipn}.json"
-        if not spec_path.exists():
-            raise Bad(f"{ipn}: no pinout at {spec_path}. "
-                      f"Run datasheet-read, or give --from")
-        spec = json.load(open(spec_path))
+        spec = reader.pinout(con, board, ipn, args.datasheet, args.datasheets)
+        if spec is None:
+            raise Bad(f"{ipn}: no pinout read. Give --from, or a datasheet")
         spec["name"] = ipn
         spec["reference"] = prefix
         spec["description"] = description or ""
@@ -439,8 +436,6 @@ def one(con, board, ipn, nickname, args, classes):
         letter = "h"
         origin = f"drawn, {len(spec['pins'])} pins"
 
-    if args.source:
-        letter = args.source
     changed = merge(path, ipn, block, args.redraw)
     write_fields(con, ipn, lib_id, letter, source)
     print(f"{ipn}  {lib_id}  {letter}  {origin}"
@@ -456,10 +451,10 @@ def main(argv):
                     help="every part with no symbol yet")
     ap.add_argument("--from", dest="source_lib", metavar="LIB:NAME",
                     help="copy this symbol instead of drawing one")
-    ap.add_argument("--source", choices=("s", "v", "h"),
-                    help="override the source letter of T1.2")
     ap.add_argument("--nickname", help="the library nickname. Defaults to "
                                        "the .kicad_pro name")
+    ap.add_argument("--datasheet", help="the PDF, when the name does not match")
+    ap.add_argument("--datasheets", help="the directory to search")
     ap.add_argument("--redraw", action="store_true",
                     help="replace a symbol the library already holds")
     args = ap.parse_args(argv[1:])
@@ -473,9 +468,13 @@ def main(argv):
         raise Bad(f"'{args.ipn}' is not an IPN")
     if args.all and args.source_lib:
         raise Bad("--from names one symbol, so it names one part")
+    if args.all and args.datasheet:
+        raise Bad("--datasheet names one file, so it names one part")
 
     lib_init = sibling("lib-init")
     classes = sibling("table-write").CLASSES
+    global reader
+    reader = sibling("datasheet-read")
     try:
         nickname = lib_init.nickname_of(board, args.nickname)
         lib_init.make_library(board, nickname)

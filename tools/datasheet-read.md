@@ -4,12 +4,16 @@ Read a pinout out of a datasheet. The first tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>`datasheets/` | `<board-dir>/parts/<IPN>.json`<br>`board.db` — `mpn_table.datasheet` |
+| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>`datasheets/` | the pins, to `symbol-draw` or to standard output<br>`board.db` — `mpn_table.datasheet` |
 
 ```
 python3 tools/board-build/tools/datasheet-read.py <board-dir> <ipn> [options]
 python3 tools/board-build/tools/datasheet-read.py <board-dir> --all [options]
 ```
+
+It writes no file of its own. `symbol-draw` calls it and draws what comes
+back; run alone it prints the pins. The pins belong in the symbol, and a
+second copy of them beside the symbol is a second thing to keep true.
 
 `--all` is every part whose `symbol` is null — the parts process 2 exists to
 serve, per T3.1.
@@ -62,39 +66,21 @@ repository's. `--datasheets <dir>` names another.
 A part number matching two files stops the run and lists them. Taking the
 first is how a symbol gets drawn from the wrong part.
 
-## The pinout file
+## What comes back
 
-`<board-dir>/parts/<IPN>.json`, one per part. Derived — delete the directory
-and run again.
+A pin is `[number, name, type, side]`. `side` is `L`, `R`, `T` or `B`.
+`type` is a KiCad electrical type — `input`, `output`, `bidirectional`,
+`tri_state`, `passive`, `free`, `unspecified`, `power_in`, `power_out`,
+`open_collector`, `open_emitter`, `no_connect`. `~{NAME}` gives an overbar.
+An exposed pad is a pin, numbered after the last numbered pin.
 
-```json
-{
-  "ipn": "F0003",
-  "description": "the parts_table description",
-  "mpn": "the blank-rank MPN",
-  "datasheet": "path, from the repository root",
-  "source": "the figure or table it was read from, by number and page",
-  "pins": [[1, "IN", "passive", "L"], [2, "GND", "passive", "B"]]
-}
-```
-
-A pin is `[number, name, type, side]`. `side` is `L`, `R`, `T` or `B`. `type`
-is a KiCad electrical type — `input`, `output`, `bidirectional`, `tri_state`,
-`passive`, `free`, `unspecified`, `power_in`, `power_out`, `open_collector`,
-`open_emitter`, `no_connect`. `~{NAME}` gives an overbar. An exposed pad is a
-pin, numbered after the last numbered pin.
-
-Everything but `source` and `pins` is the database's. The reader writes those
-two and the tool fills the rest in around them, so a part's identity cannot
-be altered by what came back from a datasheet.
-
-`source` records which figure the pins were read from, so the next reader can
-check them without guessing.
+The reader is given a scratch file to write, because that is how it is told
+what to produce. The file is read back, checked, and deleted.
 
 ## Re-running
 
-A part whose pinout is already on disk is left alone and says so. `--force`
-reads it again over the top.
+Nothing is cached. `symbol-draw` skips a part that already has a symbol, so
+a datasheet is read once per symbol drawn and not again.
 
 ## What it refuses
 
@@ -111,6 +97,5 @@ does not stop the rest; the run lists them at the end and exits non-zero.
 
 ## What it does not do
 
-It does not open a KiCad file, write `parts_table`, or read a package. The
-package and the physical fields belong to `footprint-draw`, and land in this
-same file when that tool is written.
+It does not open a KiCad file and it does not write `parts_table`. The
+package and the physical fields belong to `footprint-draw`.

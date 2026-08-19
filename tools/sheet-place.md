@@ -7,7 +7,7 @@ Place symbols on their page. The tool of process 3.
 | `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/<project>.kicad_sym` | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once |
 
 ```
-python3 tools/board-build/tools/sheet-place.py <board-dir> [--project NAME] [--paper A-E]
+python3 tools/board-build/tools/sheet-place.py <board-dir> [--project NAME]
 ```
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
@@ -84,8 +84,7 @@ write it back over anything added underneath it.
 ## Paper
 
 A new page takes the smallest ANSI size, `A` to `E`, that its parts fit on.
-`--paper` fixes every new page at one size. A page that already exists keeps
-the size it has.
+A page that already exists keeps the size it has.
 
 ## What it refuses
 
