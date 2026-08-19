@@ -125,9 +125,38 @@ There is no `qty` field. Quantity is `count(*) from ref_table group by ipn`,
 and a field would only be a second place for it to be wrong.
 
 `page` names the schematic page the symbol is placed on. `room` is the
-User's tag for where a footprint goes; it constrains nothing, and a KiCad
-group is nothing more than a list of parts. No tool invents one. Both are
-properties of the instance, not of the part.
+User's tag for where the instance goes — a block of the sheet and a region of
+the board, one name read by both. No tool invents one. Both are properties of
+the instance, not of the part.
+
+**T1.4 — Where a thing is placed**
+
+Three dimensions, in this order. Both `sheet-place` and `board-place` obey
+it, and neither has a rule of its own.
+
+| Rank | Dimension | Schematic | Board |
+|---|---|---|---|
+| 1 | `page` | selects the file | — |
+| 2 | `room` | which block of the sheet | which region of the board |
+| 3 | family | groups what `room` has not already placed | groups what `room` has not already placed |
+
+`page` is not a preference. It selects the file the symbol is written into,
+and there is nowhere else to put it, so a family split across two pages stays
+split.
+
+`room` outranks family. An instance with a `room` goes there, and it leaves
+its family's block to do it. Nothing is reported — it was set by hand and the
+hand meant it.
+
+Family is the default. A part and its children are placed together wherever
+`room` has not already spoken, which today is every instance.
+
+A KiCad group is what `board-place` writes when it puts a room or a family
+together. It is a list of footprints that move as one, and nothing more.
+
+What this table does not settle: the order of rooms and families within a
+page, and the order of parts within a family. Those belong to the tool
+documents, not here.
 
 **`parent`**
 
