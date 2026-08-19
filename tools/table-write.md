@@ -35,7 +35,7 @@ free number for its class's reference prefix and a fresh UUID.
 read six months later.
 
 Every other `parts_table` field may be given: `--symbol`, `--footprint`,
-`--model`, `--source`. `--page` and `--room` are properties of the instance
+`--model`, `--source`, `--note`. `--page` and `--room` are properties of the instance
 and go on the `ref_table` rows.
 
 There is no status to set. The record says what the design is, not how far
@@ -67,7 +67,8 @@ The row is the approval. A part number that may not be built does not get a
 row, and neither does one that would need the board changed to take — every
 MPN in the table drops in. There is no flag to set and none to forget.
 
-`--rank` orders the alternatives, default 1. `--note` is recorded as given.
+`--rank` orders the alternatives, default 1. `--note` is a sentence a person
+writes, and is normally left alone — see T1.2. The tool never fills it in.
 
 Naming the same IPN and MPN again updates the rank and the note rather than
 adding a second row. `aml_table` is kept, unlike the fetched

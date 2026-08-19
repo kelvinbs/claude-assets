@@ -27,6 +27,7 @@ SCHEMA = {
             "footprint     TEXT",
             "model         TEXT",
             "source        TEXT",
+            "note          TEXT",
         ),
         "ref_table": (
             "uuid          TEXT PRIMARY KEY",
@@ -34,6 +35,7 @@ SCHEMA = {
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
+            "note          TEXT",
         ),
     },
     "sourcing.db": {
@@ -53,6 +55,7 @@ SCHEMA = {
             "datasheet     TEXT",
             "lifecycle     TEXT",
             "fetched_at    TEXT",
+            "note          TEXT",
         ),
         "offer_table": (
             "mpn           TEXT NOT NULL",
@@ -65,6 +68,7 @@ SCHEMA = {
             "moq           INTEGER",
             "lead_days     INTEGER",
             "fetched_at    TEXT",
+            "note          TEXT",
             "PRIMARY KEY (mpn, distributor, break_qty)",
         ),
     },

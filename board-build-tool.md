@@ -86,12 +86,28 @@ time somebody writes one and not the other.
 So there is no `status`, no `pins_checked`, no `approved`. What a process
 still owes is read off the record, in one query, at the moment it is asked.
 
+**`note`**
+
+Every table carries one, and it is normally blank.
+
+It is for a person to write a sentence a column cannot hold — why this part
+and not the obvious one, what the datasheet gets wrong, what to check before
+ordering again. It is read by a person and by nothing else.
+
+A tool does not write it. Not where a value came from, not which document a
+row was imported out of, not when it was touched — a tool that has something
+to say about a row says it in the column that holds that fact, or does not
+say it. A `note` full of machine bookkeeping is a `note` nobody reads, and
+the one sentence that mattered is lost in it.
+
+Blank is the normal state.
+
 **T1.2 — `design.db`**
 
 | Table | Key | Fields |
 |---|---|---|
-| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `source` |
-| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room` |
+| `parts_table` | `ipn` | `description`, `category`, `symbol`, `footprint`, `model`, `source`, `note` |
+| `ref_table` | `uuid` | `ipn`, `ref`, `page`, `room`, `note` |
 
 `parts_table` is the part. One row per IPN, whatever the board uses it for.
 
@@ -172,8 +188,8 @@ class is recorded. A class the list does not hold is added here first.
 | Table | Key | Fields |
 |---|---|---|
 | `aml_table` | `ipn` + `mpn` | `rank`, `note` |
-| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at` |
-| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
+| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at`, `note` |
+| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at`, `note` |
 
 `aml_table` is the approved manufacturer list: which MPNs may be built
 against an IPN, ranked. The row is the approval — a part number that may not

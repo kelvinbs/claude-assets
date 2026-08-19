@@ -51,7 +51,7 @@ IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 FIELDS = ("description", "category", "symbol", "footprint", "model",
-          "source")
+          "source", "note")
 
 
 class Bad(SystemExit):
@@ -157,8 +157,8 @@ def add(con, args):
 
     for _ in range(args.count):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?)",
-                    (str(uuid.uuid4()), ipn, ref, args.page, args.room))
+        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), ipn, ref, args.page, args.room, None))
         print(f"    {ref}  {args.page or '—'}")
     con.commit()
 
@@ -192,8 +192,8 @@ def place(con, args):
                   f"remove them — name the reference with drop")
     for _ in range(args.count - have):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?)",
-                    (str(uuid.uuid4()), args.ipn, ref, args.page, args.room))
+        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), args.ipn, ref, args.page, args.room, None))
         print(f"{args.ipn}  {ref}  {args.page or '—'}")
     if args.page or args.room:
         sets, vals = [], []
