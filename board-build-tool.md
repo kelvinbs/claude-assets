@@ -103,6 +103,19 @@ instance, not of the part.
 `hand`. Once a symbol is copied into `lib/` under the clone rule of section
 2, nothing else distinguishes a copied stock symbol from a drawn one.
 
+`status` says what the part still owes, and is one of five:
+
+| Value | Meaning |
+|---|---|
+| `chosen` | the part is picked. No library object yet |
+| `drawn` | symbol and footprint exist and resolve |
+| `checked` | the pinout has been read against the datasheet, and `pins_checked` says against what |
+| `provisional` | a stand-in is in place and is known to be wrong |
+| `blocked` | the part cannot advance, for a reason that is not the tool's |
+
+A part climbs `chosen`, `drawn`, `checked`. `provisional` and `blocked` are
+off that line and say so.
+
 **`ref` is a field, not a key**
 
 Annotate and reannotate in the editor as you please. `ref` is read back off
@@ -326,7 +339,7 @@ Each tool document opens with the assets it reads and the assets it writes.
 
 **State**
 
-- Written: this document, `tools/db-init.md`.
-- Built: `tools/db-init.py`.
+- Written: this document, `tools/db-init.md`, `tools/table-write.md`.
+- Built: `tools/db-init.py`, `tools/table-write.py`.
 - `builds/proto1/tools` is the working precedent for the rest, and has not
   been moved here.
