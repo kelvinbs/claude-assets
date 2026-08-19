@@ -60,7 +60,7 @@ class Bad(SystemExit):
 
 
 def connect(board, name="board.db",
-            need=("parts_table", "ref_table", "aml_table")):
+            need=("parts_table", "ref_table", "aml_table", "mpn_table")):
     path = Path(board) / name
     if not path.exists():
         raise Bad(f"{path} does not exist. Run db-init first")
@@ -234,6 +234,10 @@ def mpn(con, args):
     """An approval: this manufacturer part may be built against this IPN.
     It is kept, unlike the fetched tables beside it."""
     part(con, args.ipn)
+    # the part number's identity exists from the moment it is named, with
+    # every field but the key empty until something fills them in
+    con.execute("insert or ignore into mpn_table (mpn) values (?)",
+                (args.mpn,))
     have = con.execute(
         "select rank from aml_table where ipn = ? and mpn = ?",
         (args.ipn, args.mpn)).fetchone()

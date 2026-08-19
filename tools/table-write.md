@@ -4,7 +4,7 @@ Create or modify a part. The tool of process 1.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table` | `board.db` — `parts_table`, `ref_table`, `aml_table` |
+| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` |
 
 It never opens a KiCad file, and of the sourcing tables it touches only
 `aml_table`. `db-init` must have run first.
@@ -68,6 +68,11 @@ loses a part. Removing one is `drop`, and it names the reference.
 Records an approval in `aml_table` — this manufacturer part may be built
 against this IPN. Choosing a part and choosing the part number it is bought
 as are the same act, which is why it is here and not in a sourcing tool.
+
+Naming a part number creates its `mpn_table` row too, with every field but
+the key empty. The part number's identity exists from the moment you name it;
+what is in the package and who makes it gets filled in later, and nothing
+that is fetched belongs there at all — see T1.3.
 
 The row is the approval. A part number that may not be built does not get a
 row, and neither does one that would need the board changed to take — every

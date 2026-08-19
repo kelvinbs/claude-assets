@@ -41,6 +41,7 @@ SCHEMA = {
             "room          TEXT",
             "note          TEXT",
         ),
+        # the manufacturer part itself. Kept, and never fetched away
         "mpn_table": (
             "mpn           TEXT PRIMARY KEY",
             "manufacturer  TEXT",
@@ -48,17 +49,23 @@ SCHEMA = {
             "pin_count     INTEGER",
             "pitch_mm      REAL",
             "datasheet     TEXT",
-            "lifecycle     TEXT",
-            "fetched_at    TEXT",
             "note          TEXT",
         ),
         "aml_table": (
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
-            "mpn           TEXT NOT NULL",
+            "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
+            " ON DELETE RESTRICT",
             "rank          INTEGER",
             "note          TEXT",
             "PRIMARY KEY (ipn, mpn)",
+        ),
+        # what a fetch found. Discarded and fetched again
+        "lifecycle_table": (
+            "mpn           TEXT PRIMARY KEY REFERENCES mpn_table(mpn)"
+            " ON DELETE CASCADE",
+            "lifecycle     TEXT",
+            "fetched_at    TEXT",
         ),
         "offer_table": (
             "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
@@ -72,7 +79,6 @@ SCHEMA = {
             "moq           INTEGER",
             "lead_days     INTEGER",
             "fetched_at    TEXT",
-            "note          TEXT",
             "PRIMARY KEY (mpn, distributor, break_qty)",
         ),
     },

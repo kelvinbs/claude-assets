@@ -57,7 +57,7 @@ never carries the suffix, so a table and its key are never the same word.
 
 | File | Holds | Role |
 |---|---|---|
-| `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` | Master for the design fields. Pushes to KiCad |
+| `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `lifecycle_table`, `offer_table` | Master for the design fields. Pushes to KiCad |
 | `*.kicad_sch`, `*.kicad_pcb` | — | The native design store: `Reference`, `Value`, `Footprint`, `ipn` |
 
 KiCad is the native store for design use, generally updated from the master.
@@ -69,8 +69,9 @@ rule it was meant to carry survives as a rule: a design process does not read
 `aml_table`, `mpn_table` or `offer_table`, and ordering writes none of the
 others. The join is `ipn`.
 
-`mpn_table` and `offer_table` are fetched, never typed, and may be discarded
-and fetched again. `aml_table` is an approval and is kept.
+`lifecycle_table` and `offer_table` are fetched, never typed, and may be
+discarded and fetched again. `aml_table` is an approval and is kept, and
+`mpn_table` is the part number's identity and is kept with it.
 
 Availability and price come from the JLCPCB API, the only distributor
 interface that answers, or from distributor tables the User downloads and
@@ -258,55 +259,71 @@ class is recorded. A class the list does not hold is added here first.
 
 **T1.5 — The relations**
 
-Five, and `parts_table.ipn` is the hub of three. All but one are declared —
-they live in one file now, which is what makes that possible.
+Six, and every one is declared. There are no exemptions. A relation that is
+real and cannot be declared means a table is wrong, and the table gets fixed.
 
-| From | To | Declared | On delete |
-|---|---|---|---|
-| `ref_table.ipn` | `parts_table.ipn` | yes | restricted |
-| `parts_table.parent` | `parts_table.ipn` | yes | set null |
-| `offer_table.mpn` | `mpn_table.mpn` | yes | cascade |
-| `aml_table.ipn` | `parts_table.ipn` | yes | restricted |
-| `aml_table.mpn` | `mpn_table.mpn` | no — see below | — |
+| From | To | On delete |
+|---|---|---|
+| `ref_table.ipn` | `parts_table.ipn` | restricted |
+| `parts_table.parent` | `parts_table.ipn` | set null |
+| `aml_table.ipn` | `parts_table.ipn` | restricted |
+| `aml_table.mpn` | `mpn_table.mpn` | restricted |
+| `lifecycle_table.mpn` | `mpn_table.mpn` | cascade |
+| `offer_table.mpn` | `mpn_table.mpn` | cascade |
 
-The three that can be declared are declared, so the database refuses the
-basic violation rather than trusting every tool to remember. Foreign keys in
-SQLite are off unless a connection turns them on, so every tool sets
-`PRAGMA foreign_keys = ON` before it writes.
+`parts_table.ipn` and `mpn_table.mpn` are the two hubs — the part you
+designed and the part number you buy. `aml_table` is the only table that
+touches both, and that is what it is for.
+
+Foreign keys in SQLite are off unless a connection turns them on, so every
+tool sets `PRAGMA foreign_keys = ON` before it writes.
 
 Deleting a part that still has instances is refused — the instances are on a
-sheet. Deleting a parent leaves its children, with `parent` cleared: they are
-still parts, they have simply lost the thing they served. Deleting a fetched
-`mpn_table` row takes its offers with it, which is what discarding a fetch
-means.
+sheet. Deleting a part that is approved against a manufacturer part is
+refused too: the approval is a decision, and a decision does not evaporate
+because a row was removed. Drop the approval first.
 
-Deleting a part that is approved against a manufacturer part is refused for
-the same reason as an instance: the approval is a decision, and a decision
-does not evaporate because a row was removed. Drop the approval first.
+Deleting a parent leaves its children with `parent` cleared. They are still
+parts, they have simply lost the thing they served.
 
-`aml_table.mpn` must not be declared even though it could be. `aml_table` is
-kept and `mpn_table` is thrown away and refetched; a key pointing from the
-kept table into the discardable one would make an approval depend on a fetch,
-and discarding the fetch would take the approval with it. You name a part
-number long before anything has looked it up.
-
-That one stays a convention, and the tool that writes it checks it itself.
+Deleting a manufacturer part is refused while an approval names it, and
+takes its lifecycle and its offers with it once none does. That is what
+discarding a fetch means, and it is why the fetched tables cascade and the
+approval does not.
 
 **T1.3 — The sourcing tables**
 
 | Table | Key | Fields |
 |---|---|---|
 | `aml_table` | `ipn` + `mpn` | `rank`, `note` |
-| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `lifecycle`, `fetched_at`, `note` |
-| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at`, `note` |
+| `mpn_table` | `mpn` | `manufacturer`, `package`, `pin_count`, `pitch_mm`, `datasheet`, `note` |
+| `lifecycle_table` | `mpn` | `lifecycle`, `fetched_at` |
+| `offer_table` | `mpn` + `distributor` + `break_qty` | `sku`, `currency`, `price`, `stock`, `moq`, `lead_days`, `fetched_at` |
 
 `aml_table` is the approved manufacturer list: which MPNs may be built
 against an IPN, ranked. The row is the approval — a part number that may not
 be built is not in the table, and one that would need the board changed to
 take is not either. Every MPN in it drops in, or it is not in it.
 
+`mpn_table` is the manufacturer part itself. Who makes it, what package it
+comes in, how many pins, at what pitch, and the datasheet. None of that
+changes, none of it is fetched from anywhere in particular, and none of it is
+thrown away. The row exists from the moment the part number is named — with
+every field but the key empty, if that is all that is known yet.
+
+`lifecycle_table` and `offer_table` are what a fetch found. Whether the
+manufacturer still makes it, what a distributor charges, what is on the
+shelf. All of it goes stale, all of it is discarded and fetched again, and
+`fetched_at` says when it was true.
+
+The split is the point. An approval names a part number and must outlive
+every fetch; a price must not. Keeping identity and fetched state in one
+table forced the approval to depend on a fetch, and the last two versions of
+this document wrote an exemption instead of the split.
+
 An offer is one distributor's listing of one MPN at one quantity break. One
-MPN carries many.
+MPN carries many. Lifecycle is per part number, not per distributor, so it is
+its own table and not a column on the offer.
 
 `rank` orders the alternatives, and is blank on the one you designed against.
 A number appears only when there is something to order — an IPN with one
@@ -328,8 +345,8 @@ where `rank is null`.
 
 | Asset | Owner |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table` | Hand |
-| `board.db` — `mpn_table`, `offer_table` | Fetched. Discardable |
+| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
+| `board.db` — `lifecycle_table`, `offer_table` | Fetched. Discardable |
 | `lib/*.kicad_sym` | Hand |
 | `lib/*.pretty` | Hand |
 | `lib/3d/` | Hand |
@@ -458,7 +475,7 @@ Each tool document opens with the assets it reads and the assets it writes.
 | `sheet-place` | Place symbols on their page | `board.db`, `lib/*.kicad_sym` | `*.kicad_sch` |
 | `board-place` | Place footprints on the board | `board.db`, `*.kicad_sch`, `lib/*.pretty` | `*.kicad_pcb` |
 | `layer-export` | Export the board geometry as boxes | `*.kicad_pcb` | `out/` — the RF-simulation file |
-| `stock-query` | Fetch price, stock and lifecycle | `board.db` — `aml_table`, JLCPCB API | `board.db` — `mpn_table`, `offer_table` |
+| `stock-query` | Fetch price, stock and lifecycle | `board.db` — `aml_table`, JLCPCB API | `board.db` — `lifecycle_table`, `offer_table` |
 | `clone-check` | Prove a fresh clone opens with nothing missing | A fresh clone of the project | A verdict |
 
 **Layout**

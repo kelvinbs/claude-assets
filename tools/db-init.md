@@ -5,7 +5,7 @@ before any process. It is outside the chain — see T3.1.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T1.2, T1.3 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
+| `board-build-tool.md` — T1.2, T1.3 | `board.db` — `parts_table`, `ref_table`, `mpn_table`, `aml_table`, `lifecycle_table`, `offer_table` |
 
 ```
 python3 tools/board-build/tools/db-init.py <board-dir>
@@ -16,7 +16,7 @@ beside the design files.
 
 ## The schema
 
-Five tables in one file, and their columns are T1.2 and T1.3 of
+Six tables in one file, and their columns are T1.2 and T1.3 of
 `board-build-tool.md`.
 `tools/db-init.py` holds them in executable form and is the only place
 they are written as DDL. A column added to T1.2 or T1.3 is added there in
@@ -26,11 +26,9 @@ Keys carry the constraint the document states: `ipn` on `parts_table`,
 `uuid` on `ref_table`, `ipn` + `mpn` on `aml_table`, `mpn` on `mpn_table`,
 `mpn` + `distributor` + `break_qty` on `offer_table`.
 
-The four declared relations of T1.5 are declared — `ref_table.ipn`,
-`aml_table.ipn` and `parts_table.parent` against `parts_table.ipn`, and
-`offer_table.mpn` against `mpn_table.mpn`. Tables are created in an order
-that lets a reference resolve, and `aml_table` carries the unique index that
-holds one blank rank per IPN.
+Every relation of T1.5 is declared — there are six and none is exempt.
+Tables are created in an order that lets a reference resolve, and `aml_table`
+carries the unique index that holds one blank rank per IPN.
 
 Everything else is nullable. A part is defined over several passes and a row
 that is not finished is still a row; the tool that writes a field is the tool
