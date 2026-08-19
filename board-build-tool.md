@@ -61,6 +61,14 @@ The tables are a record of the design. Progress is a query:
 `note` is a person's sentence, on `parts_table` and `aml_table`. Normally
 blank. Tools write the columns.
 
+**The schema is the User's**
+
+Tables, columns, types, keys and relations are set by the User. An agent
+proposes a change and waits. It adds no column, removes none, and infers
+none.
+
+T1.2, T1.3 and T1.5 are the schema. `db-init` builds what they declare.
+
 **T1.2 — The design tables**
 
 `parts_table`
