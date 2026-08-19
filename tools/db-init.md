@@ -23,8 +23,13 @@ they are written as DDL. A column added to T1.2 or T1.3 is added there in
 the same commit.
 
 Keys carry the constraint the document states: `ipn` on `parts_table`,
-`ipn` + `mpn` on `aml_table`, `mpn` on `mpn_table`, `mpn` + `distributor` +
-`break_qty` on `offer_table`.
+`uuid` on `ref_table`, `ipn` + `mpn` on `aml_table`, `mpn` on `mpn_table`,
+`mpn` + `distributor` + `break_qty` on `offer_table`.
+
+The three declarable relations of T1.5 are declared — `ref_table.ipn` and
+`parts_table.parent` against `parts_table.ipn`, `offer_table.mpn` against
+`mpn_table.mpn`. Tables are created in an order that lets a reference
+resolve.
 
 Everything else is nullable. A part is defined over several passes and a row
 that is not finished is still a row; the tool that writes a field is the tool

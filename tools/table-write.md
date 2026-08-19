@@ -10,6 +10,9 @@ Create or modify a part. The tool of process 1.
 It never opens a KiCad file, and it touches no table in `sourcing.db` but
 `aml_table`. `db-init` must have run first.
 
+It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves
+them off otherwise and the keys of T1.5 would not be checked.
+
 ```
 table-write.py <board-dir> add   --class A --description "..." [options]
 table-write.py <board-dir> set   <ipn> [--field value ...]

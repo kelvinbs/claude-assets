@@ -64,6 +64,7 @@ def connect(board, name="design.db", need=("parts_table", "ref_table")):
     if not path.exists():
         raise Bad(f"{path} does not exist. Run db-init first")
     con = sqlite3.connect(path)
+    con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
     if not set(need) <= have:

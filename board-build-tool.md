@@ -252,6 +252,41 @@ The four fixed digits are what keep them apart, and the IPN never reaches the
 `category` carries the class word, so the letter is not the only place the
 class is recorded. A class the list does not hold is added here first.
 
+**T1.5 — The relations**
+
+Five, and `parts_table.ipn` is the hub of three.
+
+| From | To | Declared | On delete |
+|---|---|---|---|
+| `ref_table.ipn` | `parts_table.ipn` | yes | restricted |
+| `parts_table.parent` | `parts_table.ipn` | yes | set null |
+| `offer_table.mpn` | `mpn_table.mpn` | yes | cascade |
+| `aml_table.ipn` | `parts_table.ipn` | no — the two are different files | — |
+| `aml_table.mpn` | `mpn_table.mpn` | no — see below | — |
+
+The three that can be declared are declared, so the database refuses the
+basic violation rather than trusting every tool to remember. Foreign keys in
+SQLite are off unless a connection turns them on, so every tool sets
+`PRAGMA foreign_keys = ON` before it writes.
+
+Deleting a part that still has instances is refused — the instances are on a
+sheet. Deleting a parent leaves its children, with `parent` cleared: they are
+still parts, they have simply lost the thing they served. Deleting a fetched
+`mpn_table` row takes its offers with it, which is what discarding a fetch
+means.
+
+`aml_table.ipn` cannot be declared because SQLite has no foreign key across
+two database files, and the design and the sourcing data are deliberately
+two.
+
+`aml_table.mpn` must not be declared even though it could be. `aml_table` is
+kept and `mpn_table` is thrown away and refetched; a key pointing from the
+kept table into the discardable one would make an approval depend on a fetch,
+and discarding the fetch would take the approval with it. You name a part
+number long before anything has looked it up.
+
+Those two stay conventions, and a tool that writes them checks them itself.
+
 **T1.3 — `sourcing.db`**
 
 | Table | Key | Fields |

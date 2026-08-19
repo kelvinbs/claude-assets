@@ -23,7 +23,7 @@ SCHEMA = {
             "ipn           TEXT PRIMARY KEY",
             "description   TEXT",
             "category      TEXT",
-            "parent        TEXT",
+            "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
             "symbol        TEXT",
             "footprint     TEXT",
             "model         TEXT",
@@ -32,7 +32,8 @@ SCHEMA = {
         ),
         "ref_table": (
             "uuid          TEXT PRIMARY KEY",
-            "ipn           TEXT NOT NULL",
+            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
+            " ON DELETE RESTRICT",
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
@@ -59,7 +60,8 @@ SCHEMA = {
             "note          TEXT",
         ),
         "offer_table": (
-            "mpn           TEXT NOT NULL",
+            "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
+            " ON DELETE CASCADE",
             "distributor   TEXT NOT NULL",
             "break_qty     INTEGER NOT NULL",
             "sku           TEXT",
