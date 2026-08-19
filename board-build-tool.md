@@ -303,6 +303,16 @@ A process adds what is missing and leaves what is there. A placed part keeps
 its position, its wiring and its routing. Each run reports what it left
 untouched.
 
+**The init state**
+
+An empty board directory, and the reference the parts come from — for
+`proto1`, `designarchive/`. Nothing else: no `board.db`, no `lib/`, no
+KiCad files.
+
+Every file in the board directory is made by a tool, so a full init deletes
+all of them and starts from nothing. The init functions are steps of process
+1, not something run ahead of it.
+
 **T3.2 — One agent per process**
 
 Each process is entered on its own and calls the tools its T3.1 row names.
