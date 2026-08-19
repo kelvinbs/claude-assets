@@ -7,17 +7,11 @@ workflow.
 |---|---|
 | `board.db` | nothing |
 
-```
-python3 tools/board-build/tools/table-read.py <board-dir> [view] [--page P ...] [--out FILE]
-```
+There is no script. Table 3 holds the SQL; run it as it stands:
 
-With no view named it prints every one. `--page` restricts `page_view`, and
-is repeatable. `--out` writes the markdown to a file instead of standard
-output, which is how a view is put somewhere a person can read it.
-
-Table 3 holds the SQL. `table-read.py` holds the same statements in
-executable form and is the only place they are written as SQL; a view added
-to table 3 is added there in the same commit.
+```
+sqlite3 -markdown builds/<build>/design/board.db "<statement>"
+```
 
 No view returns `ref_table.uuid`. It is KiCad's key and carries nothing a
 person reads.

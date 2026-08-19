@@ -394,9 +394,8 @@ tool document opens with the assets it reads and writes.
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
   `tools/table-read.md`, `tools/lib-init.md`, `tools/datasheet-read.md`,
   `tools/symbol-draw.md`, `tools/sheet-place.md`.
-- Built: `tools/db-init.py`, `tools/table-write.py`, `tools/table-read.py`,
-  `tools/lib-init.py`, `tools/datasheet-read.py`, `tools/symbol-draw.py`,
-  `tools/sheet-place.py`.
+- Built: `tools/db-init.py`, `tools/table-write.py`, `tools/lib-init.py`,
+  `tools/datasheet-read.py`, `tools/symbol-draw.py`, `tools/sheet-place.py`.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
