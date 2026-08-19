@@ -101,7 +101,7 @@ sometimes known before the part is chosen.
 ## What it refuses
 
 - A class letter that is not in T1.2
-- A `source` that is not one of the three
+- A `source` that is not two letters from `s`, `v`, `h` or `-`, as `s/h`
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
 - A footprint on a part with no MPN

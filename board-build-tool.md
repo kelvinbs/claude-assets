@@ -129,9 +129,26 @@ tool may use in choosing where a footprint goes; it constrains nothing, and a
 KiCad group is nothing more than a list of parts. Both are properties of the
 instance, not of the part.
 
-`source` records where the library object came from — `stock`, `vendor` or
-`hand`. Once a symbol is copied into `lib/` under the clone rule of section
-2, nothing else distinguishes a copied stock symbol from a drawn one.
+`source` records where the library objects came from. Two letters, the symbol
+then the footprint, separated by a slash — `s/h` is a stock symbol with a
+hand-drawn footprint.
+
+| Letter | Came from |
+|---|---|
+| `s` | KiCad's own bundled libraries |
+| `v` | the manufacturer, or a service that publishes for them |
+| `h` | drawn here, against the datasheet |
+
+They are recorded apart because they are chosen apart. A stock symbol is
+usually fine — a pinout is a pinout. A stock footprint for a specific part
+number rarely is, and the two are almost never taken from the same place.
+
+Where a part has only one of the two, the other letter is `-`: `h/-` is a
+symbol drawn here and no footprint yet.
+
+Once a symbol is copied into `lib/` under the clone rule of section 2,
+nothing else distinguishes a copied stock symbol from a drawn one, which is
+why this field exists at all.
 
 **`ref` is a field, not a key**
 

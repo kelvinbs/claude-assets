@@ -45,7 +45,7 @@ CLASSES = {
     "Y": ("oscillator", "Y"),
 }
 
-SOURCE = ("stock", "vendor", "hand")
+SOURCE = re.compile(r"^[svh-]/[svh-]$")   # symbol/footprint — T1.2
 
 IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
@@ -126,8 +126,9 @@ def guard_footprint(board, ipn, footprint):
 def check(field, value):
     if value is None:
         return None
-    if field == "source" and value not in SOURCE:
-        raise Bad(f"source must be one of {', '.join(SOURCE)}, found '{value}'")
+    if field == "source" and not SOURCE.match(value):
+        raise Bad(f"source is two letters, symbol then footprint, from "
+                  f"s v h or -, as in 's/h'. Found '{value}'")
     return value
 
 
