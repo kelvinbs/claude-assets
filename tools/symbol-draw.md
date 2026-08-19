@@ -5,7 +5,7 @@ it is. The second tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>a symbol per part, from `symbol-match`<br>the pins, from `datasheet-read` | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
+| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>a symbol per part, from `copy-kicad-part`<br>the pins, from `datasheet-read` | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
 python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
@@ -26,7 +26,7 @@ Drawing a symbol is the last thing tried, not the first.
 
 | | |
 |---|---|
-| 1 | `symbol-match` is asked, once for every part in the run, whether a library already holds each. What it returns is copied, and the pins it names are renamed |
+| 1 | `copy-kicad-part` is asked, once for every part in the run, whether a library already holds each. What it returns is copied, and the pins it names are renamed |
 | 2 | nothing holds it — `datasheet-read` is called and what it returns is drawn |
 
 `--from <library>:<name>` names a symbol outright and skips the asking.

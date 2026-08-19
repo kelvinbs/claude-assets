@@ -516,7 +516,7 @@ def main(argv):
     global reader
     reader = sibling("datasheet-read")
     global finder
-    finder = sibling("symbol-match")
+    finder = sibling("copy-kicad-part")
     try:
         nickname = lib_init.nickname_of(board, args.nickname)
         lib_init.make_library(board, nickname)

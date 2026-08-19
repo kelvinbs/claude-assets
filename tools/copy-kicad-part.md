@@ -1,4 +1,4 @@
-# symbol-match
+# copy-kicad-part
 
 Match the board's parts to symbols in the KiCad libraries. One run for the
 whole board.
@@ -8,8 +8,8 @@ whole board.
 | `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/kicad-index.json` | nothing |
 
 ```
-python3 tools/board-build/tools/symbol-match.py <board-dir> --all [--lib DIR ...]
-python3 tools/board-build/tools/symbol-match.py <board-dir> <ipn> [<ipn> ...]
+python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --all [--lib DIR ...]
+python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <ipn> [<ipn> ...]
 ```
 
 `--all` is every part the record puts on a page and that has no symbol yet.

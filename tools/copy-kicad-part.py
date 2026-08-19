@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""symbol-match - match the board's parts to symbols in the KiCad libraries.
+"""copy-kicad-part - match the board's parts to symbols in the KiCad libraries.
 
-    symbol-match.py <board-dir> [--all | <ipn> ...] [--lib DIR ...]
+    copy-kicad-part.py <board-dir> [--all | <ipn> ...] [--lib DIR ...]
 
 One run for the whole board. Every part is matched in the same run, against
 candidates drawn from the `lib-index` index, and the answer per part is a
@@ -82,7 +82,7 @@ the pins are not the part's pins, the answer is null.
 
 class Bad(SystemExit):
     def __init__(self, message):
-        super().__init__(f"symbol-match: {message}")
+        super().__init__(f"copy-kicad-part: {message}")
 
 
 def heartbeat(label):
