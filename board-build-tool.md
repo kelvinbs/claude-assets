@@ -367,6 +367,7 @@ tool document opens with the assets it reads and writes.
 | Tool | Function | In | Out |
 |---|---|---|---|
 | `db-init` | Create the database and its tables | T1.2, T1.3 | `board.db` |
+| `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
@@ -388,6 +389,7 @@ tool document opens with the assets it reads and writes.
 
 **State**
 
-- Written: this document, `tools/db-init.md`, `tools/table-write.md`.
+- Written: this document, `tools/db-init.md`, `tools/table-write.md`,
+  `tools/table-read.md`.
 - Built: `tools/db-init.py`, `tools/table-write.py`.
 - `builds/proto1/tools` holds the working precedent for the rest.
