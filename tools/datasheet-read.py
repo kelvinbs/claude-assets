@@ -98,8 +98,10 @@ def heartbeat(label):
     def tick():
         start = time.monotonic()
         while not stop.wait(15):
+            # stderr, so a tool reading this one's output reads its
+            # answer and not its ticking.
             print(f"    {label}  {int(time.monotonic() - start)}s",
-                  flush=True)
+                  file=sys.stderr, flush=True)
     thread = threading.Thread(target=tick, daemon=True)
     thread.start()
     return stop

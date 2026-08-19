@@ -400,13 +400,13 @@ bug: abort the run, declare the tool unusable, and report it.
 - Written: this document, `tools/db-init.md`, `tools/table-write.md`,
   `tools/table-read.md`, `tools/lib-index.md`,
   `tools/copy-kicad-part.md`, `tools/datasheet-read.md`,
-  `tools/symbol-draw.md`.
+  `tools/symbol-draw.md`, `tools/kicad-init.md`.
 - Built: `tools/db-init.py`, `tools/table-write.py`,
   `tools/lib-index.py`, `tools/copy-kicad-part.py`,
-  `tools/datasheet-read.py`, `tools/symbol-draw.py`.
-- Placeholders: `footprint-draw`, `kicad-init`, `kicad-update`. Each has
-  its document and a script that stops. They serve processes that are
-  not built.
+  `tools/datasheet-read.py`, `tools/symbol-draw.py`,
+  `tools/kicad-init.py`.
+- Placeholders: `footprint-draw`, `kicad-update`. Each has its document and
+  a script that stops. They serve processes that are not built.
 - Process 1 passed its initial function test against `builds/proto1`, on a
   database created from empty: 46 parts, 57 instances, 21 approvals, 21
   manufacturer parts, every relation held.
