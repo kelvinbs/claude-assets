@@ -293,7 +293,7 @@ The check runs against a fresh clone, and fails on any of the above.
 | 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
 | 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym` | `datasheet-read`<br>`symbol-draw` | — |
 | 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
-| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`datasheets/` | `lib/*.pretty`<br>`lib/3d/`<br>`*.kicad_pcb`<br>Footprints, placed | `footprint-draw`<br>`kicad-update` | Routes |
+| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`datasheets/` | `lib/*.pretty`<br>`lib/3d/`<br>`*.kicad_pcb`<br>Footprints, placed | `datasheet-read`<br>`footprint-draw`<br>`kicad-update` | Routes |
 | 5 | Output | `*.kicad_pcb` | RF-simulation file | — | — |
 | 6 | Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
