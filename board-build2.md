@@ -80,18 +80,6 @@
 
 - `board.db` is master and pushes to KiCad.
 - Table names end in `_table`; keys carry the bare word.
-- Design reads:
-  - `parts_table`
-  - `ref_table`
-- Ordering reads:
-  - `aml_table` — kept
-  - `mpn_table` — kept
-  - `offer_table` — fetched and discardable
-- Sources:
-  - The JLCPCB API
-  - Distributor tables the User supplies
-- The tables are a record of the design. Progress is a query — T2.2.
-
 **T2.2 — Progress queries**
 
 | # | Question | Query |
@@ -101,10 +89,6 @@
 | 3 | Has a part number | A row in `aml_table` |
 | 4 | Quantity | `count(*) from ref_table group by ipn` |
 | 5 | The assembly | Rows whose `parent` is this IPN |
-
-- `note` is a person's sentence — on `parts_table` and `aml_table`:
-  - Normally blank
-  - Skills write the columns
 
 ### 2.3 — The design tables
 
