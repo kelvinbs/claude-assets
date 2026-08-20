@@ -5,8 +5,8 @@
 1. [Introduction](#1--introduction)
 2. [Data](#2--data)
 3. [Assets](#3--assets)
-4. [Processes](#4--processes)
-5. [Tools](#5--tools)
+4. [Stages](#4--stages)
+5. [Skills](#5--skills)
 6. [Installation](#6--installation)
 
 ## 1 — Introduction
@@ -15,36 +15,36 @@
 
 - Claude-assisted hardware design in KiCad.
 - The tool carries:
-  - The processes that carry a board through KiCad
+  - The stages that carry a board through KiCad
   - The documents that define them
   - The scripts they call
 - Nothing specific to one product.
 
 ### 1.2 — How it is used
 
-- The board is designed by working processes 1–6 in order — as often as
+- The board is designed by working stages 1–6 in order — as often as
   needed.
-- Revision re-enters a process.
-- The tool is entered at whichever process is next.
+- Revision re-enters a stage.
+- The tool is entered at whichever stage is next.
 
 ### 1.3 — How it works
 
-- The LLM performs the process steps using ten sub-tools — T17.
-- The sub-tool list is immutable:
-  - No other tool is used or defined
+- The LLM performs the stage steps using ten skills — T17.
+- The skill list is immutable:
+  - No other skill is used or defined
   - No edit to the list is permitted
   - A document — or a version of one — that carries eleven is a bug
 
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
-  - The six processes — T14
-  - The ten sub-tools — T17
+  - The six stages — T14
+  - The ten skills — T17
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T9
 - The tool is stateless.
 - Runtime exception: the User may add a field to any table at will.
-- A tool changes the schema on the User's request and on nothing else:
+- A skill changes the schema on the User's request and on nothing else:
   - Not to carry a task
   - Never on an inference
 - An agent that finds it needs any of the structure changed has found a bug:
@@ -52,7 +52,7 @@
   - Declare the tool unusable
   - Name what it hit
   - Never carry on — never ask
-- Failure of a tool or sub-tool is met the same way:
+- Failure of the tool or a skill is met the same way:
   - Abort
   - Notify
   - Bug — tool unusable
@@ -111,7 +111,7 @@
 
 - `note` is a person's sentence — on `parts_table` and `aml_table`:
   - Normally blank
-  - Tools write the columns
+  - Skills write the columns
 
 ### 2.3 — The design tables
 
@@ -158,7 +158,7 @@
 - `symbol` and `footprint` are `<project>:<name>` — resolving inside `lib/`
   per section 3:
   - `symbol-draw` and `footprint-draw` copy the object in and write the field
-  - A KiCad library is an input to those tools; `source` records it as the
+  - A KiCad library is an input to those skills; `source` records it as the
     origin
 
 **T5 — `source` letters**
@@ -234,7 +234,7 @@
 | 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |
 
 - All are declared foreign keys.
-- Every tool sets `PRAGMA foreign_keys = ON`.
+- Every skill sets `PRAGMA foreign_keys = ON`.
 
 ### 2.6 — The IPN
 
@@ -298,7 +298,7 @@
 - A family whose instances carry two pages is placed on both.
 - Order of rooms and families within a page is arbitrary — subject to
   re-entry, section 4.4.
-- Order within a family is defined in the tool documents.
+- Order within a family is defined in the skill documents.
 
 ## 3 — Assets
 
@@ -334,13 +334,13 @@
   point.
 - The check runs against a fresh clone, and fails on any of the above.
 
-## 4 — Processes
+## 4 — Stages
 
-### 4.1 — The chain
+### 4.1 — The pipeline
 
-**T14 — The chain**
+**T14 — The pipeline**
 
-| # | Process | In | Out | Tools | User then |
+| # | Stage | In | Out | Skills | User then |
 |---|---|---|---|---|---|
 | 1 | 0 — Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
 | 2 | 1 — Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
@@ -350,8 +350,8 @@
 | 6 | 5 — Output | `*.kicad_pcb` | RF-simulation file | — | — |
 | 7 | 6 — Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
-- Process 1 gives a part its IPN and its description.
-- Process 2 builds the library objects for the rows that lack them.
+- Stage 1 gives a part its IPN and its description.
+- Stage 2 builds the library objects for the rows that lack them.
 
 ### 4.2 — The init state
 
@@ -361,12 +361,12 @@
   - No `lib/`
   - No KiCad files
 - The board directory carries no product name and no reference of its own.
-- The source is named to the process that reads it and lives outside the
+- The source is named to the stage that reads it and lives outside the
   board directory.
-- Every file in the board directory is made by a tool — a full init deletes
+- Every file in the board directory is made by a skill — a full init deletes
   all of them and starts from nothing.
 
-### 4.3 — Process 0 — Init
+### 4.3 — Stage 0 — Init
 
 From the init state, three steps, in this order — T15.
 
@@ -378,13 +378,13 @@ From the init state, three steps, in this order — T15.
 | 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
 | 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Steps 1 and 3 are process 0; step 2 is process 1.
+- Steps 1 and 3 are stage 0; step 2 is stage 1.
 - After them the board directory holds the record and an empty project —
-  process 2 has somewhere to put a symbol.
+  stage 2 has somewhere to put a symbol.
 
 ### 4.4 — Re-entry
 
-- A process adds what is missing and leaves what is there.
+- A stage adds what is missing and leaves what is there.
 - A placed part keeps:
   - Its position
   - Its wiring
@@ -393,24 +393,24 @@ From the init state, three steps, in this order — T15.
 
 ### 4.5 — The RF-simulation file
 
-- Process 5 writes what `rf-simulation` reads.
+- Stage 5 writes what `rf-simulation` reads.
 - Three-dimensional geometry is carried on the KiCad User layers:
   - Each layer names a vertical position and a height
   - The objects on it are the boxes at that level — dielectric or conductor
 
-### 4.6 — One agent per process
+### 4.6 — One agent per stage
 
-- Each process is entered on its own and calls the tools its T14 row names.
+- Each stage is entered on its own and calls the skills its T14 row names.
 - They are written in order — 1 and 2, then 3 through 6 — each agreed
   working before the next.
-- A process that needs the User mid-run is a command — loaded into the
+- A stage that needs the User mid-run is a command — loaded into the
   running session.
-- A process that runs headless is an agent — holding its own context and
+- A stage that runs headless is an agent — holding its own context and
   reporting at the end.
 
-**T16 — Process forms**
+**T16 — Stage forms**
 
-| # | Process | Form |
+| # | Stage | Form |
 |---|---|---|
 | 1 | 1 — Update parts | Command |
 | 2 | 2 — Update library | Agent. Asks when a datasheet withholds the pinout |
@@ -419,30 +419,30 @@ From the init state, three steps, in this order — T15.
 | 5 | 5 — Output | Agent |
 | 6 | 6 — Source | Agent |
 
-## 5 — Tools
+## 5 — Skills
 
-### 5.1 — What a tool is
+### 5.1 — What a skill is
 
-- A tool is LLM-based: defined by one document and zero or one Python
+- A skill is LLM-based: defined by one document and zero or one Python
   script.
 - The LLM follows the document and may call the script:
   - Script — deterministic file and database work
   - LLM — interpretation and judgment
 - Code the agent writes to cover a gap is declared — so the gap can be
   closed.
-- A process uses one or more tools; a tool serves one or more processes.
-- Each tool document opens with the assets it reads and writes.
+- A stage uses one or more skills; a skill serves one or more stages.
+- Each skill document opens with the assets it reads and writes.
 
-### 5.2 — The tools
+### 5.2 — The skills
 
 There are ten.
 
-**T17 — The tools**
+**T17 — The skills**
 
 | # | Tool | Function | In | Out |
 |---|---|---|---|---|
 | 1 | `db-init` | Create the database and its tables | T3, T4, T6, T7, T8 | `board.db` |
-| 2 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
+| 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
@@ -455,10 +455,10 @@ There are ten.
 ### 5.3 — Layout
 
 - `board-build-tool.md` — the only document at the top level
-- `tools/` — one `<tool>.md` and its scripts, per tool
+- `tools/` — one `<skill>.md` and its script, per skill
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
-- `commands/` — one per interactive process, section 4.6
-- `agents/` — one per batch process, section 4.6
+- `commands/` — one per interactive stage, section 4.6
+- `agents/` — one per batch stage, section 4.6
 - `skills/` — skills they load
 
 ## 6 — Installation
@@ -472,8 +472,8 @@ There are ten.
 |---|---|---|
 | 1 | `.claude-plugin/plugin.json` | The plugin manifest |
 | 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
-| 3 | `commands/<process>.md` | One command per interactive process |
-| 4 | `agents/<process>.md` | One agent per batch process |
+| 3 | `commands/<stage>.md` | One command per interactive stage |
+| 4 | `agents/<stage>.md` | One agent per batch stage |
 | 5 | `skills/<name>/SKILL.md` | Skills the commands and agents load |
 
 - A fresh clone installs it once:
