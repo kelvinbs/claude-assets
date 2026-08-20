@@ -164,7 +164,8 @@
 | 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |
 
 - All are declared foreign keys.
-- Every skill sets `PRAGMA foreign_keys = ON`.
+- Enforce the relations: every skill sets `PRAGMA foreign_keys = ON` on
+  each connection — SQLite does not enforce them otherwise.
 
 ### 2.6 — The IPN
 
