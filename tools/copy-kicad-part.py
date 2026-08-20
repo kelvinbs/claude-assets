@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""copy-kicad-part - copy a KiCad symbol into the project library.
+"""copy-kicad-part - copy KiCad symbols into the project library.
 
     copy-kicad-part.py <board-dir> <hint> [--name NAME] [--lib DIR ...]
+    copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
 
-Give it a part number, or a description. It finds the symbol in the KiCad
+Give it a part number or a description, or a batch of them - a JSON list of
+{"name": ..., "hint": ...}. It finds each part's symbol in the KiCad
 libraries, copies it into `lib/`, renames the pins to what the part calls
-them, and prints the `<library>:<name>` it wrote. It prints `null` when no
-library holds anything that is the part.
+them, and prints one line per part: `<name>  <library>:<name>`, or
+`<name>  null` when no library holds anything that is the part.
 
-Five steps: take the hint, index the libraries, score the index for
-candidates, ask once which of them is the part, write the answer into the
-library. Only the fourth runs a model, and it reads nothing - the candidates
-and their pins are in the prompt.
+One model call per run, never per part: every part's candidates go into one
+prompt and one JSON object comes back. A single hint is a batch of one.
 
 It calls `lib-index` as a command. It imports nothing from another tool.
 """
@@ -40,13 +40,14 @@ STOCK_CANDIDATES = [
     "C:/Program Files/KiCad/share/kicad/symbols",
 ]
 
-PROMPT = """Which of these KiCad symbols is the symbol for {hint}?
+PROMPT = """For each part below, which of its KiCad symbol candidates is the
+part's symbol?
 
-The candidates come from every library on this machine. Each line is
-`library:symbol`, its pin count, its description, and its pins as
+Each part is a heading `== <name>: <hint>`, then its candidates, one per
+line: `library:symbol`, its pin count, its description, and its pins as
 number:name.
 
-{candidates}
+{sections}
 
 A similar part's symbol is this part's symbol when its pins do the same job.
 Take it, and rename the pins to the names this part's datasheet prints. The
@@ -57,13 +58,14 @@ Null when nothing listed has pins that do the same job. Pin count alone is
 never the test. A part that is not on a schematic at all - a bare board, an
 enclosure, a host the board plugs into - is null.
 
-Write one of these to {out} and nothing else:
+Write to {out} one JSON object, keyed by part name, one entry per part,
+and nothing else:
 
-    {{"library": "as listed", "symbol": "as listed",
-      "rename": {{"3": "VCC"}}, "fit": "exact, family or generic",
-      "why": "one line"}}
-
-    {{"library": null, "why": "one line - the nearest candidate and why it is not this part"}}
+    {{"U0001": {{"library": "as listed", "symbol": "as listed",
+                "rename": {{"3": "VCC"}}, "fit": "exact, family or generic",
+                "why": "one line"}},
+      "U0002": {{"library": null,
+                "why": "one line - the nearest candidate and why not"}}}}
 
 `rename` carries only the pins whose names differ. Leave it out when nothing
 needs changing. It is not a way to reshape a symbol: if the pins are not the
@@ -207,13 +209,18 @@ def faults(spec, rows):
     return bad
 
 
-def ask(hint, rows, root):
+def ask(parts, lists, root):
+    """One model call for every part in the run. `parts` is the batch,
+    `lists` its candidates by name. Returns the JSON object, keyed by name."""
+    sections = "\n\n".join(
+        f"== {p['name']}: {p['hint']}\n{as_lines(lists[p['name']])}"
+        for p in parts if lists[p["name"]])
     handle, path = tempfile.mkstemp(suffix=".json")
     os.close(handle)
     out = Path(path)
     out.unlink()
-    prompt = PROMPT.format(hint=hint, candidates=as_lines(rows), out=out)
-    beat = heartbeat(f"{hint[:40]} - asking")
+    prompt = PROMPT.format(sections=sections, out=out)
+    beat = heartbeat(f"{len(parts)} part(s) - asking")
     try:
         run = subprocess.run(
             ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
@@ -223,18 +230,16 @@ def ask(hint, rows, root):
             tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
             raise Bad("nothing written. " + " / ".join(tail))
         try:
-            spec = json.load(open(out))
+            specs = json.load(open(out))
         except json.JSONDecodeError as exc:
             raise Bad(f"not JSON - {exc}")
     finally:
         beat.set()
         if out.exists():
             out.unlink()
-
-    bad = faults(spec, rows)
-    if bad:
-        raise Bad("; ".join(bad))
-    return spec
+    if not isinstance(specs, dict):
+        raise Bad("the answer is not an object keyed by part name")
+    return specs
 
 
 # ------------------------------------------------------------ 5, the writing
@@ -405,8 +410,11 @@ def copy(library, nickname, spec, name, extra):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
-    ap.add_argument("hint", help="a part number, or a description")
+    ap.add_argument("hint", nargs="?",
+                    help="a part number, or a description")
     ap.add_argument("--name", help="name the copy this. Defaults to the hint")
+    ap.add_argument("--batch",
+                    help='JSON list of {"name", "hint"} - one run, one ask')
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
     args = ap.parse_args(argv[1:])
@@ -415,30 +423,53 @@ def main(argv):
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
     nickname, library = library_of(board)
-    name = args.name or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
 
-    rows = shortlist(index(board, args.lib), args.hint)
-    if not rows:
-        print("null")
-        print("    nothing in the index scored against the hint")
-        return 0
+    if args.batch:
+        parts = json.load(open(args.batch))
+        for p in parts:
+            if not p.get("name") or not p.get("hint"):
+                raise Bad("--batch entries carry a name and a hint")
+    elif args.hint:
+        name = args.name or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
+        parts = [{"name": name, "hint": args.hint}]
+    else:
+        raise Bad("a hint, or --batch")
+
+    rows = index(board, args.lib)
+    lists = {p["name"]: shortlist(rows, p["hint"]) for p in parts}
+
     root = board.resolve()
     for folder in [root] + list(root.parents):
         if (folder / ".git").exists():
             root = folder
             break
-    spec = ask(args.hint, rows, root)
-    if not spec.get("library"):
-        print("null")
-        print(f"    {spec.get('why', '')}")
-        return 0
 
-    lib_id = copy(library, nickname, spec, name, args.lib)
-    renames = spec.get("rename") or {}
-    print(f"{lib_id}  ({spec.get('fit', '')})"
-          + (f"  {len(renames)} pin(s) renamed" if renames else ""))
-    print(f"    from {spec['library']}:{spec['symbol']}")
-    print(f"    {spec.get('why', '')}")
+    asked = [p for p in parts if lists[p["name"]]]
+    specs = ask(asked, lists, root) if asked else {}
+
+    misses = 0
+    for p in parts:
+        name = p["name"]
+        spec = specs.get(name) or {}
+        if not lists[name]:
+            print(f"{name}  null")
+            print("    nothing in the index scored against the hint")
+            misses += 1
+            continue
+        bad = faults(spec, lists[name])
+        if bad:
+            raise Bad(f"{name}: " + "; ".join(bad))
+        if not spec.get("library"):
+            print(f"{name}  null")
+            print(f"    {spec.get('why', '')}")
+            misses += 1
+            continue
+        lib_id = copy(library, nickname, spec, name, args.lib)
+        renames = spec.get("rename") or {}
+        print(f"{name}  {lib_id}  ({spec.get('fit', '')})"
+              + (f"  {len(renames)} pin(s) renamed" if renames else ""))
+        print(f"    from {spec['library']}:{spec['symbol']}")
+        print(f"    {spec.get('why', '')}")
     return 0
 
 
