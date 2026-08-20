@@ -125,7 +125,7 @@
 |---|---|---|---|---|
 | 1 | `ipn` | TEXT | Key | |
 | 2 | `mpn` | TEXT | Key | |
-| 3 | `rank` | INTEGER | | Yes |
+| 3 | `rank` | INTEGER | Unique index over `ipn` where `rank is null` | Yes |
 | 4 | `note` | TEXT | | Yes |
 
 **T2.7 — `mpn_table`**
@@ -150,16 +150,6 @@
 | 8 | `moq` | INTEGER | | Yes |
 | 9 | `lead_days` | INTEGER | | Yes |
 | 10 | `fetched_at` | TEXT | | Yes |
-
-- `aml_table` is the approved manufacturer list — the MPNs that may be built
-  against an IPN:
-  - The row is the approval
-  - Every MPN in it takes the board as designed
-  - `rank` orders the alternatives — blank on the one designed against
-  - One blank per IPN — held as a unique index over `ipn` where
-    `rank is null`
-- `mpn_table` is the manufacturer part — maker and datasheet:
-  - The row exists from the moment the part number is named
 
 ### 2.5 — The relations
 
