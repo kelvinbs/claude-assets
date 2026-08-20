@@ -130,7 +130,6 @@
 | 4 | `page` | TEXT | | Yes |
 | 5 | `room` | TEXT | | Yes |
 
-- `parts_table` is the part — one row per IPN.
 - `ref_table` is the instance: `U1` and `U2` are two rows on one `ipn`, each
   free to carry its own `page` and `room`.
 - `uuid` is KiCad's instance UUID:
