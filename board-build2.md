@@ -279,11 +279,12 @@
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
-- Update library — symbols: `copy-kicad-part` is primary.
+- Both Update library stages — symbols, footprints, 3D: `copy-kicad-part`
+  is primary. Borrow, not build.
 - On miss it returns `null` — the stage reports and stops.
 - Secondary — only on the User's word:
   - User assist — manual
-  - `symbol-draw` — automatic
+  - `symbol-draw`, `footprint-draw` — automatic
 
 ### 4.2 — Init
 
