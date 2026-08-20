@@ -202,9 +202,9 @@
 - Ten letters match the KiCad reference designator for the same class.
 - `U0001` is a part, `U1` an instance.
 
-### 2.7 — What the schematic carries
+### 2.7 — What the KiCad project carries
 
-**T2.11 — Schematic fields**
+**T2.11 — KiCad project fields**
 
 | # | Field | Origin |
 |---|---|---|
