@@ -30,7 +30,6 @@
 ### 1.3 — How it works
 
 - The LLM performs the stages using the ten skills — T5.1.
-- T5.1 is the complete skill set.
 
 ### 1.4 — The contract
 
@@ -54,11 +53,6 @@
 
 - The plugin lives in `tools/board-build/`.
 - Work files live in the board directory.
-- The project consists of — T3.1 is the full list:
-  - `board.db`
-  - The KiCad files
-  - `lib/`
-  - `datasheets/`
 
 ## 2 — Data
 
@@ -166,13 +160,6 @@
     `rank is null`
 - `mpn_table` is the manufacturer part — maker and datasheet:
   - The row exists from the moment the part number is named
-  - `datasheet-read` reads from the datasheet — lands in the footprint:
-    - Package
-    - Pin count
-    - Pitch
-- `offer_table` is fetched:
-  - One row per distributor per quantity break
-  - `fetched_at` dates it
 
 ### 2.5 — The relations
 
@@ -223,8 +210,7 @@
 | 17 | `Y` | Oscillator, reference |
 
 - Ten letters match the KiCad reference designator for the same class.
-- Four digits mark the IPN: `U0001` is a part, `U1` an instance.
-- T2.10 is the class list; a new class is added there first.
+- `U0001` is a part, `U1` an instance.
 
 ### 2.7 — What the schematic carries
 
@@ -247,10 +233,9 @@
 | 2 | 2 | `room` | Block of the sheet | Region of the board |
 | 3 | 3 | Family | Groups instances whose `room` is blank | Groups instances whose `room` is blank |
 
-- Placement follows this order.
 - A family whose instances carry two pages is placed on both.
 - Order of rooms and families within a page is arbitrary — subject to
-  re-entry, section 4.4.
+  re-entry, section 4.3.
 - Order within a family is defined in the skill documents.
 
 ## 3 — Assets
@@ -304,25 +289,9 @@
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
-- Update parts gives a part its IPN and its description.
-- Update library builds the library objects for the rows that lack them.
+### 4.2 — Init
 
-### 4.2 — The init state
-
-- An empty board directory and a pointer to the raw source the parts come
-  from. Nothing else:
-  - No `board.db`
-  - No `lib/`
-  - No KiCad files
-- The board directory carries no product name and no reference of its own.
-- The source is named to the stage that reads it and lives outside the
-  board directory.
-- Every file in the board directory is made by a skill — a full init deletes
-  all of them and starts from nothing.
-
-### 4.3 — Init
-
-From the init state, three steps, in this order — T4.2.
+Three steps, in this order — T4.2.
 
 **T4.2 — Init steps**
 
@@ -336,7 +305,7 @@ From the init state, three steps, in this order — T4.2.
 - After them the board directory holds the record and an empty project —
   Update library has somewhere to put a symbol.
 
-### 4.4 — Re-entry
+### 4.3 — Re-entry
 
 - A stage adds what is missing and leaves what is there.
 - A placed part keeps:
@@ -345,16 +314,15 @@ From the init state, three steps, in this order — T4.2.
   - Its routing
 - Each run reports what it left untouched.
 
-### 4.5 — The RF-simulation file
+### 4.4 — The RF-simulation file
 
 - RF-sim export writes what `rf-simulation` reads.
 - Three-dimensional geometry is carried on the KiCad User layers:
   - Each layer names a vertical position and a height
   - The objects on it are the boxes at that level — dielectric or conductor
 
-### 4.6 — One agent per stage
+### 4.5 — One agent per stage
 
-- Each stage is entered on its own and calls the skills its T4.1 row names.
 - They are written in pipeline order — each agreed working before the
   next.
 - A stage that needs the User mid-run is a command — loaded into the
@@ -408,8 +376,8 @@ From the init state, three steps, in this order — T4.2.
 - `board-build-tool.md` — the only document at the top level
 - `tools/` — one `<skill>.md` and its script, per skill
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
-- `commands/` — one per interactive stage, section 4.6
-- `agents/` — one per batch stage, section 4.6
+- `commands/` — one per interactive stage, section 4.5
+- `agents/` — one per batch stage, section 4.5
 - `skills/` — skills they load
 
 ## 6 — Installation
