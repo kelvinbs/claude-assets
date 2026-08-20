@@ -324,6 +324,8 @@ Three steps, in this order — T4.2.
   next.
 - Every stage runs as an agent — holding its own context and reporting at
   the end.
+- A stage does not prompt for missing information — it processes what it
+  can and reports the omissions.
 
 ## 5 — Skills
 
