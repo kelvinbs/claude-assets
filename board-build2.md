@@ -282,7 +282,7 @@
 |---|---|---|---|
 | 1 | Init | `init-pipeline`<br>`kicad-init` | — |
 | 2 | Update parts | `table-write` | — |
-| 3 | Update library — symbols | `copy-kicad-part` — primary<br>`datasheet-read`, `symbol-draw` — on failure, with User assist | — |
+| 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read`<br>`symbol-draw` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `datasheet-read`<br>`footprint-draw` | — |
 | 6 | Update board | `kicad-update` | Routes |
