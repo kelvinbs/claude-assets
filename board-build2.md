@@ -28,7 +28,7 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the process steps using ten sub-tools — T19.
+- The LLM performs the process steps using ten sub-tools — T18.
 - The sub-tool list is immutable:
   - No other tool is used or defined
   - No edit to the list is permitted
@@ -37,10 +37,10 @@
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
-  - The six processes — T15
-  - The ten sub-tools — T19
+  - The six processes — T14
+  - The ten sub-tools — T18
   - The five tables with their keys — sections 2.3 and 2.4
-  - The relations — T10
+  - The relations — T9
 - The tool is stateless.
 - Runtime exception: the User may add a field to any table at will.
 - A tool changes the schema on the User's request and on nothing else:
@@ -56,22 +56,11 @@
   - Notify
   - Bug — tool unusable
 
-### 1.5 — The split
-
-**T1 — The split**
-
-| # | Tool | User |
-|---|---|---|
-| 1 | The parts data, on the User's decisions | Wiring |
-| 2 | Symbols, footprints, models | Board outline and stackup |
-| 3 | Symbol placement, footprint assignment and placement | Routing |
-| 4 | The RF-simulation file | |
-
-### 1.6 — How it is organized
+### 1.5 — How it is organized
 
 - The tool lives in `tools/board-build/`.
 - Work files live in the board directory.
-- The project consists of — T14 is the full list:
+- The project consists of — T13 is the full list:
   - `board.db`
   - The KiCad files
   - `lib/`
@@ -88,7 +77,7 @@
 
 ### 2.2 — Where the data lives
 
-**T2 — Where the data lives**
+**T1 — Where the data lives**
 
 | # | File | Holds |
 |---|---|---|
@@ -107,9 +96,9 @@
 - Sources:
   - The JLCPCB API
   - Distributor tables the User supplies
-- The tables are a record of the design. Progress is a query — T3.
+- The tables are a record of the design. Progress is a query — T2.
 
-**T3 — Progress queries**
+**T2 — Progress queries**
 
 | # | Question | Query |
 |---|---|---|
@@ -125,7 +114,7 @@
 
 ### 2.3 — The design tables
 
-**T4 — `parts_table`**
+**T3 — `parts_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
@@ -137,7 +126,7 @@
 | 6 | `source` | TEXT | | Yes |
 | 7 | `note` | TEXT | | Yes |
 
-**T5 — `ref_table`**
+**T4 — `ref_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
@@ -163,7 +152,7 @@
   - Children are the assembly; the parent its primary part
   - Blank is top level
   - One level
-- `source` is two letters — symbol then footprint — T6:
+- `source` is two letters — symbol then footprint — T5:
   - `h/-` is a hand-drawn symbol and no footprint
 - `symbol` and `footprint` are `<project>:<name>` — resolving inside `lib/`
   per section 3:
@@ -171,7 +160,7 @@
   - A KiCad library is an input to those tools; `source` records it as the
     origin
 
-**T6 — `source` letters**
+**T5 — `source` letters**
 
 | # | Letter | Origin |
 |---|---|---|
@@ -182,7 +171,7 @@
 
 ### 2.4 — The sourcing tables
 
-**T7 — `aml_table`**
+**T6 — `aml_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
@@ -191,7 +180,7 @@
 | 3 | `rank` | INTEGER | | Yes |
 | 4 | `note` | TEXT | | Yes |
 
-**T8 — `mpn_table`**
+**T7 — `mpn_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
@@ -199,7 +188,7 @@
 | 2 | `manufacturer` | TEXT | | Yes |
 | 3 | `datasheet` | TEXT | | Yes |
 
-**T9 — `offer_table`**
+**T8 — `offer_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
@@ -233,7 +222,7 @@
 
 ### 2.5 — The relations
 
-**T10 — The relations**
+**T9 — The relations**
 
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
@@ -257,7 +246,7 @@
   - Function
 - Any other change is a second MPN in `aml_table`.
 
-**T11 — The IPN classes**
+**T10 — The IPN classes**
 
 | # | Letter | Class |
 |---|---|---|
@@ -281,11 +270,11 @@
 
 - Ten letters match the KiCad reference designator for the same class.
 - Four digits mark the IPN: `U0001` is a part, `U1` an instance.
-- T11 is the class list; a new class is added there first.
+- T10 is the class list; a new class is added there first.
 
 ### 2.7 — What the schematic carries
 
-**T12 — Schematic fields**
+**T11 — Schematic fields**
 
 | # | Field | Origin |
 |---|---|---|
@@ -296,7 +285,7 @@
 
 ### 2.8 — Where a thing is placed
 
-**T13 — Placement**
+**T12 — Placement**
 
 | # | Rank | Dimension | Schematic | Board |
 |---|---|---|---|---|
@@ -314,7 +303,7 @@
 
 ### 3.1 — The board project
 
-**T14 — The board project**
+**T13 — The board project**
 
 | # | Asset | Owner |
 |---|---|---|
@@ -348,7 +337,7 @@
 
 ### 4.1 — The chain
 
-**T15 — The chain**
+**T14 — The chain**
 
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
@@ -378,9 +367,9 @@
 
 ### 4.3 — Process 0 — Init
 
-From the init state, three steps, in this order — T16.
+From the init state, three steps, in this order — T15.
 
-**T16 — Init steps**
+**T15 — Init steps**
 
 | # | Step | Tool | Makes |
 |---|---|---|---|
@@ -410,7 +399,7 @@ From the init state, three steps, in this order — T16.
 
 ### 4.6 — One agent per process
 
-- Each process is entered on its own and calls the tools its T15 row names.
+- Each process is entered on its own and calls the tools its T14 row names.
 - They are written in order — 1 and 2, then 3 through 6 — each agreed
   working before the next.
 - A process that needs the User mid-run is a command — loaded into the
@@ -418,7 +407,7 @@ From the init state, three steps, in this order — T16.
 - A process that runs headless is an agent — holding its own context and
   reporting at the end.
 
-**T17 — Process forms**
+**T16 — Process forms**
 
 | # | Process | Form |
 |---|---|---|
@@ -430,9 +419,9 @@ From the init state, three steps, in this order — T16.
 | 6 | 6 — Source | Agent |
 
 - Claude Code reads its assets from fixed paths — the folder is carried as a
-  plugin and its files stay tool assets — T18.
+  plugin and its files stay tool assets — T17.
 
-**T18 — Plugin paths**
+**T17 — Plugin paths**
 
 | # | Path | Holds |
 |---|---|---|
@@ -464,11 +453,11 @@ From the init state, three steps, in this order — T16.
 
 There are ten.
 
-**T19 — The tools**
+**T18 — The tools**
 
 | # | Tool | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `db-init` | Create the database and its tables | T4, T5, T7, T8, T9 | `board.db` |
+| 1 | `db-init` | Create the database and its tables | T3, T4, T6, T7, T8 | `board.db` |
 | 2 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
