@@ -14,7 +14,7 @@
 ### 1.1 — What it is
 
 - Claude-assisted hardware design in KiCad.
-- The tool carries:
+- The plugin carries:
   - The stages that carry a board through KiCad
   - The documents that define them
   - The scripts they call
@@ -25,7 +25,7 @@
 - The board is designed by working the stages of T4.1 in order — as often as
   needed.
 - Revision re-enters a stage.
-- The tool is entered at whichever stage is next.
+- The plugin is entered at whichever stage is next.
 
 ### 1.3 — How it works
 
@@ -39,7 +39,7 @@
   - The ten skills — T5.1
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T2.9
-- The tool is stateless.
+- The plugin is stateless.
 - The User may add a field to any table at runtime. All other schema change
   is on the User's request only.
 - No code or skill outside T5.1. Authoring scripts at runtime is
@@ -47,12 +47,12 @@
 - On a failure — or when a skill does not cover the work:
   - Abort the stage
   - Report the bug
-  - The tool is unusable until fixed
-  - The runtime agent is not authorized to fix the tool
+  - The plugin is unusable until fixed
+  - The runtime agent is not authorized to fix the plugin
 
 ### 1.5 — How it is organized
 
-- The tool lives in `tools/board-build/`.
+- The plugin lives in `tools/board-build/`.
 - Work files live in the board directory.
 - The project consists of — T3.1 is the full list:
   - `board.db`
@@ -308,8 +308,8 @@
 | 5 | `lib/3d/` | Hand |
 | 6 | `datasheets/` | Hand |
 | 7 | `*.kicad_pro` | Generated once |
-| 8 | `*.kicad_sch` | Updated by the tool, wired by the User |
-| 9 | `*.kicad_pcb` | Updated by the tool, routed by the User |
+| 8 | `*.kicad_sch` | Updated by the plugin, wired by the User |
+| 9 | `*.kicad_pcb` | Updated by the plugin, routed by the User |
 | 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 11 | `out/` — RF-simulation file | Generated |
 
@@ -455,7 +455,7 @@ From the init state, three steps, in this order — T4.2.
 ## 6 — Installation
 
 - Claude Code reads its assets from fixed paths — the folder is carried as a
-  plugin and its files stay tool assets — T6.1.
+  plugin and its files stay plugin assets — T6.1.
 
 **T6.1 — Plugin paths**
 
