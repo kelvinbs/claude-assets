@@ -29,11 +29,8 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the stage steps using ten skills — T5.1.
-- The skill list is immutable:
-  - No other skill is used or defined
-  - No edit to the list is permitted
-  - A document — or a version of one — that carries eleven is a bug
+- The LLM performs the stages using the ten skills — T5.1.
+- T5.1 is the complete skill set.
 
 ### 1.4 — The contract
 
@@ -43,19 +40,14 @@
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T2.9
 - The tool is stateless.
-- Runtime exception: the User may add a field to any table at will.
-- A skill changes the schema on the User's request and on nothing else:
-  - Not to carry a task
-  - Never on an inference
-- An agent that finds it needs any of the structure changed has found a bug:
+- The User may add a field to any table at runtime. All other schema change
+  is on the User's request only.
+- No code or skill outside T5.1. The declared gap coverage of section 5.1 is
+  the sole exception.
+- On a failure — or on finding the structure insufficient:
   - Abort
-  - Declare the tool unusable
-  - Name what it hit
-  - Never carry on — never ask
-- Failure of the tool or a skill is met the same way:
-  - Abort
-  - Notify
-  - Bug — tool unusable
+  - Report the cause
+  - The tool is unusable until fixed
 
 ### 1.5 — How it is organized
 
