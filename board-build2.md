@@ -130,29 +130,6 @@
 | 4 | `page` | TEXT | | Yes |
 | 5 | `room` | TEXT | | Yes |
 
-- `ref_table` is the instance: `U1` and `U2` are two rows on one `ipn`, each
-  free to carry its own `page` and `room`.
-- `uuid` is KiCad's instance UUID:
-  - The `.kicad_sch` symbol carries it
-  - The `.kicad_pcb` footprint holds `(path "/<sheet-uuid>/<symbol-uuid>")`
-    back to it
-- `ref` is a field. Reannotation in the editor is read back into it.
-- `page` is the schematic page.
-- `room` is the User's region: one name serving a block of the sheet and a
-  region of the board.
-- `parent` is an IPN — the part this one serves:
-  - A feedback resistor carries the op-amp's IPN
-  - Children are the assembly; the parent its primary part
-  - Blank is top level
-  - One level
-- `source` is two letters — symbol then footprint — T2.5:
-  - `h/-` is a hand-drawn symbol and no footprint
-- `symbol` and `footprint` are `<project>:<name>` — resolving inside `lib/`
-  per section 3:
-  - `symbol-draw` and `footprint-draw` copy the object in and write the field
-  - A KiCad library is an input to those skills; `source` records it as the
-    origin
-
 **T2.5 — `source` letters**
 
 | # | Letter | Origin |
