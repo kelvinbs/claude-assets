@@ -14,9 +14,9 @@
 
 - Claude-assisted hardware design in KiCad.
 - The tool carries:
-  - the processes that carry a board through KiCad
-  - the documents that define them
-  - the scripts they call
+  - The processes that carry a board through KiCad
+  - The documents that define them
+  - The scripts they call
 - Nothing specific to one product.
 
 ### 1.2 — How it is used
@@ -30,31 +30,31 @@
 
 - The LLM performs the process steps using ten sub-tools — T19.
 - The sub-tool list is immutable:
-  - no other tool is used or defined
-  - no edit to the list is permitted
-  - a document — or a version of one — that carries eleven is a bug
+  - No other tool is used or defined
+  - No edit to the list is permitted
+  - A document — or a version of one — that carries eleven is a bug
 
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
-  - the six processes — T15
-  - the ten sub-tools — T19
-  - the five tables with their keys — sections 2.3 and 2.4
-  - the relations — T10
+  - The six processes — T15
+  - The ten sub-tools — T19
+  - The five tables with their keys — sections 2.3 and 2.4
+  - The relations — T10
 - The tool is stateless.
 - Runtime exception: the User may add a field to any table at will.
 - A tool changes the schema on the User's request and on nothing else:
-  - not to carry a task
-  - never on an inference
+  - Not to carry a task
+  - Never on an inference
 - An agent that finds it needs any of the structure changed has found a bug:
-  - abort
-  - declare the tool unusable
-  - name what it hit
-  - never carry on — never ask
+  - Abort
+  - Declare the tool unusable
+  - Name what it hit
+  - Never carry on — never ask
 - Failure of a tool or sub-tool is met the same way:
-  - abort
-  - notify
-  - bug — tool unusable
+  - Abort
+  - Notify
+  - Bug — tool unusable
 
 ### 1.5 — The split
 
@@ -62,10 +62,10 @@
 
 | # | Tool | User |
 |---|---|---|
-| r1 | the parts data, on the User's decisions | wiring |
-| r2 | symbols, footprints, models | board outline and stackup |
-| r3 | symbol placement, footprint assignment and placement | routing |
-| r4 | the RF-simulation file | |
+| 1 | The parts data, on the User's decisions | Wiring |
+| 2 | Symbols, footprints, models | Board outline and stackup |
+| 3 | Symbol placement, footprint assignment and placement | Routing |
+| 4 | The RF-simulation file | |
 
 ### 1.6 — How it is organized
 
@@ -73,7 +73,7 @@
 - Work files live in the board directory.
 - The project consists of — T14 is the full list:
   - `board.db`
-  - the KiCad files
+  - The KiCad files
   - `lib/`
   - `datasheets/`
 
@@ -92,8 +92,8 @@
 
 | # | File | Holds |
 |---|---|---|
-| r1 | `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
-| r2 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
+| 1 | `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
+| 2 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
 
 - `board.db` is master and pushes to KiCad.
 - Table names end in `_table`; keys carry the bare word.
@@ -105,23 +105,23 @@
   - `mpn_table` — kept
   - `offer_table` — fetched and discardable
 - Sources:
-  - the JLCPCB API
-  - distributor tables the User supplies
+  - The JLCPCB API
+  - Distributor tables the User supplies
 - The tables are a record of the design. Progress is a query — T3.
 
 **T3 — Progress queries**
 
 | # | Question | Query |
 |---|---|---|
-| r1 | has a symbol | `symbol is null` |
-| r2 | has a footprint | `footprint is null` |
-| r3 | has a part number | a row in `aml_table` |
-| r4 | quantity | `count(*) from ref_table group by ipn` |
-| r5 | the assembly | rows whose `parent` is this IPN |
+| 1 | Has a symbol | `symbol is null` |
+| 2 | Has a footprint | `footprint is null` |
+| 3 | Has a part number | A row in `aml_table` |
+| 4 | Quantity | `count(*) from ref_table group by ipn` |
+| 5 | The assembly | Rows whose `parent` is this IPN |
 
 - `note` is a person's sentence — on `parts_table` and `aml_table`:
-  - normally blank
-  - tools write the columns
+  - Normally blank
+  - Tools write the columns
 
 ### 2.3 — The design tables
 
@@ -129,56 +129,56 @@
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| r1 | `ipn` | TEXT | key | |
-| r2 | `description` | TEXT | | yes |
-| r3 | `parent` | TEXT | | yes |
-| r4 | `symbol` | TEXT | | yes |
-| r5 | `footprint` | TEXT | | yes |
-| r6 | `source` | TEXT | | yes |
-| r7 | `note` | TEXT | | yes |
+| 1 | `ipn` | TEXT | Key | |
+| 2 | `description` | TEXT | | Yes |
+| 3 | `parent` | TEXT | | Yes |
+| 4 | `symbol` | TEXT | | Yes |
+| 5 | `footprint` | TEXT | | Yes |
+| 6 | `source` | TEXT | | Yes |
+| 7 | `note` | TEXT | | Yes |
 
 **T5 — `ref_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| r1 | `uuid` | TEXT | key | |
-| r2 | `ipn` | TEXT | | |
-| r3 | `ref` | TEXT | | yes |
-| r4 | `page` | TEXT | | yes |
-| r5 | `room` | TEXT | | yes |
+| 1 | `uuid` | TEXT | Key | |
+| 2 | `ipn` | TEXT | | |
+| 3 | `ref` | TEXT | | Yes |
+| 4 | `page` | TEXT | | Yes |
+| 5 | `room` | TEXT | | Yes |
 
 - `parts_table` is the part — one row per IPN.
 - `ref_table` is the instance: `U1` and `U2` are two rows on one `ipn`, each
   free to carry its own `page` and `room`.
 - `uuid` is KiCad's instance UUID:
-  - the `.kicad_sch` symbol carries it
-  - the `.kicad_pcb` footprint holds `(path "/<sheet-uuid>/<symbol-uuid>")`
+  - The `.kicad_sch` symbol carries it
+  - The `.kicad_pcb` footprint holds `(path "/<sheet-uuid>/<symbol-uuid>")`
     back to it
 - `ref` is a field. Reannotation in the editor is read back into it.
 - `page` is the schematic page.
 - `room` is the User's region: one name serving a block of the sheet and a
   region of the board.
 - `parent` is an IPN — the part this one serves:
-  - a feedback resistor carries the op-amp's IPN
-  - children are the assembly; the parent its primary part
-  - blank is top level
-  - one level
+  - A feedback resistor carries the op-amp's IPN
+  - Children are the assembly; the parent its primary part
+  - Blank is top level
+  - One level
 - `source` is two letters — symbol then footprint — T6:
   - `h/-` is a hand-drawn symbol and no footprint
 - `symbol` and `footprint` are `<project>:<name>` — resolving inside `lib/`
   per section 3:
   - `symbol-draw` and `footprint-draw` copy the object in and write the field
-  - a KiCad library is an input to those tools; `source` records it as the
+  - A KiCad library is an input to those tools; `source` records it as the
     origin
 
 **T6 — `source` letters**
 
 | # | Letter | Origin |
 |---|---|---|
-| r1 | `s` | KiCad stock libraries |
-| r2 | `v` | manufacturer or a publishing service |
-| r3 | `h` | drawn here, against the datasheet |
-| r4 | `-` | absent |
+| 1 | `s` | KiCad stock libraries |
+| 2 | `v` | Manufacturer or a publishing service |
+| 3 | `h` | Drawn here, against the datasheet |
+| 4 | `-` | Absent |
 
 ### 2.4 — The sourcing tables
 
@@ -186,49 +186,49 @@
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| r1 | `ipn` | TEXT | key | |
-| r2 | `mpn` | TEXT | key | |
-| r3 | `rank` | INTEGER | | yes |
-| r4 | `note` | TEXT | | yes |
+| 1 | `ipn` | TEXT | Key | |
+| 2 | `mpn` | TEXT | Key | |
+| 3 | `rank` | INTEGER | | Yes |
+| 4 | `note` | TEXT | | Yes |
 
 **T8 — `mpn_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| r1 | `mpn` | TEXT | key | |
-| r2 | `manufacturer` | TEXT | | yes |
-| r3 | `datasheet` | TEXT | | yes |
+| 1 | `mpn` | TEXT | Key | |
+| 2 | `manufacturer` | TEXT | | Yes |
+| 3 | `datasheet` | TEXT | | Yes |
 
 **T9 — `offer_table`**
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| r1 | `mpn` | TEXT | key | |
-| r2 | `distributor` | TEXT | key | |
-| r3 | `break_qty` | INTEGER | key | |
-| r4 | `sku` | TEXT | | yes |
-| r5 | `currency` | TEXT | | yes |
-| r6 | `price` | REAL | | yes |
-| r7 | `stock` | INTEGER | | yes |
-| r8 | `moq` | INTEGER | | yes |
-| r9 | `lead_days` | INTEGER | | yes |
-| r10 | `fetched_at` | TEXT | | yes |
+| 1 | `mpn` | TEXT | Key | |
+| 2 | `distributor` | TEXT | Key | |
+| 3 | `break_qty` | INTEGER | Key | |
+| 4 | `sku` | TEXT | | Yes |
+| 5 | `currency` | TEXT | | Yes |
+| 6 | `price` | REAL | | Yes |
+| 7 | `stock` | INTEGER | | Yes |
+| 8 | `moq` | INTEGER | | Yes |
+| 9 | `lead_days` | INTEGER | | Yes |
+| 10 | `fetched_at` | TEXT | | Yes |
 
 - `aml_table` is the approved manufacturer list — the MPNs that may be built
   against an IPN:
-  - the row is the approval
-  - every MPN in it takes the board as designed
+  - The row is the approval
+  - Every MPN in it takes the board as designed
   - `rank` orders the alternatives — blank on the one designed against
-  - one blank per IPN — held as a unique index over `ipn` where
+  - One blank per IPN — held as a unique index over `ipn` where
     `rank is null`
 - `mpn_table` is the manufacturer part — maker and datasheet:
-  - the row exists from the moment the part number is named
+  - The row exists from the moment the part number is named
   - `datasheet-read` reads from the datasheet — lands in the footprint:
-    - package
-    - pin count
-    - pitch
+    - Package
+    - Pin count
+    - Pitch
 - `offer_table` is fetched:
-  - one row per distributor per quantity break
+  - One row per distributor per quantity break
   - `fetched_at` dates it
 
 ### 2.5 — The relations
@@ -237,11 +237,11 @@
 
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
-| r1 | `ref_table.ipn` | `parts_table.ipn` | many-to-one | restrict |
-| r2 | `parts_table.parent` | `parts_table.ipn` | many-to-one, self | set null |
-| r3 | `aml_table.ipn` | `parts_table.ipn` | many-to-one | restrict |
-| r4 | `aml_table.mpn` | `mpn_table.mpn` | many-to-one | restrict |
-| r5 | `offer_table.mpn` | `mpn_table.mpn` | many-to-one | cascade |
+| 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
+| 2 | `parts_table.parent` | `parts_table.ipn` | Many-to-one, self | Set null |
+| 3 | `aml_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
+| 4 | `aml_table.mpn` | `mpn_table.mpn` | Many-to-one | Restrict |
+| 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |
 
 - All are declared foreign keys.
 - Every tool sets `PRAGMA foreign_keys = ON`.
@@ -249,35 +249,35 @@
 ### 2.6 — The IPN
 
 - `ANNNN` — class letter then four digits:
-  - sequential within the letter from `0001`
-  - one number to one part for the life of the design
+  - Sequential within the letter from `0001`
+  - One number to one part for the life of the design
 - A new IPN on change of:
-  - form
-  - fit
-  - function
+  - Form
+  - Fit
+  - Function
 - Any other change is a second MPN in `aml_table`.
 
 **T11 — The IPN classes**
 
 | # | Letter | Class |
 |---|---|---|
-| r1 | `A` | amplifier |
-| r2 | `C` | capacitor |
-| r3 | `E` | antenna, panel |
-| r4 | `F` | filter |
-| r5 | `G` | synthesizer, PLL |
-| r6 | `H` | mechanical, enclosure |
-| r7 | `J` | connector |
-| r8 | `K` | switch |
-| r9 | `L` | inductor, ferrite |
-| r10 | `M` | mixer |
-| r11 | `P` | regulator, converter |
-| r12 | `R` | resistor |
-| r13 | `S` | sensor |
-| r14 | `T` | test point, cal standard |
-| r15 | `U` | processor, memory |
-| r16 | `W` | splitter, coupler, bias tee |
-| r17 | `Y` | oscillator, reference |
+| 1 | `A` | Amplifier |
+| 2 | `C` | Capacitor |
+| 3 | `E` | Antenna, panel |
+| 4 | `F` | Filter |
+| 5 | `G` | Synthesizer, PLL |
+| 6 | `H` | Mechanical, enclosure |
+| 7 | `J` | Connector |
+| 8 | `K` | Switch |
+| 9 | `L` | Inductor, ferrite |
+| 10 | `M` | Mixer |
+| 11 | `P` | Regulator, converter |
+| 12 | `R` | Resistor |
+| 13 | `S` | Sensor |
+| 14 | `T` | Test point, cal standard |
+| 15 | `U` | Processor, memory |
+| 16 | `W` | Splitter, coupler, bias tee |
+| 17 | `Y` | Oscillator, reference |
 
 - Ten letters match the KiCad reference designator for the same class.
 - Four digits mark the IPN: `U0001` is a part, `U1` an instance.
@@ -289,8 +289,8 @@
 
 | # | Field | Origin |
 |---|---|---|
-| r1 | `Reference`, `Value`, `Footprint` | built in |
-| r2 | `ipn` | custom, the key to `parts_table` |
+| 1 | `Reference`, `Value`, `Footprint` | Built in |
+| 2 | `ipn` | Custom, the key to `parts_table` |
 
 - `Value` is drawn from the IPN.
 
@@ -300,9 +300,9 @@
 
 | # | Rank | Dimension | Schematic | Board |
 |---|---|---|---|---|
-| r1 | 1 | `page` | selects the file | — |
-| r2 | 2 | `room` | block of the sheet | region of the board |
-| r3 | 3 | family | groups instances whose `room` is blank | groups instances whose `room` is blank |
+| 1 | 1 | `page` | Selects the file | — |
+| 2 | 2 | `room` | Block of the sheet | Region of the board |
+| 3 | 3 | Family | Groups instances whose `room` is blank | Groups instances whose `room` is blank |
 
 - Placement follows this order.
 - A family whose instances carry two pages is placed on both.
@@ -318,17 +318,17 @@
 
 | # | Asset | Owner |
 |---|---|---|
-| r1 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
-| r2 | `board.db` — `offer_table` | Fetched. Discardable |
-| r3 | `lib/*.kicad_sym` | Hand |
-| r4 | `lib/*.pretty` | Hand |
-| r5 | `lib/3d/` | Hand |
-| r6 | `datasheets/` | Hand |
-| r7 | `*.kicad_pro` | Generated once |
-| r8 | `*.kicad_sch` | Updated by the tool, wired by the User |
-| r9 | `*.kicad_pcb` | Updated by the tool, routed by the User |
-| r10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
-| r11 | `out/` — RF-simulation file | Generated |
+| 1 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
+| 2 | `board.db` — `offer_table` | Fetched. Discardable |
+| 3 | `lib/*.kicad_sym` | Hand |
+| 4 | `lib/*.pretty` | Hand |
+| 5 | `lib/3d/` | Hand |
+| 6 | `datasheets/` | Hand |
+| 7 | `*.kicad_pro` | Generated once |
+| 8 | `*.kicad_sch` | Updated by the tool, wired by the User |
+| 9 | `*.kicad_pcb` | Updated by the tool, routed by the User |
+| 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
+| 11 | `out/` — RF-simulation file | Generated |
 
 ### 3.2 — No dependencies — clone and work
 
@@ -352,13 +352,13 @@
 
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
-| r1 | 0 — Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
-| r2 | 1 — Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
-| r3 | 2 — Update library: symbol, footprint, 3D model | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
-| r4 | 3 — Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
-| r5 | 4 — Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty`<br>`lib/3d/` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
-| r6 | 5 — Output | `*.kicad_pcb` | RF-simulation file | — | — |
-| r7 | 6 — Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
+| 1 | 0 — Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
+| 2 | 1 — Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
+| 3 | 2 — Update library: symbol, footprint, 3D model | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
+| 4 | 3 — Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
+| 5 | 4 — Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty`<br>`lib/3d/` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
+| 6 | 5 — Output | `*.kicad_pcb` | RF-simulation file | — | — |
+| 7 | 6 — Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
 - Process 1 gives a part its IPN and its description.
 - Process 2 builds the library objects for the rows that lack them.
@@ -367,9 +367,9 @@
 
 - An empty board directory and a pointer to the raw source the parts come
   from. Nothing else:
-  - no `board.db`
-  - no `lib/`
-  - no KiCad files
+  - No `board.db`
+  - No `lib/`
+  - No KiCad files
 - The board directory carries no product name and no reference of its own.
 - The source is named to the process that reads it and lives outside the
   board directory.
@@ -384,9 +384,9 @@ From the init state, three steps, in this order — T16.
 
 | # | Step | Tool | Makes |
 |---|---|---|---|
-| r1 | 1 | `db-init` | `board.db` and its five empty tables |
-| r2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
-| r3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
+| 1 | 1 | `db-init` | `board.db` and its five empty tables |
+| 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
+| 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
 - Steps 1 and 3 are process 0; step 2 is process 1.
 - After them the board directory holds the record and an empty project —
@@ -396,17 +396,17 @@ From the init state, three steps, in this order — T16.
 
 - A process adds what is missing and leaves what is there.
 - A placed part keeps:
-  - its position
-  - its wiring
-  - its routing
+  - Its position
+  - Its wiring
+  - Its routing
 - Each run reports what it left untouched.
 
 ### 4.5 — The RF-simulation file
 
 - Process 5 writes what `rf-simulation` reads.
 - Three-dimensional geometry is carried on the KiCad User layers:
-  - each layer names a vertical position and a height
-  - the objects on it are the boxes at that level — dielectric or conductor
+  - Each layer names a vertical position and a height
+  - The objects on it are the boxes at that level — dielectric or conductor
 
 ### 4.6 — One agent per process
 
@@ -422,12 +422,12 @@ From the init state, three steps, in this order — T16.
 
 | # | Process | Form |
 |---|---|---|
-| r1 | 1 — Update parts | Command |
-| r2 | 2 — Update library | Agent. Asks when a datasheet withholds the pinout |
-| r3 | 3 — Update schematic | Agent |
-| r4 | 4 — Update board | Agent |
-| r5 | 5 — Output | Agent |
-| r6 | 6 — Source | Agent |
+| 1 | 1 — Update parts | Command |
+| 2 | 2 — Update library | Agent. Asks when a datasheet withholds the pinout |
+| 3 | 3 — Update schematic | Agent |
+| 4 | 4 — Update board | Agent |
+| 5 | 5 — Output | Agent |
+| 6 | 6 — Source | Agent |
 
 - Claude Code reads its assets from fixed paths — the folder is carried as a
   plugin and its files stay tool assets — T18.
@@ -436,11 +436,11 @@ From the init state, three steps, in this order — T16.
 
 | # | Path | Holds |
 |---|---|---|
-| r1 | `.claude-plugin/plugin.json` | the plugin manifest |
-| r2 | `.claude-plugin/marketplace.json` | the local marketplace entry |
-| r3 | `commands/<process>.md` | one command per interactive process |
-| r4 | `agents/<process>.md` | one agent per batch process |
-| r5 | `skills/<name>/SKILL.md` | skills the commands and agents load |
+| 1 | `.claude-plugin/plugin.json` | The plugin manifest |
+| 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
+| 3 | `commands/<process>.md` | One command per interactive process |
+| 4 | `agents/<process>.md` | One agent per batch process |
+| 5 | `skills/<name>/SKILL.md` | Skills the commands and agents load |
 
 - A fresh clone installs it once:
 
@@ -468,16 +468,16 @@ There are ten.
 
 | # | Tool | Function | In | Out |
 |---|---|---|---|---|
-| r1 | `db-init` | Create the database and its tables | T4, T5, T7, T8, T9 | `board.db` |
-| r2 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
-| r3 | `lib-index` | Index the KiCad symbol libraries | the User's `.kicad_sym` files | `lib/kicad-index.json` |
-| r4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
-| r5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| r6 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
-| r7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
-| r8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| r9 | `kicad-init` | Create the KiCad project from nothing | `board.db` | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
-| r10 | `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
+| 1 | `db-init` | Create the database and its tables | T4, T5, T7, T8, T9 | `board.db` |
+| 2 | `table-read` | Show the record, one view per workflow step | `board.db` | Markdown on stdout |
+| 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
+| 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
+| 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
+| 6 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
+| 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
+| 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
+| 9 | `kicad-init` | Create the KiCad project from nothing | `board.db` | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
+| 10 | `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
 
 ### 5.3 — Layout
 
