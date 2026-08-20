@@ -42,12 +42,13 @@
 - The tool is stateless.
 - The User may add a field to any table at runtime. All other schema change
   is on the User's request only.
-- No code or skill outside T5.1. The declared gap coverage of section 5.1 is
-  the sole exception.
-- On a failure — or on finding the structure insufficient:
-  - Abort
-  - Report the cause
+- No code or skill outside T5.1. Authoring scripts at runtime is
+  prohibited.
+- On a failure — or when a skill does not cover the work:
+  - Abort the stage
+  - Report the bug
   - The tool is unusable until fixed
+  - The runtime agent is not authorized to fix the tool
 
 ### 1.5 — How it is organized
 
@@ -422,8 +423,6 @@ From the init state, three steps, in this order — T4.2.
 - The LLM follows the document and may call the script:
   - Script — deterministic file and database work
   - LLM — interpretation and judgment
-- Code the agent writes to cover a gap is declared — so the gap can be
-  closed.
 - A stage uses one or more skills; a skill serves one or more stages.
 - Each skill document opens with the assets it reads and writes.
 
