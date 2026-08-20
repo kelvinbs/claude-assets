@@ -335,7 +335,7 @@
 
 | # | Stage | Skills | User then |
 |---|---|---|---|
-| 1 | Init | `db-init`<br>`kicad-init` | — |
+| 1 | Init | `init-pipeline`<br>`kicad-init` | — |
 | 2 | Update parts | `table-write` | — |
 | 3 | Update library — symbols | `datasheet-read`<br>`symbol-draw` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
@@ -368,7 +368,7 @@ From the init state, three steps, in this order — T4.2.
 
 | # | Step | Skill | Makes |
 |---|---|---|---|
-| 1 | 1 | `db-init` | `board.db` and its five empty tables |
+| 1 | 1 | `init-pipeline` | `board.db` and its five empty tables |
 | 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
 | 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
@@ -432,7 +432,7 @@ From the init state, three steps, in this order — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `db-init` | Create the database and its tables | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` |
+| 1 | `init-pipeline` | Create the blank framework | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
