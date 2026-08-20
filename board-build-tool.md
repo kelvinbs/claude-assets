@@ -289,13 +289,22 @@ The check runs against a fresh clone, and fails on any of the above.
 
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
-| 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
+| 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `db-init`<br>`table-write`<br>`kicad-init` | — |
 | 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
+| 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
+| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
+| 5 | Output | `*.kicad_pcb` | RF-simulation file | — | — |
+| 6 | Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
 Process 1 gives a part its IPN and its description. Process 2 builds the
 library objects for the rows that lack them.
 
-`db-init` runs once, before process 1.
+**The RF-simulation file**
+
+Process 5 writes what `rf-simulation` reads. Three-dimensional geometry is
+carried on the KiCad User layers: each layer names a vertical position and a
+height, and the objects on it are the boxes at that level, dielectric or
+conductor.
 
 **Re-entry**
 
@@ -329,7 +338,8 @@ empty project, and process 2 has somewhere to put a symbol.
 **T3.2 — One agent per process**
 
 Each process is entered on its own and calls the tools its T3.1 row names.
-They are written in order, each agreed working before the next.
+They are written in order — 1 and 2, then 3, 4, 5, 6 — each agreed working
+before the next.
 
 A process that needs the User mid-run is a command, loaded into the running
 session. A process that runs headless is an agent, holding its own context
@@ -339,6 +349,10 @@ and reporting at the end.
 |---|---|---|
 | 1 | Update parts | Command |
 | 2 | Update library | Agent. Asks when a datasheet withholds the pinout |
+| 3 | Update schematic | Agent |
+| 4 | Update board | Agent |
+| 5 | Output | Agent |
+| 6 | Source | Agent |
 
 Claude Code reads commands, agents and skills from fixed paths, so the folder
 is carried as a plugin and its files stay tool assets:
