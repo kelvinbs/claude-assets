@@ -22,7 +22,7 @@
 
 ### 1.2 — How it is used
 
-- The board is designed by working stages 1–6 in order — as often as
+- The board is designed by working the stages of T14 in order — as often as
   needed.
 - Revision re-enters a stage.
 - The tool is entered at whichever stage is next.
@@ -38,7 +38,7 @@
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
-  - The six stages — T14
+  - The stages — T14
   - The ten skills — T17
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T9
@@ -342,16 +342,17 @@
 
 | # | Stage | In | Out | Skills | User then |
 |---|---|---|---|---|---|
-| 1 | 0 — Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
-| 2 | 1 — Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
-| 3 | 2 — Update library: symbol, footprint, 3D model | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
-| 4 | 3 — Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
-| 5 | 4 — Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty`<br>`lib/3d/` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
-| 6 | 5 — Output | `*.kicad_pcb` | RF-simulation file | — | — |
-| 7 | 6 — Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
+| 1 | Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
+| 2 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
+| 3 | Update library — symbols | `board.db`<br>`datasheets/` | `lib/*.kicad_sym` | `datasheet-read`<br>`symbol-draw` | — |
+| 4 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
+| 5 | Update library — footprints, 3D | `board.db`<br>`datasheets/` | `lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`footprint-draw` | — |
+| 6 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty`<br>`lib/3d/` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
+| 7 | RF-sim export | `*.kicad_pcb` | RF-simulation file | — | — |
+| 8 | Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
-- Stage 1 gives a part its IPN and its description.
-- Stage 2 builds the library objects for the rows that lack them.
+- Update parts gives a part its IPN and its description.
+- Update library builds the library objects for the rows that lack them.
 
 ### 4.2 — The init state
 
@@ -366,7 +367,7 @@
 - Every file in the board directory is made by a skill — a full init deletes
   all of them and starts from nothing.
 
-### 4.3 — Stage 0 — Init
+### 4.3 — Init
 
 From the init state, three steps, in this order — T15.
 
@@ -378,9 +379,9 @@ From the init state, three steps, in this order — T15.
 | 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
 | 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Steps 1 and 3 are stage 0; step 2 is stage 1.
+- Steps 1 and 3 are Init; step 2 is Update parts.
 - After them the board directory holds the record and an empty project —
-  stage 2 has somewhere to put a symbol.
+  Update library has somewhere to put a symbol.
 
 ### 4.4 — Re-entry
 
@@ -393,7 +394,7 @@ From the init state, three steps, in this order — T15.
 
 ### 4.5 — The RF-simulation file
 
-- Stage 5 writes what `rf-simulation` reads.
+- RF-sim export writes what `rf-simulation` reads.
 - Three-dimensional geometry is carried on the KiCad User layers:
   - Each layer names a vertical position and a height
   - The objects on it are the boxes at that level — dielectric or conductor
@@ -401,8 +402,8 @@ From the init state, three steps, in this order — T15.
 ### 4.6 — One agent per stage
 
 - Each stage is entered on its own and calls the skills its T14 row names.
-- They are written in order — 1 and 2, then 3 through 6 — each agreed
-  working before the next.
+- They are written in pipeline order — each agreed working before the
+  next.
 - A stage that needs the User mid-run is a command — loaded into the
   running session.
 - A stage that runs headless is an agent — holding its own context and
@@ -412,12 +413,13 @@ From the init state, three steps, in this order — T15.
 
 | # | Stage | Form |
 |---|---|---|
-| 1 | 1 — Update parts | Command |
-| 2 | 2 — Update library | Agent. Asks when a datasheet withholds the pinout |
-| 3 | 3 — Update schematic | Agent |
-| 4 | 4 — Update board | Agent |
-| 5 | 5 — Output | Agent |
-| 6 | 6 — Source | Agent |
+| 1 | Init | Agent |
+| 2 | Update parts | Command |
+| 3 | Update library | Agent. Asks when a datasheet withholds the pinout |
+| 4 | Update schematic | Agent |
+| 5 | Update board | Agent |
+| 6 | RF-sim export | Agent |
+| 7 | Source | Agent |
 
 ## 5 — Skills
 
