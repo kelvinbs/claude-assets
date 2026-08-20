@@ -20,6 +20,7 @@ unless `--redraw` names it, because it may have been corrected by hand.
 
 import argparse
 import json
+import math
 import re
 import sqlite3
 import subprocess

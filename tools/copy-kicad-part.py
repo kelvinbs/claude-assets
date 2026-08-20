@@ -147,8 +147,14 @@ def score(row, keys, cores, terms):
     for key in keys:
         if flat == key:
             points += 100
-        elif key and (flat.startswith(key[:6]) or key.startswith(flat[:6])):
-            points += 40
+        elif key:
+            common = 0
+            for a, b in zip(flat, key):
+                if a != b:
+                    break
+                common += 1
+            if common >= 6:
+                points += 4 * common
     for core in cores:
         if core and (flat.startswith(core) or core.startswith(flat)):
             points += 30
