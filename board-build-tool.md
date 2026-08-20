@@ -315,9 +315,12 @@ untouched.
 
 **The init state**
 
-An empty board directory, and the reference the parts come from — for
-`proto1`, `designarchive/`. Nothing else: no `board.db`, no `lib/`, no
-KiCad files.
+An empty board directory, and a pointer to the raw source the parts come
+from. Nothing else: no `board.db`, no `lib/`, no KiCad files.
+
+The board directory carries no product name and no reference of its own. The
+source is named to the process that reads it, and lives outside the board
+directory.
 
 Every file in the board directory is made by a tool, so a full init deletes
 all of them and starts from nothing.
