@@ -358,7 +358,7 @@ Three steps, in this order — T4.2.
 
 ### 5.3 — Layout
 
-- `board-build-tool.md` — the only document at the top level
+- `board-build.md` — the only document at the top level
 - `tools/` — one `<skill>.md` and its script, per skill
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
 - `agents/` — one per stage, section 4.5
