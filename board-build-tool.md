@@ -289,7 +289,8 @@ The check runs against a fresh clone, and fails on any of the above.
 
 | # | Process | In | Out | Tools | User then |
 |---|---|---|---|---|---|
-| 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `db-init`<br>`table-write`<br>`kicad-init` | — |
+| 0 | Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
+| 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
 | 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
 | 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
 | 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
@@ -319,10 +320,9 @@ An empty board directory, and the reference the parts come from — for
 KiCad files.
 
 Every file in the board directory is made by a tool, so a full init deletes
-all of them and starts from nothing. The init functions are steps of process
-1, not something run ahead of it.
+all of them and starts from nothing.
 
-**Initialisation**
+**Process 0 — Init**
 
 From the init state, three steps, in this order:
 
@@ -332,8 +332,9 @@ From the init state, three steps, in this order:
 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-They are process 1. After them the board directory holds the record and an
-empty project, and process 2 has somewhere to put a symbol.
+Steps 1 and 3 are process 0, step 2 is process 1. After them the board
+directory holds the record and an empty project, and process 2 has somewhere
+to put a symbol.
 
 **T3.2 — One agent per process**
 
