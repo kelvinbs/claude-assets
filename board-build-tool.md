@@ -291,9 +291,9 @@ The check runs against a fresh clone, and fails on any of the above.
 |---|---|---|---|---|---|
 | 0 | Init | The init state | `board.db`, five empty tables<br>`*.kicad_pro`<br>`sym-lib-table`<br>`lib/<project>.kicad_sym` | `db-init`<br>`kicad-init` | — |
 | 1 | Update parts | Datasheet<br>Record row | `parts_table` row | `table-write` | — |
-| 2 | Update library | `board.db`<br>`datasheets/` | `lib/*.kicad_sym` | `datasheet-read`<br>`symbol-draw` | — |
+| 2 | Update library: symbol, footprint, 3D model | `board.db`<br>`datasheets/` | `lib/*.kicad_sym`<br>`lib/*.pretty`<br>`lib/3d/` | `datasheet-read`<br>`symbol-draw`<br>`footprint-draw` | — |
 | 3 | Update schematic | `board.db`<br>`lib/*.kicad_sym` | `*.kicad_sch`<br>Symbols, on their page | `kicad-update` | Wires |
-| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`datasheets/` | `lib/*.pretty`<br>`lib/3d/`<br>`*.kicad_pcb`<br>Footprints, placed | `datasheet-read`<br>`footprint-draw`<br>`kicad-update` | Routes |
+| 4 | Update board | `board.db`<br>`*.kicad_sch`<br>`lib/*.pretty`<br>`lib/3d/` | `*.kicad_pcb`<br>Footprints, placed | `kicad-update` | Routes |
 | 5 | Output | `*.kicad_pcb` | RF-simulation file | — | — |
 | 6 | Source | `aml_table` | Price<br>Stock<br>Availability | — | — |
 
