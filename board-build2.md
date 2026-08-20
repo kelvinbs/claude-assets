@@ -208,7 +208,7 @@
 
 | # | Field | Origin |
 |---|---|---|
-| 1 | `Reference`, `Value`, `Footprint` | Built in |
+| 1 | `Reference`, `Value`, `Footprint`, `3D model` | Built in |
 | 2 | `ipn` | Custom, the key to `parts_table` |
 
 - `Value` is drawn from the IPN.
