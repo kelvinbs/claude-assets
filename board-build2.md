@@ -365,7 +365,7 @@ From the init state, three steps, in this order — T4.2.
 
 **T4.2 — Init steps**
 
-| # | Step | Tool | Makes |
+| # | Step | Skill | Makes |
 |---|---|---|---|
 | 1 | 1 | `db-init` | `board.db` and its five empty tables |
 | 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
@@ -429,11 +429,9 @@ From the init state, three steps, in this order — T4.2.
 
 ### 5.2 — The skills
 
-There are ten.
-
 **T5.1 — The skills**
 
-| # | Tool | Function | In | Out |
+| # | Skill | Function | In | Out |
 |---|---|---|---|---|
 | 1 | `db-init` | Create the database and its tables | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
