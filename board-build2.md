@@ -322,22 +322,8 @@ Three steps, in this order — T4.2.
 
 - They are written in pipeline order — each agreed working before the
   next.
-- A stage that needs the User mid-run is a command — loaded into the
-  running session.
-- A stage that runs headless is an agent — holding its own context and
-  reporting at the end.
-
-**T4.3 — Stage forms**
-
-| # | Stage | Form |
-|---|---|---|
-| 1 | Init | Agent |
-| 2 | Update parts | Command |
-| 3 | Update library | Agent. Asks when a datasheet withholds the pinout |
-| 4 | Update schematic | Agent |
-| 5 | Update board | Agent |
-| 6 | RF-sim export | Agent |
-| 7 | Source | Agent |
+- Every stage runs as an agent — holding its own context and reporting at
+  the end.
 
 ## 5 — Skills
 
@@ -373,8 +359,7 @@ Three steps, in this order — T4.2.
 - `board-build-tool.md` — the only document at the top level
 - `tools/` — one `<skill>.md` and its script, per skill
 - `.claude-plugin/` — `plugin.json`, `marketplace.json`
-- `commands/` — one per interactive stage, section 4.5
-- `agents/` — one per batch stage, section 4.5
+- `agents/` — one per stage, section 4.5
 - `skills/` — skills they load
 
 ## 6 — Installation
@@ -388,9 +373,8 @@ Three steps, in this order — T4.2.
 |---|---|---|
 | 1 | `.claude-plugin/plugin.json` | The plugin manifest |
 | 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
-| 3 | `commands/<stage>.md` | One command per interactive stage |
-| 4 | `agents/<stage>.md` | One agent per batch stage |
-| 5 | `skills/<name>/SKILL.md` | Skills the commands and agents load |
+| 3 | `agents/<stage>.md` | One agent per stage |
+| 4 | `skills/<name>/SKILL.md` | Skills the agents load |
 
 - A fresh clone installs it once:
 
