@@ -289,6 +289,12 @@
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
+- Update library — symbols: `copy-kicad-part` is primary.
+- On miss it returns `null` — the stage reports and stops.
+- Secondary — only on the User's word:
+  - User assist — manual
+  - `symbol-draw` — automatic
+
 ### 4.2 — Init
 
 Three steps, in this order — T4.2.
