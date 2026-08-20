@@ -8,8 +8,13 @@ before any process. It is outside the chain — see T3.1.
 | `board-build-tool.md` — T1.2, T1.3 | `board.db` — `parts_table`, `ref_table`, `mpn_table`, `aml_table`, `offer_table` |
 
 ```
-python3 tools/board-build/tools/db-init.py <board-dir>
+python3 tools/board-build/tools/db-init.py <board-dir> [--scorch]
 ```
+
+`--scorch` empties the board directory before the database is made. Every
+file in it is made by a tool, so a full init deletes all of them and starts
+from nothing — the init state of T3.1. `.gitkeep` is left, so the directory
+survives a clone. Without the flag nothing is removed.
 
 `<board-dir>` is the KiCad project directory. `board.db` is written there,
 beside the design files.

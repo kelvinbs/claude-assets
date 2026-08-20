@@ -4,13 +4,14 @@
 The schema is T1.2 and T1.3 of board-build-tool.md and nothing else. The
 script is the one place it is written down in executable form.
 
-    python3 tools/board-build/tools/db-init.py <board-dir>
+    python3 tools/board-build/tools/db-init.py <board-dir> [--scorch]
 
 It adds what is missing and leaves what is there. An existing table whose
 columns do not match the schema stops the run and is named. Nothing is
 dropped, altered or emptied, ever.
 """
 
+import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -143,12 +144,31 @@ def init_file(path, tables):
     return made_file, report
 
 
+def scorch(board):
+    """Empty the board directory. Every file in it is made by a tool."""
+    removed = 0
+    for child in sorted(board.iterdir()):
+        if child.name == ".gitkeep":
+            continue
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
+        removed += 1
+    print(f"{board}  scorched, {removed} removed")
+
+
 def main(argv):
-    if len(argv) != 2:
-        raise Bad("usage: db-init.py <board-dir>")
-    board = Path(argv[1])
+    args = argv[1:]
+    burn = "--scorch" in args
+    args = [a for a in args if a != "--scorch"]
+    if len(args) != 1:
+        raise Bad("usage: db-init.py <board-dir> [--scorch]")
+    board = Path(args[0])
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
+    if burn:
+        scorch(board)
 
     for name, tables in SCHEMA.items():
         path = board / name
