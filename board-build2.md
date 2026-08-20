@@ -7,6 +7,7 @@
 3. [Assets](#3--assets)
 4. [Processes](#4--processes)
 5. [Tools](#5--tools)
+6. [Installation](#6--installation)
 
 ## 1 — Introduction
 
@@ -28,7 +29,7 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the process steps using ten sub-tools — T18.
+- The LLM performs the process steps using ten sub-tools — T17.
 - The sub-tool list is immutable:
   - No other tool is used or defined
   - No edit to the list is permitted
@@ -38,7 +39,7 @@
 
 - The structure — enforced and immutable:
   - The six processes — T14
-  - The ten sub-tools — T18
+  - The ten sub-tools — T17
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T9
 - The tool is stateless.
@@ -418,26 +419,6 @@ From the init state, three steps, in this order — T15.
 | 5 | 5 — Output | Agent |
 | 6 | 6 — Source | Agent |
 
-- Claude Code reads its assets from fixed paths — the folder is carried as a
-  plugin and its files stay tool assets — T17.
-
-**T17 — Plugin paths**
-
-| # | Path | Holds |
-|---|---|---|
-| 1 | `.claude-plugin/plugin.json` | The plugin manifest |
-| 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
-| 3 | `commands/<process>.md` | One command per interactive process |
-| 4 | `agents/<process>.md` | One agent per batch process |
-| 5 | `skills/<name>/SKILL.md` | Skills the commands and agents load |
-
-- A fresh clone installs it once:
-
-```
-/plugin marketplace add ./tools/board-build
-/plugin install board-build
-```
-
 ## 5 — Tools
 
 ### 5.1 — What a tool is
@@ -453,7 +434,7 @@ From the init state, three steps, in this order — T15.
 
 There are ten.
 
-**T18 — The tools**
+**T17 — The tools**
 
 | # | Tool | Function | In | Out |
 |---|---|---|---|---|
@@ -476,3 +457,25 @@ There are ten.
 - `commands/` — one per interactive process, section 4.6
 - `agents/` — one per batch process, section 4.6
 - `skills/` — skills they load
+
+## 6 — Installation
+
+- Claude Code reads its assets from fixed paths — the folder is carried as a
+  plugin and its files stay tool assets — T18.
+
+**T18 — Plugin paths**
+
+| # | Path | Holds |
+|---|---|---|
+| 1 | `.claude-plugin/plugin.json` | The plugin manifest |
+| 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
+| 3 | `commands/<process>.md` | One command per interactive process |
+| 4 | `agents/<process>.md` | One agent per batch process |
+| 5 | `skills/<name>/SKILL.md` | Skills the commands and agents load |
+
+- A fresh clone installs it once:
+
+```
+/plugin marketplace add ./tools/board-build
+/plugin install board-build
+```
