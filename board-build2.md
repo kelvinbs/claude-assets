@@ -423,8 +423,11 @@ From the init state, three steps, in this order — T15.
 
 ### 5.1 — What a tool is
 
-- A tool is a document and a set of Python scripts.
-- The agent follows the document and calls the scripts.
+- A tool is LLM-based: defined by one document and zero or one Python
+  script.
+- The LLM follows the document and may call the script:
+  - Script — deterministic file and database work
+  - LLM — interpretation and judgment
 - Code the agent writes to cover a gap is declared — so the gap can be
   closed.
 - A process uses one or more tools; a tool serves one or more processes.
