@@ -10,7 +10,7 @@ workflow.
 There is no script. Table 3 holds the SQL; run it as it stands:
 
 ```
-sqlite3 -markdown builds/<build>/design/board.db "<statement>"
+sqlite3 -markdown <board-dir>/board.db "<statement>"
 ```
 
 No view returns `ref_table.uuid`. It is KiCad's key and carries nothing a

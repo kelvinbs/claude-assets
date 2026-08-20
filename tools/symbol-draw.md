@@ -72,7 +72,6 @@ order the pinout gives, right mirrored so the symbol reads like the package
 drawing; top and bottom run left to right at twice the pitch, clear of the
 corners, so a name reading up the body does not land on its neighbour.
 
-This is the code that drew the archived proto1 library. It is unchanged.
 
 ## Re-running
 

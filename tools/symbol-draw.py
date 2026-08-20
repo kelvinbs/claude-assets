@@ -16,8 +16,6 @@ page. A part on no page is not on a sheet and has no symbol.
 The library is merged, never rewritten: a symbol already in it is left alone
 unless `--redraw` names it, because it may have been corrected by hand.
 
-The drawing code is `build-sch.py` of proto1, which drew the archived
-library.
 """
 
 import argparse
