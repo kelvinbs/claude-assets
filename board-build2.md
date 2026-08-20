@@ -5,7 +5,7 @@
 1. [Introduction](#1--introduction)
 2. [Data](#2--data)
 3. [Assets](#3--assets)
-4. [Stages](#4--stages)
+4. [The pipeline](#4--the-pipeline)
 5. [Skills](#5--skills)
 6. [Installation](#6--installation)
 
@@ -272,11 +272,11 @@
   point.
 - The check runs against a fresh clone, and fails on any of the above.
 
-## 4 — Stages
+## 4 — The pipeline
 
-### 4.1 — The pipeline
+### 4.1 — The stages
 
-**T4.1 — The pipeline**
+**T4.1 — The stages**
 
 | # | Stage | Skills | User then |
 |---|---|---|---|
