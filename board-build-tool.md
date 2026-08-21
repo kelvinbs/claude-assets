@@ -299,6 +299,7 @@ Three steps, in this order — T4.2.
 | 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
 - Steps 1 and 3 are Init; step 2 is Update parts.
+- Project filenames take the board folder name.
 - After them the board directory holds the record and an empty project —
   Update library has somewhere to put a symbol.
 
