@@ -16,7 +16,7 @@ back; run alone it prints the pins. The pins belong in the symbol, and a
 second copy of them beside the symbol is a second thing to keep true.
 
 `--all` is every part whose `symbol` is null — the parts process 2 exists to
-serve, per T3.2.
+serve, per T2.2.
 
 ## There is no parser
 
@@ -43,7 +43,7 @@ to come out identical twice. Run one IPN alone to see why one part fails.
 ## Which part number
 
 The blank-rank row of `aml_table` — the MPN the board was designed against,
-per T1.3. The alternatives take the board as designed, so they take its
+per T2.6. The alternatives take the board as designed, so they take its
 symbol, and no pinout is read for them.
 
 ## Finding the datasheet

@@ -117,18 +117,18 @@ class Bad(SystemExit):
 def connect(board):
     path = Path(board) / "board.db"
     if not path.exists():
-        raise Bad(f"{path} does not exist. Run db-init first")
+        raise Bad(f"{path} does not exist. Run init-pipeline first")
     con = sqlite3.connect(path)
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
     if not {"parts_table", "aml_table", "mpn_table"} <= have:
-        raise Bad(f"{path} is missing a table. Run db-init")
+        raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
 
 def designed_mpn(con, ipn):
-    """The MPN the board was designed against — the blank-rank row of T1.3.
+    """The MPN the board was designed against — the blank-rank row of T2.6.
     A pinout is read for that one part, not for the alternatives, which take
     the board as designed and so take its symbol too."""
     rows = con.execute(
