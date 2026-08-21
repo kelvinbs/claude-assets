@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """table-write — create or modify a part.
 
-The tool of process 1. It writes the part, its instances, and the approval
-that says which manufacturer part may be built against it. The library
-fields of `parts_table` belong to process 2, which copies each object into
-`lib/` before naming it.
+The skill of Update parts. It writes the part, its instances, and the
+approval that says which manufacturer part may be built against it. The
+library fields of `parts_table` belong to Update library, which copies each
+object into `lib/` before naming it. Parenthood is a property of use:
+`parent` sits on `ref_table` and names the parent instance — T2.4, T2.9.
 
-    table-write.py <board-dir> add   --class A --description "..." [options]
-    table-write.py <board-dir> set   <ipn> [--field value ...]
-    table-write.py <board-dir> place <ipn> --count N [--page P] [--room R]
-    table-write.py <board-dir> mpn   <ipn> <mpn> [--rank N] [--note ...]
-    table-write.py <board-dir> drop  <ref>
-    table-write.py <board-dir> show  [<ipn>]
+    table-write.py <board-dir> add    --class A --description "..." [options]
+    table-write.py <board-dir> set    <ipn> [--field value ...]
+    table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
+    table-write.py <board-dir> parent <ref> --under <ref> | --none
+    table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
+    table-write.py <board-dir> drop   <ref>
+    table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
 by naming its reference, one at a time.
@@ -24,7 +26,7 @@ import sys
 import uuid
 from pathlib import Path
 
-# T1.2 — the part classes, and the reference-designator prefix each
+# T2.10 — the part classes, and the reference-designator prefix each
 # annotates under
 CLASSES = {
     "A": ("amplifier", "U"),
@@ -49,9 +51,9 @@ CLASSES = {
 IPN = re.compile(r"^([A-Z])(\d{4})$")
 REF = re.compile(r"^([A-Z]+)(\d+)$")
 
-# process 1 writes the part. The library objects are process 2's, written by
-# symbol-draw and footprint-draw once the object is copied into lib/
-FIELDS = ("description", "parent", "note")
+# Update parts writes the part. The library objects are Update library's,
+# written by symbol-draw and footprint-draw once copied into lib/
+FIELDS = ("description", "note")
 
 
 class Bad(SystemExit):
@@ -63,13 +65,13 @@ def connect(board, name="board.db",
             need=("parts_table", "ref_table", "aml_table", "mpn_table")):
     path = Path(board) / name
     if not path.exists():
-        raise Bad(f"{path} does not exist. Run db-init first")
+        raise Bad(f"{path} does not exist. Run init-pipeline first")
     con = sqlite3.connect(path)
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
     if not set(need) <= have:
-        raise Bad(f"{path} is missing a table. Run db-init")
+        raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
 
@@ -106,16 +108,13 @@ def part(con, ipn):
     return dict(zip(("ipn",) + FIELDS, row))
 
 
-def guard_parent(con, ipn, parent):
-    if parent is None:
-        return
-    if not IPN.match(parent):
-        raise Bad(f"'{parent}' is not an IPN")
-    if parent == ipn:
-        raise Bad(f"{ipn} cannot be its own parent")
-    if con.execute("select 1 from parts_table where ipn = ?",
-                   (parent,)).fetchone() is None:
-        raise Bad(f"parent {parent} is not in parts_table")
+def parent_uuid(con, ref):
+    """Resolve a reference to its instance uuid."""
+    row = con.execute("select uuid from ref_table where ref = ?",
+                      (ref,)).fetchone()
+    if row is None:
+        raise Bad(f"parent {ref} names no instance")
+    return row[0]
 
 
 def check(field, value):
@@ -138,8 +137,7 @@ def add(con, args):
     ipn = next_ipn(con, letter)
     values = {f: check(f, getattr(args, f, None)) for f in FIELDS}
     values["description"] = args.description
-
-    guard_parent(con, ipn, values["parent"])
+    under = parent_uuid(con, args.parent) if args.parent else None
 
     con.execute(
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
@@ -149,8 +147,9 @@ def add(con, args):
 
     for _ in range(args.count):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?)",
-                    (str(uuid.uuid4()), ipn, ref, args.page, args.room))
+        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), ipn, under, ref, args.page,
+                     args.room))
         print(f"    {ref}  {args.page or '—'}")
     con.commit()
 
@@ -164,7 +163,6 @@ def setf(con, args):
             changes[f] = check(f, v)
     if not changes:
         raise Bad("no field given")
-    guard_parent(con, args.ipn, changes.get("parent"))
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()
@@ -180,10 +178,12 @@ def place(con, args):
     if args.count < have:
         raise Bad(f"{args.ipn} has {have} instances. This tool does not "
                   f"remove them — name the reference with drop")
+    under = parent_uuid(con, args.parent) if args.parent else None
     for _ in range(args.count - have):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?)",
-                    (str(uuid.uuid4()), args.ipn, ref, args.page, args.room))
+        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+                    (str(uuid.uuid4()), args.ipn, under, ref, args.page,
+                     args.room))
         print(f"{args.ipn}  {ref}  {args.page or '—'}")
     if args.page or args.room:
         sets, vals = [], []
@@ -195,6 +195,39 @@ def place(con, args):
                     tuple(vals) + (args.ipn,))
     con.commit()
     print(f"{args.ipn}  {max(args.count, have)} instances")
+
+
+def reparent(con, args):
+    row = con.execute("select uuid, parent from ref_table where ref = ?",
+                      (args.ref,)).fetchone()
+    if row is None:
+        raise Bad(f"{args.ref} is not in ref_table")
+    child, was = row
+    if args.none:
+        new = None
+    else:
+        if not args.under:
+            raise Bad("give --under <ref> or --none")
+        new = parent_uuid(con, args.under)
+        walk = new
+        while walk is not None:
+            if walk == child:
+                raise Bad(f"{args.ref} under {args.under} closes a loop")
+            walk = con.execute("select parent from ref_table where uuid = ?",
+                               (walk,)).fetchone()[0]
+    con.execute("update ref_table set parent = ? where uuid = ?",
+                (new, child))
+    con.commit()
+    print(f"{args.ref}  parent {ref_of(con, was) or '—'} -> "
+          f"{args.under if new else '—'}")
+
+
+def ref_of(con, u):
+    if u is None:
+        return None
+    row = con.execute("select ref from ref_table where uuid = ?",
+                      (u,)).fetchone()
+    return row[0] if row else None
 
 
 def drop(con, args):
@@ -241,21 +274,25 @@ def mpn(con, args):
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
-        f"select ipn, description, parent, source, symbol, footprint"
+        f"select ipn, description, source, symbol, footprint"
         f" from parts_table {where} order by ipn", vals).fetchall()
     if not rows:
         raise Bad("nothing to show")
-    for ipn, desc, parent, source, sym, fp in rows:
-        refs = [r[0] for r in con.execute(
-            "select ref from ref_table where ipn = ? order by ref", (ipn,))]
-        print(f"{ipn}  {CLASSES[ipn[0]][0]:12s} {(desc or '')[:52]}"
-              + (f"   parent {parent}" if parent else ""))
+    for ipn, desc, source, sym, fp in rows:
+        refs = []
+        for ref, par in con.execute(
+                "select ref, parent from ref_table where ipn = ?"
+                " order by ref", (ipn,)):
+            up = ref_of(con, par)
+            refs.append(f"{ref}<{up}" if up else ref)
+        print(f"{ipn}  {CLASSES[ipn[0]][0]:12s} {(desc or '')[:52]}")
         print(f"    refs: {' '.join(refs) or '—'}")
         if args.ipn:
             print(f"    source: {source or '—'}  symbol: {sym or '—'}"
                   f"  footprint: {fp or '—'}")
             kids = [r[0] for r in con.execute(
-                "select ipn from parts_table where parent = ? order by ipn",
+                "select r2.ref from ref_table r2 join ref_table r1"
+                " on r2.parent = r1.uuid where r1.ipn = ? order by r2.ref",
                 (ipn,))]
             if kids:
                 print(f"    children: {' '.join(kids)}")
@@ -283,6 +320,7 @@ def main(argv):
                    help="instances to create. Default 1")
     a.add_argument("--page")
     a.add_argument("--room")
+    a.add_argument("--parent", help="reference of the parent instance")
     fields(a)
     a.set_defaults(run=add)
 
@@ -296,7 +334,14 @@ def main(argv):
     p.add_argument("--count", type=int, required=True)
     p.add_argument("--page")
     p.add_argument("--room")
+    p.add_argument("--parent", help="reference of the parent instance")
     p.set_defaults(run=place)
+
+    r = sub.add_parser("parent", help="set one instance's parent")
+    r.add_argument("ref")
+    r.add_argument("--under", help="reference of the parent instance")
+    r.add_argument("--none", action="store_true", help="clear the parent")
+    r.set_defaults(run=reparent)
 
     m = sub.add_parser("mpn", help="approve a manufacturer part against an IPN")
     m.add_argument("ipn")
