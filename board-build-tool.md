@@ -92,11 +92,10 @@
 |---|---|---|---|---|
 | 1 | `ipn` | TEXT | Key | |
 | 2 | `description` | TEXT | | Yes |
-| 3 | `parent` | TEXT | | Yes |
-| 4 | `symbol` | TEXT | | Yes |
-| 5 | `footprint` | TEXT | | Yes |
-| 6 | `source` | TEXT | | Yes |
-| 7 | `note` | TEXT | | Yes |
+| 3 | `symbol` | TEXT | | Yes |
+| 4 | `footprint` | TEXT | | Yes |
+| 5 | `source` | TEXT | | Yes |
+| 6 | `note` | TEXT | | Yes |
 
 **T2.4 — `ref_table`**
 
@@ -104,9 +103,10 @@
 |---|---|---|---|---|
 | 1 | `uuid` | TEXT | Key | |
 | 2 | `ipn` | TEXT | | |
-| 3 | `ref` | TEXT | | Yes |
-| 4 | `page` | TEXT | | Yes |
-| 5 | `room` | TEXT | | Yes |
+| 3 | `parent` | TEXT | | Yes |
+| 4 | `ref` | TEXT | | Yes |
+| 5 | `page` | TEXT | | Yes |
+| 6 | `room` | TEXT | | Yes |
 
 **T2.5 — `source` letters**
 
@@ -158,7 +158,7 @@
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 2 | `parts_table.parent` | `parts_table.ipn` | Many-to-one, self | Set null |
+| 2 | `ref_table.parent` | `parts_table.ipn` | Many-to-one | Set null |
 | 3 | `aml_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 4 | `aml_table.mpn` | `mpn_table.mpn` | Many-to-one | Restrict |
 | 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |
