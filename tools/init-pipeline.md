@@ -17,7 +17,8 @@ file in it is made by the pipeline, so a full init deletes all of them and
 starts from nothing. `.gitkeep` is left, so the directory survives a clone.
 Without the flag nothing is removed.
 
-`<board-dir>` is the KiCad project directory. `board.db` is written there,
+`<board-dir>` is the design folder — `<project>/design/` (T3.1). It must
+be named `design`; anything else is refused. `board.db` is written there,
 beside the design files.
 
 ## The schema
@@ -70,9 +71,10 @@ migration, and it is hand work.
 
 ## The KiCad project
 
-The project folder names the project: at first init its own folder name is
-stored in `project_table`, master thereafter — the tools read it, never
-derive it again. The name changes only by editing the table. It writes the project file,
+The project root names the project: at first init the parent of `design/`
+gives the name, stored in `project_table`, master thereafter — the tools
+read it, never derive it again. The name changes only by editing the
+table. It writes the project file,
 the root sheet, the empty board, the empty symbol library, and the `sym-lib-table` entry
 that resolves it — section 3.2 satisfied: the table sits in the project
 directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the

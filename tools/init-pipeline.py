@@ -4,9 +4,10 @@
 The schema is T2.3 through T2.8 of board-build-tool.md and nothing else.
 The script is the one place it is written down in executable form. The
 KiCad side satisfies section 3.2: every path `${KIPRJMOD}`-relative, the
-nickname the project's own. At first init the name is the project folder's
-own name (T2.13); thereafter the database is master and the name is read,
-never derived. Project filenames take the project name.
+nickname the project's own. The KiCad files live in `design/` under the
+project root (T3.1); at first init the name is the root's — the parent of
+`design/` (T2.13) — and thereafter the database is master: the name is
+read, never derived. Project filenames take the project name.
 
     python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 
@@ -327,14 +328,18 @@ def main(argv):
         for table, what in report:
             print(f"    {table:12s} {what}")
 
-    # T2.13: at first init the name is the project folder's own; the
-    # database is master thereafter and the name is read, never derived.
+    # T3.1: the design folder is named `design`; T2.13: at first init the
+    # name is the project root's — the parent of `design/`. The database
+    # is master thereafter and the name is read, never derived.
+    if board.resolve().name != "design":
+        raise Bad(f"{board} is not a design folder — the KiCad files live "
+                  f"in `<project>/design/` (T3.1)")
     con = sqlite3.connect(board / "board.db")
     row = con.execute("select name from project_table").fetchone()
     if row:
         project = row[0]
     else:
-        project = board.resolve().name
+        project = board.resolve().parent.name
         if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
             con.close()
             raise Bad(f"'{project}' is not usable as a project name")
