@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """kicad-init - create the KiCad project from nothing.
 
-    kicad-init.py <board-dir> --project NAME
+    kicad-init.py <board-dir>
 
 Step 3 of the Init stage — T4.2. It makes the project file, the root
 sheet, the empty symbol library, and the `sym-lib-table` entry that
@@ -10,7 +10,8 @@ resolves it, so Update library has somewhere to put a symbol.
 Section 3.2 is what it satisfies: the table sits in the project directory,
 every path in it is `${KIPRJMOD}`-relative, and the nickname is the
 project's, so a fresh clone opens with nothing missing and a global entry on
-another machine cannot collide.
+another machine cannot collide. Project filenames take the board folder
+name.
 
 It adds what is missing and leaves what is there.
 """
@@ -134,9 +135,6 @@ def make_table(board, project):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
-    ap.add_argument("--project", required=True,
-                    help="the project name. It names the files and the "
-                         "library nickname")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
@@ -144,13 +142,14 @@ def main(argv):
         raise Bad(f"{board} is not a directory")
     if not (board / "board.db").exists():
         raise Bad(f"{board} has no board.db — run init-pipeline first")
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", args.project):
-        raise Bad(f"'{args.project}' is not usable as a project name")
+    project = board.resolve().name
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
+        raise Bad(f"'{project}' is not usable as a project name")
 
-    for path, made in (make_project(board, args.project),
-                       make_sheet(board, args.project),
-                       make_library(board, args.project),
-                       make_table(board, args.project)):
+    for path, made in (make_project(board, project),
+                       make_sheet(board, project),
+                       make_library(board, project),
+                       make_table(board, project)):
         print(f"{path}  {'written' if made else 'already there'}")
     return 0
 

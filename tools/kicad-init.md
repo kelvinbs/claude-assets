@@ -8,7 +8,7 @@ Create the KiCad project from nothing. Step 3 of the Init stage — T4.2 of
 | `board.db` — presence only; the record precedes the project | `<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
-python3 tools/board-build/tools/kicad-init.py <board-dir> --project NAME
+python3 tools/board-build/tools/kicad-init.py <board-dir>
 ```
 
 It runs on a board directory holding `board.db` and leaves an empty
@@ -16,9 +16,8 @@ project: a project file KiCad opens, an empty root sheet, a symbol library
 with no symbols in it, and the table entry that resolves that library.
 Update library — symbols then has somewhere to put a symbol.
 
-`--project` names the files and the library nickname. It is required — a
-project name guessed from a directory name is how two projects end up
-sharing a nickname.
+Project filenames take the board folder name — the folder names the files
+and the library nickname.
 
 ## What it satisfies
 
