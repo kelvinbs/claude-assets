@@ -6,7 +6,7 @@ else.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
+| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
 python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
@@ -22,7 +22,8 @@ beside the design files.
 
 ## The schema
 
-Five tables in one file, and their columns are T2.3 through T2.8 of
+Six tables in one file, and their columns are T2.3 through T2.8 and
+T2.13 of
 `board-build-tool.md`.
 `tools/init-pipeline.py` holds them in executable form and is the only
 place they are written as DDL. A column added to those tables is added
@@ -69,7 +70,9 @@ migration, and it is hand work.
 
 ## The KiCad project
 
-Project filenames take the board folder name. It writes the project file,
+Project filenames take the project name — `project_table`, seeded once
+at first init from an existing `*.kicad_pro` or the board folder, master
+thereafter. It writes the project file,
 the root sheet, the empty board, the empty symbol library, and the `sym-lib-table` entry
 that resolves it — section 3.2 satisfied: the table sits in the project
 directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the

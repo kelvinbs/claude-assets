@@ -39,6 +39,10 @@ SCHEMA = {
     # one file. A foreign key cannot cross two, and the split enforced
     # nothing. Order matters — a table is created after the one it references
     "board.db": {
+        # T2.13 — one row, the project name. Seeded once; master thereafter
+        "project_table": (
+            "name          TEXT PRIMARY KEY NOT NULL",
+        ),
         "parts_table": (
             "ipn           TEXT PRIMARY KEY NOT NULL",
             "description   TEXT",
@@ -321,10 +325,19 @@ def main(argv):
         for table, what in report:
             print(f"    {table:12s} {what}")
 
-    # re-entry, section 4.3: a project already named keeps its name.
-    # Otherwise the board folder names it.
-    have = sorted(board.glob("*.kicad_pro"))
-    project = have[0].stem if have else board.resolve().name
+    # T2.13: the database is master for the name. Seed once on first
+    # init — re-entry (4.3) keeps an already-named project's name, else
+    # the board folder names it.
+    con = sqlite3.connect(board / "board.db")
+    row = con.execute("select name from project_table").fetchone()
+    if row:
+        project = row[0]
+    else:
+        have = sorted(board.glob("*.kicad_pro"))
+        project = have[0].stem if have else board.resolve().name
+        con.execute("insert into project_table (name) values (?)", (project,))
+        con.commit()
+    con.close()
     if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
         raise Bad(f"'{project}' is not usable as a project name")
     for path, made in (make_project(board, project),
