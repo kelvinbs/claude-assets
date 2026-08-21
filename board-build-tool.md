@@ -238,8 +238,9 @@
 |---|---|---|---|---|
 | 1 | `name` | TEXT | Key | |
 
-- One row, written at first init from the project folder name; thereafter
-  the database is master and the tools read it, never derive it.
+- One row, written at first init from the project folder name — the
+  parent of `design/`; thereafter the database is master and the tools
+  read it, never derive it.
 
 ## 3 — The project folder
 
@@ -250,12 +251,13 @@
 | # | Path | Holds |
 |---|---|---|
 | 1 | `<project>/` | the root. Its name is the project name |
-| 2 | `board.db` | the record |
-| 3 | `<project>.kicad_pro`, `<project>.kicad_sch`, `<project>.kicad_pcb` | the KiCad project |
-| 4 | `sym-lib-table`, `fp-lib-table` | library resolution, committed |
-| 5 | `lib/` | symbols, footprints, `3d/` models |
-| 6 | `datasheets/` | manufacturer datasheets |
-| 7 | `out/` | generated exports |
+| 2 | `design/` | the design folder — everything below lives in it |
+| 3 | `design/board.db` | the record |
+| 4 | `design/<project>.kicad_pro`, `design/<project>.kicad_sch`, `design/<project>.kicad_pcb` | the KiCad project |
+| 5 | `design/sym-lib-table`, `design/fp-lib-table` | library resolution, committed |
+| 6 | `design/lib/` | symbols, footprints, `3d/` models |
+| 7 | `design/datasheets/` | manufacturer datasheets |
+| 8 | `design/out/` | generated exports |
 
 ### 3.2 — Assets
 
@@ -325,7 +327,9 @@ One skill, one run — T4.2.
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
 - The project folder names the project — its name is stored at first
-  init (T2.13) and project filenames take it.
+  init (T2.13) and project filenames take it. The files live in
+  `design/`, one level below the project root, and the name is the
+  root's, never the design folder's.
 - After it the project folder holds the record and an empty project —
   Update library has somewhere to put a symbol. `table-write` then loads
   the reference in Update parts.
