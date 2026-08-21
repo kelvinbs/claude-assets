@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""db-init — create the database and its tables.
+"""init-pipeline — create the blank framework.
 
-The schema is T1.2 and T1.3 of board-build-tool.md and nothing else. The
-script is the one place it is written down in executable form.
+The schema is T2.3 through T2.8 of board-build-tool.md and nothing else.
+The script is the one place it is written down in executable form.
 
-    python3 tools/board-build/tools/db-init.py <board-dir> [--scorch]
+    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 
 It adds what is missing and leaves what is there. An existing table whose
 columns do not match the schema stops the run and is named. Nothing is
@@ -72,18 +72,9 @@ SCHEMA = {
     },
 }
 
-# an index a table needs to hold a rule its columns cannot
-INDEXES = {
-    "aml_table": (
-        "create unique index aml_one_default on aml_table(ipn)"
-        " where rank is null",
-    ),
-}
-
-
 class Bad(SystemExit):
     def __init__(self, message):
-        super().__init__(f"db-init: {message}")
+        super().__init__(f"init-pipeline: {message}")
 
 
 def columns_of(spec):
@@ -163,7 +154,7 @@ def main(argv):
     burn = "--scorch" in args
     args = [a for a in args if a != "--scorch"]
     if len(args) != 1:
-        raise Bad("usage: db-init.py <board-dir> [--scorch]")
+        raise Bad("usage: init-pipeline.py <board-dir> [--scorch]")
     board = Path(args[0])
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")

@@ -3,11 +3,11 @@
 
     kicad-init.py <board-dir> --project NAME
 
-The third step of initialisation. It makes the project file, the empty
-symbol library, and the `sym-lib-table` entry that resolves it, so process 2
-has somewhere to put a symbol.
+Step 3 of the Init stage — T4.2. It makes the project file, the root
+sheet, the empty symbol library, and the `sym-lib-table` entry that
+resolves it, so Update library has somewhere to put a symbol.
 
-Section 2 is what it satisfies: the table sits in the project directory,
+Section 3.2 is what it satisfies: the table sits in the project directory,
 every path in it is `${KIPRJMOD}`-relative, and the nickname is the
 project's, so a fresh clone opens with nothing missing and a global entry on
 another machine cannot collide.
@@ -19,7 +19,10 @@ import argparse
 import json
 import re
 import sys
+import uuid
 from pathlib import Path
+
+SCH_VERSION = 20250114
 
 SYM_LIB_VERSION = 20251024
 
@@ -66,6 +69,27 @@ def make_project(board, project):
         "sheets": [],
         "text_variables": {},
     }, indent=2) + "\n")
+    return path, True
+
+
+def make_sheet(board, project):
+    path = board / f"{project}.kicad_sch"
+    if path.exists():
+        return path, False
+    path.write_text(
+        "(kicad_sch\n"
+        f"\t(version {SCH_VERSION})\n"
+        '\t(generator "kicad-init.py")\n'
+        '\t(generator_version "10.0")\n'
+        f'\t(uuid "{uuid.uuid4()}")\n'
+        '\t(paper "A4")\n'
+        "\t(lib_symbols)\n"
+        "\t(sheet_instances\n"
+        '\t\t(path "/"\n'
+        '\t\t\t(page "1")\n'
+        "\t\t)\n"
+        "\t)\n"
+        ")\n")
     return path, True
 
 
@@ -118,10 +142,13 @@ def main(argv):
     board = Path(args.board)
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
+    if not (board / "board.db").exists():
+        raise Bad(f"{board} has no board.db — run init-pipeline first")
     if not re.fullmatch(r"[A-Za-z0-9_-]+", args.project):
         raise Bad(f"'{args.project}' is not usable as a project name")
 
     for path, made in (make_project(board, args.project),
+                       make_sheet(board, args.project),
                        make_library(board, args.project),
                        make_table(board, args.project)):
         print(f"{path}  {'written' if made else 'already there'}")

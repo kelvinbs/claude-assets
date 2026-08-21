@@ -1,18 +1,20 @@
 # kicad-init
 
-Create the KiCad project from nothing. The third step of initialisation.
+Create the KiCad project from nothing. Step 3 of the Init stage — T4.2 of
+`board-build-tool.md`.
 
 | Reads | Writes |
 |---|---|
-| nothing | `<project>.kicad_pro`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
+| `board.db` — presence only; the record precedes the project | `<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
 python3 tools/board-build/tools/kicad-init.py <board-dir> --project NAME
 ```
 
-It runs on an empty board directory and leaves an empty project: a project
-file KiCad opens, a symbol library with no symbols in it, and the table entry
-that resolves that library. Process 2 then has somewhere to put a symbol.
+It runs on a board directory holding `board.db` and leaves an empty
+project: a project file KiCad opens, an empty root sheet, a symbol library
+with no symbols in it, and the table entry that resolves that library.
+Update library — symbols then has somewhere to put a symbol.
 
 `--project` names the files and the library nickname. It is required — a
 project name guessed from a directory name is how two projects end up
@@ -20,7 +22,7 @@ sharing a nickname.
 
 ## What it satisfies
 
-Section 2. The table sits in the project directory and is committed, its one
+Section 3.2. The table sits in the project directory and is committed, its one
 path is `${KIPRJMOD}/lib/...`, and the nickname is the project's, so a global
 entry on another machine cannot collide with it. A fresh clone opens with
 nothing missing.
@@ -36,6 +38,7 @@ entry that is there is left alone.
 ## What it refuses
 
 - A board directory that does not exist
+- A board directory without `board.db` — init-pipeline runs first
 - A project name that is not letters, digits, hyphen or underscore
 - An entry that already carries this nickname and points somewhere other than
   `${KIPRJMOD}/lib/<project>.kicad_sym`. Nothing is changed, and the run names
