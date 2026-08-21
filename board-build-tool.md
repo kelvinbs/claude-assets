@@ -302,7 +302,7 @@
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read`<br>`symbol-draw` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`footprint-draw` | — |
-| 6 | Update board | `kicad-update` | Routes |
+| 6 | Update PCB | `kicad-update` | Routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
