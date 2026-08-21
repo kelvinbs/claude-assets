@@ -299,7 +299,8 @@ One skill, one run — T4.2.
 | 1 | `board.db` and its five empty tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Project filenames take the board folder name.
+- Project filenames take the build folder name. A board folder named
+  `design` belongs to its build folder.
 - After it the board directory holds the record and an empty project —
   Update library has somewhere to put a symbol. `table-write` then loads
   the reference in Update parts.
