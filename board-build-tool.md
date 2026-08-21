@@ -295,7 +295,7 @@ One skill, one run — T4.2.
 | # | Makes |
 |---|---|
 | 1 | `board.db` and its five empty tables |
-| 2 | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/<project>.kicad_sym` |
+| 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
 - Project filenames take the board folder name.
 - After it the board directory holds the record and an empty project —
@@ -345,7 +345,7 @@ One skill, one run — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
+| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
