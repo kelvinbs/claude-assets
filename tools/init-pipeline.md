@@ -9,7 +9,7 @@ else.
 | `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
-python3 tools/board-build/tools/init-pipeline.py <board-dir> [--name NAME] [--scorch]
+python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 ```
 
 `--scorch` empties the project folder before the database is made. Every
@@ -70,9 +70,9 @@ migration, and it is hand work.
 
 ## The KiCad project
 
-The User names the project: `--name`, required at first init, stored in
-`project_table`, master thereafter — the tools read it, never derive it.
-A second `--name` is refused; the name changes only by editing the table. It writes the project file,
+The project folder names the project: at first init its own folder name is
+stored in `project_table`, master thereafter — the tools read it, never
+derive it again. The name changes only by editing the table. It writes the project file,
 the root sheet, the empty board, the empty symbol library, and the `sym-lib-table` entry
 that resolves it — section 3.2 satisfied: the table sits in the project
 directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the

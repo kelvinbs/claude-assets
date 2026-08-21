@@ -4,9 +4,11 @@
 The schema is T2.3 through T2.8 of board-build-tool.md and nothing else.
 The script is the one place it is written down in executable form. The
 KiCad side satisfies section 3.2: every path `${KIPRJMOD}`-relative, the
-nickname the project's own. Project filenames take the board folder name.
+nickname the project's own. At first init the name is the project folder's
+own name (T2.13); thereafter the database is master and the name is read,
+never derived. Project filenames take the project name.
 
-    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--name NAME] [--scorch]
+    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 
 It adds what is missing and leaves what is there. An existing table whose
 columns do not match the schema stops the run and is named. Nothing is
@@ -310,17 +312,8 @@ def main(argv):
     args = argv[1:]
     burn = "--scorch" in args
     args = [a for a in args if a != "--scorch"]
-    given = None
-    if "--name" in args:
-        i = args.index("--name")
-        try:
-            given = args[i + 1]
-        except IndexError:
-            raise Bad("--name needs a value")
-        del args[i:i + 2]
     if len(args) != 1:
-        raise Bad("usage: init-pipeline.py <board-dir> [--name NAME]"
-                  " [--scorch]")
+        raise Bad("usage: init-pipeline.py <board-dir> [--scorch]")
     board = Path(args[0])
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
@@ -334,24 +327,17 @@ def main(argv):
         for table, what in report:
             print(f"    {table:12s} {what}")
 
-    # T2.13: the User names the project at first init; the database is
-    # master thereafter. Nothing is derived.
+    # T2.13: at first init the name is the project folder's own; the
+    # database is master thereafter and the name is read, never derived.
     con = sqlite3.connect(board / "board.db")
     row = con.execute("select name from project_table").fetchone()
     if row:
         project = row[0]
-        if given and given != project:
-            con.close()
-            raise Bad(f"this board is named {project}. The name is set "
-                      f"once — edit project_table to change it")
     else:
-        if not given:
+        project = board.resolve().name
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
             con.close()
-            raise Bad("a first init needs --name")
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", given):
-            con.close()
-            raise Bad(f"'{given}' is not usable as a project name")
-        project = given
+            raise Bad(f"'{project}' is not usable as a project name")
         con.execute("insert into project_table (name) values (?)", (project,))
         con.commit()
     con.close()
