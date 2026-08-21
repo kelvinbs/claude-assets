@@ -321,7 +321,10 @@ def main(argv):
         for table, what in report:
             print(f"    {table:12s} {what}")
 
-    project = board.resolve().name
+    # re-entry, section 4.3: a project already named keeps its name.
+    # Otherwise the board folder names it.
+    have = sorted(board.glob("*.kicad_pro"))
+    project = have[0].stem if have else board.resolve().name
     if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
         raise Bad(f"'{project}' is not usable as a project name")
     for path, made in (make_project(board, project),
