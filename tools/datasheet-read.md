@@ -16,7 +16,7 @@ back; run alone it prints the pins. The pins belong in the symbol, and a
 second copy of them beside the symbol is a second thing to keep true.
 
 `--all` is every part whose `symbol` is null — the parts process 2 exists to
-serve, per T3.1.
+serve, per T3.2.
 
 ## There is no parser
 
@@ -90,7 +90,7 @@ a datasheet is read once per symbol drawn and not again.
 - A part number matching none, with no `--datasheet`
 - A path in `mpn_table.datasheet` that is not on disk
 - `--all` with `--datasheet`, which names one file and so names one part
-- A board directory with no `board.db`, or one missing a table
+- A project folder with no `board.db`, or one missing a table
 
 Each exits non-zero and names what it found. With `--all`, one part failing
 does not stop the rest; the run lists them at the end and exits non-zero.

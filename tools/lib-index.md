@@ -28,7 +28,7 @@ file, so it need not be run by hand. `--force` rebuilds a current one.
 
 ## What it refuses
 
-- A board directory that does not exist
+- A project folder that does not exist
 - A `--lib` that is not a directory
 - No KiCad symbol directory found
 

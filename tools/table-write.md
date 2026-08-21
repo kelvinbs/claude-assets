@@ -116,7 +116,7 @@ into `lib/` and given the project nickname. This tool leaves them alone.
 - A reference that names no instance
 - Lowering an instance count
 - `add` with no description
-- A board directory with no `board.db`, or one missing a table
+- A project folder with no `board.db`, or one missing a table
 
 Each exits non-zero and names what it found.
 

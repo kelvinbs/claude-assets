@@ -1,7 +1,7 @@
 # init-pipeline
 
 Create the blank framework and the KiCad project — T4.2 of
-`board-build-tool.md`. Run on an empty board directory, before anything
+`board-build-tool.md`. Run on an empty project folder, before anything
 else.
 
 | Reads | Writes |
@@ -12,7 +12,7 @@ else.
 python3 tools/board-build/tools/init-pipeline.py <board-dir> [--name NAME] [--scorch]
 ```
 
-`--scorch` empties the board directory before the database is made. Every
+`--scorch` empties the project folder before the database is made. Every
 file in it is made by the pipeline, so a full init deletes all of them and
 starts from nothing. `.gitkeep` is left, so the directory survives a clone.
 Without the flag nothing is removed.

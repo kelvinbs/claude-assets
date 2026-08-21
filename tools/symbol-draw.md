@@ -92,7 +92,7 @@ have been corrected by hand in the symbol editor.
 - A symbol the named library does not hold
 - A derived symbol whose parent is missing from its own library
 - `--all` with `--from`, which names one symbol and so names one part
-- A board directory with no `board.db`, or one missing a table
+- A project folder with no `board.db`, or one missing a table
 
 Each exits non-zero and names what it found. With `--all`, one part failing
 does not stop the rest; the run lists them at the end and exits non-zero.

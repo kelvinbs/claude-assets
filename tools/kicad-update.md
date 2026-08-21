@@ -66,7 +66,7 @@ where nothing about how the part is bought can disturb it.
 
 ## Re-entry
 
-This is the tool where the re-entry rule of T3.1 earns its keep. The User's
+This is the tool where the re-entry rule of section 4.3 earns its keep. The User's
 wires are on these pages.
 
 - A page that exists is **edited, not rewritten**. New symbols are appended
@@ -88,7 +88,7 @@ A page that already exists keeps the size it has.
 
 ## What it refuses
 
-- A board directory with no `board.db`, or one missing a table
+- A project folder with no `board.db`, or one missing a table
 - No `.kicad_pro` and no `--project`
 - A `symbol` naming a library that is not this project's — section 2 does
   not allow a sheet to point outside the repository, and `symbol-draw`

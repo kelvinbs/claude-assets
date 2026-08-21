@@ -4,7 +4,7 @@
 
 1. [Introduction](#1--introduction)
 2. [Data](#2--data)
-3. [Assets](#3--assets)
+3. [The project folder](#3--the-project-folder)
 4. [The pipeline](#4--the-pipeline)
 5. [Skills](#5--skills)
 6. [Installation](#6--installation)
@@ -54,7 +54,7 @@
 ### 1.5 — How it is organized
 
 - The plugin lives in `tools/board-build/`.
-- Work files live in the board directory.
+- Work files live in the project folder.
 
 ## 2 — Data
 
@@ -238,14 +238,28 @@
 |---|---|---|---|---|
 | 1 | `name` | TEXT | Key | |
 
-- One row, written at first init from the name the User gives; thereafter
+- One row, written at first init from the project folder name; thereafter
   the database is master and the tools read it, never derive it.
 
-## 3 — Assets
+## 3 — The project folder
 
-### 3.1 — The board project
+### 3.1 — Folder structure
 
-**T3.1 — The board project**
+**T3.1 — Folder structure**
+
+| # | Path | Holds |
+|---|---|---|
+| 1 | `<project>/` | the root. Its name is the project name |
+| 2 | `board.db` | the record |
+| 3 | `<project>.kicad_pro`, `<project>.kicad_sch`, `<project>.kicad_pcb` | the KiCad project |
+| 4 | `sym-lib-table`, `fp-lib-table` | library resolution, committed |
+| 5 | `lib/` | symbols, footprints, `3d/` models |
+| 6 | `datasheets/` | manufacturer datasheets |
+| 7 | `out/` | generated exports |
+
+### 3.2 — Assets
+
+**T3.2 — Assets**
 
 | # | Asset | Owner |
 |---|---|---|
@@ -261,10 +275,10 @@
 | 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 11 | `out/` — RF-simulation file | Generated |
 
-### 3.2 — No dependencies — clone and work
+### 3.3 — No dependencies — clone and work
 
 - KiCad libraries are a source to copy from — never a reference.
-- `sym-lib-table` and `fp-lib-table` sit in the project directory and are
+- `sym-lib-table` and `fp-lib-table` sit in the project folder and are
   committed.
 - Every path in them is `${KIPRJMOD}/lib/...`.
 - Every model path in every `.kicad_mod` is `${KIPRJMOD}/lib/3d/...`.
@@ -310,9 +324,9 @@ One skill, one run — T4.2.
 | 1 | `board.db` and its six tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- The User names the project at first init; the name is stored — T2.13
-  — and project filenames take it.
-- After it the board directory holds the record and an empty project —
+- The project folder names the project — its name is stored at first
+  init (T2.13) and project filenames take it.
+- After it the project folder holds the record and an empty project —
   Update library has somewhere to put a symbol. `table-write` then loads
   the reference in Update parts.
 

@@ -62,7 +62,7 @@ it has. A run that fails either stops and says so.
 
 ## What it refuses
 
-- A board directory that does not exist, or with no `lib/<nickname>.kicad_sym`
+- A project folder that does not exist, or with no `lib/<nickname>.kicad_sym`
 - No `.kicad_pro` and no `--nickname`
 - A library the answer names that is not on disk
 - A symbol the library does not hold
