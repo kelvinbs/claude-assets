@@ -158,7 +158,7 @@
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 2 | `ref_table.parent` | `parts_table.ipn` | Many-to-one | Set null |
+| 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
 | 3 | `aml_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 4 | `aml_table.mpn` | `mpn_table.mpn` | Many-to-one | Restrict |
 | 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |

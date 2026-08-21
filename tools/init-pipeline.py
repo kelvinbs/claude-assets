@@ -34,7 +34,7 @@ SCHEMA = {
             "uuid          TEXT PRIMARY KEY NOT NULL",
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
-            "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
+            "parent        TEXT REFERENCES ref_table(uuid) ON DELETE SET NULL",
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
