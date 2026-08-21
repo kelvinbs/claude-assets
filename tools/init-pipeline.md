@@ -69,8 +69,7 @@ migration, and it is hand work.
 
 ## The KiCad project
 
-Project filenames take the build folder name — a board folder named
-`design` belongs to its build folder. It writes the project file,
+Project filenames take the board folder name. It writes the project file,
 the root sheet, the empty board, the empty symbol library, and the `sym-lib-table` entry
 that resolves it — section 3.2 satisfied: the table sits in the project
 directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the

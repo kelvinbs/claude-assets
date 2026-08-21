@@ -322,14 +322,9 @@ def main(argv):
             print(f"    {table:12s} {what}")
 
     # re-entry, section 4.3: a project already named keeps its name.
-    # Otherwise the build folder names it — a board folder named design
-    # belongs to its build folder.
+    # Otherwise the board folder names it.
     have = sorted(board.glob("*.kicad_pro"))
-    if have:
-        project = have[0].stem
-    else:
-        where = board.resolve()
-        project = where.parent.name if where.name == "design" else where.name
+    project = have[0].stem if have else board.resolve().name
     if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
         raise Bad(f"'{project}' is not usable as a project name")
     for path, made in (make_project(board, project),
