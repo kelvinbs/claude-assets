@@ -22,6 +22,7 @@ import uuid
 from pathlib import Path
 
 SCH_VERSION = 20250114
+PCB_VERSION = 20241229
 SYM_LIB_VERSION = 20251024
 
 EMPTY_LIB = (
@@ -218,6 +219,51 @@ def make_sheet(board, project):
     return path, True
 
 
+EMPTY_PCB_LAYERS = """\t(layers
+\t\t(0 "F.Cu" signal)
+\t\t(2 "B.Cu" signal)
+\t\t(9 "F.Adhes" user "F.Adhesive")
+\t\t(11 "B.Adhes" user "B.Adhesive")
+\t\t(13 "F.Paste" user)
+\t\t(15 "B.Paste" user)
+\t\t(5 "F.SilkS" user "F.Silkscreen")
+\t\t(7 "B.SilkS" user "B.Silkscreen")
+\t\t(1 "F.Mask" user)
+\t\t(3 "B.Mask" user)
+\t\t(17 "Dwgs.User" user "User.Drawings")
+\t\t(19 "Cmts.User" user "User.Comments")
+\t\t(21 "Eco1.User" user "User.Eco1")
+\t\t(23 "Eco2.User" user "User.Eco2")
+\t\t(25 "Edge.Cuts" user)
+\t\t(27 "Margin" user)
+\t\t(31 "F.CrtYd" user "F.Courtyard")
+\t\t(29 "B.CrtYd" user "B.Courtyard")
+\t\t(35 "F.Fab" user)
+\t\t(33 "B.Fab" user)
+\t)
+"""
+
+
+def make_board(board, project):
+    path = board / f"{project}.kicad_pcb"
+    if path.exists():
+        return path, False
+    path.write_text(
+        "(kicad_pcb\n"
+        f"\t(version {PCB_VERSION})\n"
+        '\t(generator "init-pipeline.py")\n'
+        '\t(generator_version "10.0")\n'
+        "\t(general\n"
+        "\t\t(thickness 1.6)\n"
+        "\t\t(legacy_teardrops no)\n"
+        "\t)\n"
+        '\t(paper "A4")\n'
+        + EMPTY_PCB_LAYERS +
+        "\t(embedded_fonts no)\n"
+        ")\n")
+    return path, True
+
+
 def make_library(board, project):
     path = board / "lib" / f"{project}.kicad_sym"
     if path.exists():
@@ -280,6 +326,7 @@ def main(argv):
         raise Bad(f"'{project}' is not usable as a project name")
     for path, made in (make_project(board, project),
                        make_sheet(board, project),
+                       make_board(board, project),
                        make_library(board, project),
                        make_table(board, project)):
         print(f"{path}  {'written' if made else 'already there'}")
