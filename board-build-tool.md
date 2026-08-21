@@ -15,14 +15,14 @@
 
 - Claude-assisted hardware design in KiCad.
 - The plugin carries:
-  - The stages that carry a board through KiCad
+  - The stages that carry a project through KiCad
   - The documents that define them
   - The scripts they call
 - Nothing specific to one product.
 
 ### 1.2 — How it is used
 
-- The board is designed by working the stages of T4.1 in order — as often as
+- The project is designed by working the stages of T4.1 in order — as often as
   needed.
 - Revision re-enters a stage.
 - The plugin is entered at whichever stage is next.
