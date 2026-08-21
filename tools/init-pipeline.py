@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""init-pipeline — create the blank framework.
+"""init-pipeline — create the blank framework and the KiCad project.
 
 The schema is T2.3 through T2.8 of board-build-tool.md and nothing else.
-The script is the one place it is written down in executable form.
+The script is the one place it is written down in executable form. The
+KiCad side satisfies section 3.2: every path `${KIPRJMOD}`-relative, the
+nickname the project's own. Project filenames take the board folder name.
 
     python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 
@@ -11,10 +13,24 @@ columns do not match the schema stops the run and is named. Nothing is
 dropped, altered or emptied, ever.
 """
 
+import json
+import re
 import shutil
 import sqlite3
 import sys
+import uuid
 from pathlib import Path
+
+SCH_VERSION = 20250114
+SYM_LIB_VERSION = 20251024
+
+EMPTY_LIB = (
+    "(kicad_symbol_lib\n"
+    f"\t(version {SYM_LIB_VERSION})\n"
+    '\t(generator "init-pipeline.py")\n'
+    '\t(generator_version "10.0")\n'
+    ")\n"
+)
 
 # ------------------------------------------------------------------ schema
 
@@ -149,6 +165,97 @@ def scorch(board):
     print(f"{board}  scorched, {removed} removed")
 
 
+def uri_of(project):
+    return f"${{KIPRJMOD}}/lib/{project}.kicad_sym"
+
+
+def entry(project):
+    return (f'\t(lib (name "{project}")(type "KiCad")'
+            f'(uri "{uri_of(project)}")(options "")'
+            f'(descr "Symbols owned by this project"))\n')
+
+
+def make_project(board, project):
+    path = board / f"{project}.kicad_pro"
+    if path.exists():
+        return path, False
+    # KiCad's own template, which is what it writes for an empty project.
+    path.write_text(json.dumps({
+        "board": {"design_settings": {"defaults": {},
+                                      "diff_pair_dimensions": [],
+                                      "drc_exclusions": [], "rules": {},
+                                      "track_widths": [],
+                                      "via_dimensions": []}},
+        "boards": [],
+        "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
+        "meta": {"filename": f"{project}.kicad_pro", "version": 1},
+        "net_settings": {"classes": [], "meta": {"version": 0}},
+        "pcbnew": {"page_layout_descr_file": ""},
+        "sheets": [],
+        "text_variables": {},
+    }, indent=2) + "\n")
+    return path, True
+
+
+def make_sheet(board, project):
+    path = board / f"{project}.kicad_sch"
+    if path.exists():
+        return path, False
+    path.write_text(
+        "(kicad_sch\n"
+        f"\t(version {SCH_VERSION})\n"
+        '\t(generator "init-pipeline.py")\n'
+        '\t(generator_version "10.0")\n'
+        f'\t(uuid "{uuid.uuid4()}")\n'
+        '\t(paper "A4")\n'
+        "\t(lib_symbols)\n"
+        "\t(sheet_instances\n"
+        '\t\t(path "/"\n'
+        '\t\t\t(page "1")\n'
+        "\t\t)\n"
+        "\t)\n"
+        ")\n")
+    return path, True
+
+
+def make_library(board, project):
+    path = board / "lib" / f"{project}.kicad_sym"
+    if path.exists():
+        return path, False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(EMPTY_LIB)
+    return path, True
+
+
+def make_table(board, project):
+    """The table is shared with every other library the project points at, so
+    it is edited in place rather than rewritten."""
+    path = board / "sym-lib-table"
+    if not path.exists():
+        path.write_text("(sym_lib_table\n\t(version 7)\n"
+                        + entry(project) + ")\n")
+        return path, True
+
+    src = path.read_text()
+    # One entry per line, which is how KiCad writes the table. The whole line
+    # is taken, because the nickname closes its own bracket long before the
+    # uri that has to be checked.
+    for line in src.splitlines():
+        if re.search(r'\(name "%s"\)' % re.escape(project), line):
+            uri = re.search(r'\(uri "([^"]*)"\)', line)
+            if not uri or uri.group(1) != uri_of(project):
+                raise Bad(f"{path}: '{project}' already points at "
+                          f"{uri.group(1) if uri else 'nothing'}, not "
+                          f"{uri_of(project)}. Nothing was changed")
+            return path, False
+
+    close = src.rstrip().rfind(")")
+    if close < 0:
+        raise Bad(f"{path} does not read as a sym_lib_table")
+    path.write_text(src[:close] + entry(project) + src[close:])
+    return path, True
+
+
 def main(argv):
     args = argv[1:]
     burn = "--scorch" in args
@@ -167,6 +274,15 @@ def main(argv):
         print(f"{path}  {'created' if made_file else 'present'}")
         for table, what in report:
             print(f"    {table:12s} {what}")
+
+    project = board.resolve().name
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
+        raise Bad(f"'{project}' is not usable as a project name")
+    for path, made in (make_project(board, project),
+                       make_sheet(board, project),
+                       make_library(board, project),
+                       make_table(board, project)):
+        print(f"{path}  {'written' if made else 'already there'}")
     return 0
 
 

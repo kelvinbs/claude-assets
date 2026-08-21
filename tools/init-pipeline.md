@@ -1,12 +1,12 @@
 # init-pipeline
 
-Create the blank framework. Step 1 of the Init stage — T4.2 of
+Create the blank framework and the KiCad project — T4.2 of
 `board-build-tool.md`. Run on an empty board directory, before anything
 else.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
+| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
 python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
@@ -66,3 +66,14 @@ a table — the new one is created and the existing ones are untouched.
 
 A column added to an existing table is not a case it handles. That is a
 migration, and it is hand work.
+
+## The KiCad project
+
+Project filenames take the board folder name. It writes the project file,
+the root sheet, the empty symbol library, and the `sym-lib-table` entry
+that resolves it — section 3.2 satisfied: the table sits in the project
+directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the
+project's, so a fresh clone opens with nothing missing.
+
+A nickname already present and pointing elsewhere stops the run and is
+named. A file that is there is left exactly as it is, symbols included.
