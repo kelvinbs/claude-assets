@@ -238,8 +238,8 @@
 |---|---|---|---|---|
 | 1 | `name` | TEXT | Key | |
 
-- One row. Init seeds it from the board folder name; thereafter the
-  database is master and the tools read it, never derive it.
+- One row, written at first init from the name the User gives; thereafter
+  the database is master and the tools read it, never derive it.
 
 ## 3 — Assets
 
@@ -310,7 +310,8 @@ One skill, one run — T4.2.
 | 1 | `board.db` and its six tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Project filenames take the project name — T2.13.
+- The User names the project at first init; the name is stored — T2.13
+  — and project filenames take it.
 - After it the board directory holds the record and an empty project —
   Update library has somewhere to put a symbol. `table-write` then loads
   the reference in Update parts.

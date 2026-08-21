@@ -6,7 +6,7 @@ The script is the one place it is written down in executable form. The
 KiCad side satisfies section 3.2: every path `${KIPRJMOD}`-relative, the
 nickname the project's own. Project filenames take the board folder name.
 
-    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
+    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--name NAME] [--scorch]
 
 It adds what is missing and leaves what is there. An existing table whose
 columns do not match the schema stops the run and is named. Nothing is
@@ -310,8 +310,17 @@ def main(argv):
     args = argv[1:]
     burn = "--scorch" in args
     args = [a for a in args if a != "--scorch"]
+    given = None
+    if "--name" in args:
+        i = args.index("--name")
+        try:
+            given = args[i + 1]
+        except IndexError:
+            raise Bad("--name needs a value")
+        del args[i:i + 2]
     if len(args) != 1:
-        raise Bad("usage: init-pipeline.py <board-dir> [--scorch]")
+        raise Bad("usage: init-pipeline.py <board-dir> [--name NAME]"
+                  " [--scorch]")
     board = Path(args[0])
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
@@ -325,21 +334,27 @@ def main(argv):
         for table, what in report:
             print(f"    {table:12s} {what}")
 
-    # T2.13: the database is master for the name. Seed once on first
-    # init — re-entry (4.3) keeps an already-named project's name, else
-    # the board folder names it.
+    # T2.13: the User names the project at first init; the database is
+    # master thereafter. Nothing is derived.
     con = sqlite3.connect(board / "board.db")
     row = con.execute("select name from project_table").fetchone()
     if row:
         project = row[0]
+        if given and given != project:
+            con.close()
+            raise Bad(f"this board is named {project}. The name is set "
+                      f"once — edit project_table to change it")
     else:
-        have = sorted(board.glob("*.kicad_pro"))
-        project = have[0].stem if have else board.resolve().name
+        if not given:
+            con.close()
+            raise Bad("a first init needs --name")
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", given):
+            con.close()
+            raise Bad(f"'{given}' is not usable as a project name")
+        project = given
         con.execute("insert into project_table (name) values (?)", (project,))
         con.commit()
     con.close()
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
-        raise Bad(f"'{project}' is not usable as a project name")
     for path, made in (make_project(board, project),
                        make_sheet(board, project),
                        make_board(board, project),
