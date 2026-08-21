@@ -44,7 +44,7 @@
 - No code or skill outside T5.1. Authoring scripts at runtime is
   prohibited.
 - ERC and DRC:
-  - The plugin never runs ERC or DRC on the design.
+  - The plugin does not run ERC or DRC on the design.
   - A possible future function sets the DRC rules themselves — board
     setup, not checking. Not built now.
 - On a failure — or when a skill does not cover the work:
