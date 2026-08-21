@@ -4,7 +4,7 @@ Index the KiCad symbol libraries. No model runs here; it is parsing.
 
 | Reads | Writes |
 |---|---|
-| the User's `.kicad_sym` files | `<board-dir>/lib/kicad-index.json` |
+| the User's `.kicad_sym` files | `<board-dir>/lib/kicad-lib-index.json` |
 
 ```
 python3 tools/board-build/tools/lib-index.py <board-dir> [--lib DIR ...] [--force]

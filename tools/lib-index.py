@@ -9,7 +9,7 @@ with the description and the keywords the library carries. No model runs
 here; it is parsing.
 
 The index is derived from the User's libraries, so it is written where those
-libraries are - `lib/kicad-index.json` in the board project, beside
+libraries are - `lib/kicad-lib-index.json` in the board project, beside
 `sym-lib-table`, which is what points at them. The tool holds no state of its
 own.
 
@@ -25,7 +25,7 @@ import sys
 import time
 from pathlib import Path
 
-INDEX = "kicad-index.json"
+INDEX = "kicad-lib-index.json"
 
 STOCK_CANDIDATES = [
     "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols",

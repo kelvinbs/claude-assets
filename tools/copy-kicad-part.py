@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """copy-kicad-part - copy KiCad symbols into the project library.
 
-    copy-kicad-part.py <board-dir> <hint> [--name NAME] [--lib DIR ...]
+    copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
     copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
 
 Give it a part number or a description, or a batch of them - a JSON list of
@@ -95,9 +95,15 @@ def heartbeat(label):
 
 # ------------------------------------------------------------ 1, the project
 
-def library_of(board):
+def library_of(board, nickname=None):
     """The project's library, found where `sym-lib-table` points, or by the
-    one `.kicad_sym` in `lib/`. The nickname is the project's, per section 2."""
+    one `.kicad_sym` in `lib/`. The nickname is the project's, per section 2.
+    `--nickname` names it directly when no `.kicad_pro` does."""
+    if nickname:
+        path = Path(board) / "lib" / f"{nickname}.kicad_sym"
+        if not path.exists():
+            raise Bad(f"no {path}. Run init-pipeline first")
+        return nickname, path
     table = Path(board) / "sym-lib-table"
     if table.exists():
         for line in table.read_text().splitlines():
@@ -110,7 +116,7 @@ def library_of(board):
     found = sorted((Path(board) / "lib").glob("*.kicad_sym"))
     if len(found) == 1:
         return found[0].stem, found[0]
-    raise Bad(f"no project library in {board}/lib. Run kicad-init first")
+    raise Bad(f"no project library in {board}/lib. Run init-pipeline first")
 
 
 # -------------------------------------------------------------- 2, the index
@@ -124,7 +130,7 @@ def index(board, extra):
     run = subprocess.run(argv, capture_output=True, text=True)
     if run.returncode != 0:
         raise Bad((run.stderr or run.stdout).strip())
-    path = Path(board) / "lib" / "kicad-index.json"
+    path = Path(board) / "lib" / "kicad-lib-index.json"
     if not path.exists():
         raise Bad(f"{path} was not written")
     return json.load(open(path))["symbols"]
@@ -412,7 +418,10 @@ def main(argv):
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("hint", nargs="?",
                     help="a part number, or a description")
-    ap.add_argument("--name", help="name the copy this. Defaults to the hint")
+    ap.add_argument("--ipn", help="name the copy this. Defaults to the hint")
+    ap.add_argument("--nickname",
+                    help="the project library's nickname, when no "
+                         ".kicad_pro names it")
     ap.add_argument("--batch",
                     help='JSON list of {"name", "hint"} - one run, one ask')
     ap.add_argument("--lib", action="append",
@@ -422,7 +431,7 @@ def main(argv):
     board = Path(args.board)
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
-    nickname, library = library_of(board)
+    nickname, library = library_of(board, args.nickname)
 
     if args.batch:
         parts = json.load(open(args.batch))
@@ -430,7 +439,7 @@ def main(argv):
             if not p.get("name") or not p.get("hint"):
                 raise Bad("--batch entries carry a name and a hint")
     elif args.hint:
-        name = args.name or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
+        name = args.ipn or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
         parts = [{"name": name, "hint": args.hint}]
     else:
         raise Bad("a hint, or --batch")

@@ -5,10 +5,11 @@ description; it writes the symbol and prints what it wrote, or `null`.
 
 | Reads | Writes |
 |---|---|
-| `lib/kicad-index.json`<br>the KiCad libraries | `lib/<nickname>.kicad_sym` |
+| `lib/kicad-lib-index.json`<br>the KiCad libraries | `lib/<nickname>.kicad_sym` |
 
 ```
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
+python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
 ```
 
 `<hint>` is a part number, a description, or both. `--ipn` names the copy;
@@ -53,7 +54,7 @@ The symbol, under the name given, into `lib/<nickname>.kicad_sym`. Its
 `footprint-draw` — and an `origin` property names the library and symbol it
 came from.
 
-`lib-init` must have made the library first.
+`init-pipeline` must have made the library first.
 
 ## What comes back is checked
 
