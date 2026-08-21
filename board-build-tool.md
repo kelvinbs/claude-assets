@@ -36,7 +36,7 @@
 - The structure — enforced and immutable:
   - The stages — T4.1
   - The nine skills — T5.1
-  - The five tables with their keys — sections 2.3 and 2.4
+  - The six tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
 - The plugin is stateless.
 - The User may add a field to any table at runtime. All other schema change
@@ -71,7 +71,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
 | 2 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
 
 - `board.db` is master and pushes to KiCad.
@@ -230,6 +230,17 @@
   re-entry, section 4.3.
 - Order within a family is defined in the skill documents.
 
+### 2.9 — The project name
+
+**T2.13 — `project_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `name` | TEXT | Key | |
+
+- One row. Init seeds it from the board folder name; thereafter the
+  database is master and the tools read it, never derive it.
+
 ## 3 — Assets
 
 ### 3.1 — The board project
@@ -296,10 +307,10 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its five empty tables |
+| 1 | `board.db` and its six tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Project filenames take the board folder name.
+- Project filenames take the project name — T2.13.
 - After it the board directory holds the record and an empty project —
   Update library has somewhere to put a symbol. `table-write` then loads
   the reference in Update parts.
