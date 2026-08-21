@@ -33,6 +33,7 @@ Keys carry the constraint the document states: `ipn` on `parts_table`,
 `mpn` + `distributor` + `break_qty` on `offer_table`.
 
 Every relation of T2.9 is declared — there are five and none is exempt.
+`parent` sits on `ref_table`: parenthood is a property of use.
 Tables are created in an order that lets a reference resolve, and
 `aml_table` carries the unique index that holds one blank rank per IPN.
 

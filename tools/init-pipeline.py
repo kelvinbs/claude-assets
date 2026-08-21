@@ -25,7 +25,6 @@ SCHEMA = {
         "parts_table": (
             "ipn           TEXT PRIMARY KEY NOT NULL",
             "description   TEXT",
-            "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
             "symbol        TEXT",
             "footprint     TEXT",
             "source        TEXT",
@@ -35,6 +34,7 @@ SCHEMA = {
             "uuid          TEXT PRIMARY KEY NOT NULL",
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
+            "parent        TEXT REFERENCES parts_table(ipn) ON DELETE SET NULL",
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
