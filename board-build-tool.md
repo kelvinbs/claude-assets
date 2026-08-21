@@ -29,13 +29,13 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the stages using the ten skills — T5.1.
+- The LLM performs the stages using the nine skills — T5.1.
 
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
   - The stages — T4.1
-  - The ten skills — T5.1
+  - The nine skills — T5.1
   - The five tables with their keys — sections 2.3 and 2.4
   - The relations — T2.9
 - The plugin is stateless.
@@ -270,7 +270,7 @@
 
 | # | Stage | Skills | User then |
 |---|---|---|---|
-| 1 | Init | `init-pipeline`<br>`kicad-init` | — |
+| 1 | `init-pipeline` | `init-pipeline` | — |
 | 2 | Update parts | `table-write` | — |
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read`<br>`symbol-draw` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
@@ -286,22 +286,21 @@
   - User assist — manual
   - `symbol-draw`, `footprint-draw` — automatic
 
-### 4.2 — Init
+### 4.2 — init-pipeline
 
-Three steps, in this order — T4.2.
+One skill, one run — T4.2.
 
-**T4.2 — Init steps**
+**T4.2 — init-pipeline makes**
 
-| # | Step | Skill | Makes |
-|---|---|---|---|
-| 1 | 1 | `init-pipeline` | `board.db` and its five empty tables |
-| 2 | 2 | `table-write` | `parts_table`, `ref_table` and `aml_table`, from the reference |
-| 3 | 3 | `kicad-init` | `*.kicad_pro`, `sym-lib-table`, `lib/<project>.kicad_sym` |
+| # | Makes |
+|---|---|
+| 1 | `board.db` and its five empty tables |
+| 2 | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
-- Steps 1 and 3 are Init; step 2 is Update parts.
 - Project filenames take the board folder name.
-- After them the board directory holds the record and an empty project —
-  Update library has somewhere to put a symbol.
+- After it the board directory holds the record and an empty project —
+  Update library has somewhere to put a symbol. `table-write` then loads
+  the reference in Update parts.
 
 ### 4.3 — Re-entry
 
@@ -346,7 +345,7 @@ Three steps, in this order — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `init-pipeline` | Create the blank framework | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db` |
+| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.6, T2.7, T2.8 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
@@ -354,8 +353,7 @@ Three steps, in this order — T4.2.
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| 9 | `kicad-init` | Create the KiCad project from nothing | `board.db` | `*.kicad_pro`, `*.kicad_sch`, `sym-lib-table`, `lib/` |
-| 10 | `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
+| 9 | `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
 
 ### 5.3 — Layout
 
