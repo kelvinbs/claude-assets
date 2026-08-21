@@ -103,7 +103,7 @@ def columns_of(spec):
 INDEXES = {
     "aml_table": (
         ("aml_one_default",
-         "create unique index aml_one_default on aml_table(ipn)"
+         "create unique index if not exists aml_one_default on aml_table(ipn)"
          " where rank is null"),
     ),
 }
