@@ -276,6 +276,7 @@
 | 9 | `*.kicad_pcb` | Updated by the plugin, routed by the User |
 | 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 11 | `out/` — RF-simulation file | Generated |
+| 12 | `lib/kicad-lib-index.json` | Generated |
 
 ### 3.3 — No dependencies — clone and work
 
