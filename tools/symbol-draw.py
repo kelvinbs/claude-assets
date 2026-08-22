@@ -25,6 +25,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -48,13 +49,13 @@ class Bad(SystemExit):
 def connect(board):
     path = Path(board) / "board.db"
     if not path.exists():
-        raise Bad(f"{path} does not exist. Run db-init first")
+        raise Bad(f"{path} does not exist. Run init-pipeline first")
     con = sqlite3.connect(path)
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
     if not {"parts_table", "ref_table", "aml_table", "mpn_table"} <= have:
-        raise Bad(f"{path} is missing a table. Run db-init")
+        raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
 
@@ -117,7 +118,7 @@ def library_of(board):
     found = sorted((Path(board) / "lib").glob("*.kicad_sym"))
     if len(found) == 1:
         return found[0].stem, found[0]
-    raise Bad(f"no project library in {board}/lib. Run kicad-init first")
+    raise Bad(f"no project library in {board}/lib. Run init-pipeline first")
 
 
 def held(library, name):
@@ -301,16 +302,18 @@ def try_copy(board, ipn, hint, extra):
     """`copy-kicad-part`, run as a command. Returns the library id it wrote,
     or None."""
     argv = [sys.executable, str(HERE / "copy-kicad-part.py"), str(board),
-            hint, "--name", ipn]
+            hint, "--ipn", ipn]
     for folder in extra or []:
         argv += ["--lib", folder]
     run = subprocess.run(argv, capture_output=True, text=True)
     if run.returncode != 0:
         raise Bad((run.stderr or run.stdout).strip())
-    first = (run.stdout.strip().splitlines() or ["null"])[0]
-    if first.startswith("null"):
+    # copy-kicad-part prints `<name>  <library:id>` or `<name>  null`
+    first = (run.stdout.strip().splitlines() or ["x null"])[0]
+    tokens = first.split()
+    if len(tokens) < 2 or tokens[1] == "null":
         return None
-    return first.split()[0]
+    return tokens[1]
 
 
 def try_read(board, ipn, extra):
@@ -404,14 +407,51 @@ def main(argv):
                 return 0
 
         failed = []
-        for ipn in targets:
-            try:
-                one(con, board, ipn, nickname, library, args)
-            except Bad as exc:
-                if len(targets) == 1:
-                    raise
-                print(str(exc))
-                failed.append(ipn)
+        if args.all and len(targets) > 1:
+            # n5.17: the parts share nothing - a batch of worker
+            # subprocesses, each part's output printed whole as it lands,
+            # with a progress line: timestamp, x of y, elapsed, remaining,
+            # ETA.
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from datetime import datetime, timedelta
+
+            def run_one(ipn):
+                argv = [sys.executable, __file__, str(board), ipn]
+                if args.redraw:
+                    argv.append("--redraw")
+                for folder in args.lib or []:
+                    argv += ["--lib", folder]
+                return ipn, subprocess.run(argv, capture_output=True,
+                                           text=True)
+
+            start = time.time()
+            done = 0
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                futures = [pool.submit(run_one, ipn) for ipn in targets]
+                for future in as_completed(futures):
+                    ipn, run = future.result()
+                    done += 1
+                    sys.stdout.write(run.stdout)
+                    if run.returncode != 0:
+                        sys.stdout.write(run.stderr)
+                        failed.append(ipn)
+                    elapsed = time.time() - start
+                    remaining = (len(targets) - done) * elapsed / done
+                    eta = datetime.now() + timedelta(seconds=remaining)
+                    print(f"{datetime.now():%H:%M:%S}  {done} of "
+                          f"{len(targets)}  elapsed {elapsed:.0f}s  "
+                          f"remaining ~{remaining:.0f}s  ETA {eta:%H:%M:%S}",
+                          flush=True)
+            failed.sort()
+        else:
+            for ipn in targets:
+                try:
+                    one(con, board, ipn, nickname, library, args)
+                except Bad as exc:
+                    if len(targets) == 1:
+                        raise
+                    print(str(exc))
+                    failed.append(ipn)
     finally:
         con.close()
 

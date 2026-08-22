@@ -15,7 +15,7 @@ python3 tools/board-build/tools/symbol-draw.py <board-dir> --all
 `--all` is every part whose `symbol` is null **and** whose instances put it
 on a page. A part on no page is not on a sheet and has no symbol — a bare
 board, an enclosure, a host the board plugs into. The run names them and
-leaves them. `sheet-place` reads a blank page the same way.
+leaves them. `kicad-update` reads a blank page the same way.
 
 ## The order of the resorts
 
@@ -31,7 +31,7 @@ nickname is in the KiCad symbol directory, otherwise a path to a
 `.kicad_sym` on disk. `KICAD_SYMBOL_DIR` overrides where the stock libraries
 are looked for.
 
-A KiCad library is an input, per T1.2. The symbol is copied into `lib/` and
+A KiCad library is an input, per T5.1. The symbol is copied into `lib/` and
 owned from that point — section 2 requires every object to resolve inside the
 repository, so nothing is left pointing at a library that only exists on this
 machine. A derived symbol has its parent's graphics folded in on the way, for
@@ -45,8 +45,8 @@ The symbol is named for the IPN, and `parts_table.symbol` becomes
 
 | Property | Takes |
 |---|---|
-| `Reference` | the reference prefix of the part's class, T1.2 |
-| `Value` | the IPN. `sheet-place` decides what an instance shows |
+| `Reference` | the reference prefix of the part's class, T2.10 |
+| `Value` | the IPN. `kicad-update` decides what an instance shows |
 | `Description` | `parts_table.description` |
 | `Datasheet` | `mpn_table.datasheet` of the blank-rank MPN |
 | `Footprint` | left empty. `footprint-draw` owns it |
@@ -56,7 +56,7 @@ once, rather than repeated here.
 
 ## source
 
-`source` is two letters, symbol then footprint, per T1.2. This tool writes
+`source` is two letters, symbol then footprint, per T2.5. This tool writes
 the first and leaves the second as it found it.
 
 | Letter | When |
@@ -72,6 +72,12 @@ order the pinout gives, right mirrored so the symbol reads like the package
 drawing; top and bottom run left to right at twice the pitch, clear of the
 corners, so a name reading up the body does not land on its neighbour.
 
+
+## Batch
+
+`--all` runs the parts as a batch of worker subprocesses (n5.17 — the
+parts share nothing), printing each part's output whole as it lands with
+a progress line: timestamp, x of y, elapsed, remaining, ETA.
 
 ## Re-running
 
