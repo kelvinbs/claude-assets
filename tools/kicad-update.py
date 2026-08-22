@@ -451,7 +451,16 @@ def main(argv):
 
     blocks = library_blocks(board, project, {r["symbol"] for r in drawable})
     pages = sorted({r["page"] for r in drawable})
-    root = uid(project, "root")
+    # n8.4: instance paths are rooted at the ROOT SHEET'S OWN uuid -
+    # init-pipeline wrote it. Inventing one makes KiCad repair every
+    # path on load.
+    root_path = board / f"{project}.kicad_sch"
+    if not root_path.exists():
+        raise Bad(f"{root_path} does not exist. Run init-pipeline first")
+    found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', root_path.read_text())
+    if not found:
+        raise Bad(f"{root_path} carries no uuid")
+    root = found.group(1)
 
     def normalize(path):
         """n8.2 - the sheet must load with no dialogs. KiCad's own writer
