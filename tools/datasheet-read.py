@@ -471,15 +471,50 @@ def main(argv):
                 return 0
 
         failed = []
-        for ipn in targets:
-            try:
-                if not one(con, board, ipn, args):
+        if args.all and len(targets) > 1:
+            # n5.17: the reads share nothing - run them as a batch of
+            # worker subprocesses, print each part's output whole as it
+            # lands, with a progress line: timestamp, x of y, elapsed,
+            # remaining, ETA.
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from datetime import datetime, timedelta
+
+            def run_one(ipn):
+                argv = [sys.executable, __file__, str(board), ipn]
+                if args.datasheets:
+                    argv += ["--datasheets", args.datasheets]
+                return ipn, subprocess.run(argv, capture_output=True,
+                                           text=True, timeout=TIMEOUT)
+
+            start = time.time()
+            done = 0
+            with ThreadPoolExecutor(max_workers=6) as pool:
+                futures = [pool.submit(run_one, ipn) for ipn in targets]
+                for future in as_completed(futures):
+                    ipn, run = future.result()
+                    done += 1
+                    sys.stdout.write(run.stdout)
+                    if run.returncode != 0:
+                        sys.stdout.write(run.stderr)
+                        failed.append(ipn)
+                    elapsed = time.time() - start
+                    remaining = (len(targets) - done) * elapsed / done
+                    eta = datetime.now() + timedelta(seconds=remaining)
+                    print(f"{datetime.now():%H:%M:%S}  {done} of "
+                          f"{len(targets)}  elapsed {elapsed:.0f}s  "
+                          f"remaining ~{remaining:.0f}s  ETA {eta:%H:%M:%S}",
+                          flush=True)
+            failed.sort()
+        else:
+            for ipn in targets:
+                try:
+                    if not one(con, board, ipn, args):
+                        failed.append(ipn)
+                except Bad as exc:
+                    if len(targets) == 1:
+                        raise
+                    print(str(exc))
                     failed.append(ipn)
-            except Bad as exc:
-                if len(targets) == 1:
-                    raise
-                print(str(exc))
-                failed.append(ipn)
     finally:
         con.close()
 
