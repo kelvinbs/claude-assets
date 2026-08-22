@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """kicad-update — place symbols on their page.
 
-    kicad-update.py <board-dir> [--project NAME]
+    kicad-update.py <board-dir>
 
 The tool of process 3. Every instance in `ref_table` that carries a page and
-whose part carries a symbol is drawn on that page, in the order of T1.4:
+whose part carries a symbol is drawn on that page, in the order of T2.12:
 room first, then family for the instances with no room.
 
 It adds what is missing and leaves what is there. A symbol already on a page
@@ -85,13 +85,13 @@ def slug(name):
 def connect(board):
     path = Path(board) / "board.db"
     if not path.exists():
-        raise Bad(f"{path} does not exist. Run db-init first")
+        raise Bad(f"{path} does not exist. Run init-pipeline first")
     con = sqlite3.connect(path)
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
     if not {"parts_table", "ref_table", "aml_table", "mpn_table"} <= have:
-        raise Bad(f"{path} is missing a table. Run db-init")
+        raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
 
@@ -99,7 +99,7 @@ def instances(con):
     """One row per thing to draw, with everything the sheet needs on it.
 
     `Value` shows the part number the board was designed against — the
-    blank-rank row of T1.3 — and falls back to the description for a part
+    blank-rank row of T2.6 — and falls back to the description for a part
     that has no part number yet. The IPN is on the row either way, in its
     own field, and that is what the record keys on."""
     rows = []
@@ -121,7 +121,7 @@ def instances(con):
 
 
 def order_of(row):
-    """T1.4, ranks 2 and 3. Rooms come first, in name order. What is left
+    """T2.12, ranks 2 and 3. Rooms come first, in name order. What is left
     groups by family — the class letter of the IPN — and runs by reference
     inside it."""
     ref = re.match(r"^([A-Za-z]+)(\d+)$", row["ref"])
@@ -227,7 +227,7 @@ def indent_block(block, tabs):
 
 def flow(rows, blocks, project, path_uuid, width, start_y):
     """Lay parts left to right, wrapping at the page edge. A new room or a
-    new family starts on a new row, so the groups of T1.4 read as groups."""
+    new family starts on a new row, so the groups of T2.12 read as groups."""
     margin = 5 * GRID
     gap = 5 * GRID
     cur_x, cur_y, row_h = margin, start_y, 0.0
@@ -411,19 +411,21 @@ def write_project_file(board, project):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
-    ap.add_argument("--project", help="the project name. Defaults to the "
-                                      ".kicad_pro already there")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
 
-    lib_init = sibling("lib-init")
+    # T2.13 - the database is master for the name; nothing is derived.
+    con = connect(board)
     try:
-        project = lib_init.nickname_of(board, args.project)
-    except SystemExit as exc:
-        raise Bad(str(exc))
+        row = con.execute("select name from project_table").fetchone()
+    finally:
+        con.close()
+    if not row:
+        raise Bad("project_table is empty. Run init-pipeline first")
+    project = row[0]
 
     con = connect(board)
     try:

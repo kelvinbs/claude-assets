@@ -7,7 +7,7 @@ Push the record into the KiCad project. The tool of processes 3 and 4.
 | `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/<project>.kicad_sym` | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once |
 
 ```
-python3 tools/board-build/tools/kicad-update.py <board-dir> [--project NAME]
+python3 tools/board-build/tools/kicad-update.py <board-dir>
 ```
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
@@ -25,7 +25,7 @@ Both are counted at the end of the run. Neither stops it.
 
 ## The UUID
 
-`ref_table.uuid` is the symbol's UUID in the sheet, per T1.2. It is what
+`ref_table.uuid` is the symbol's UUID in the sheet, per T2.4. It is what
 makes the symbol on the page and the row in the table the same thing on
 every run, and what this tool follows from the footprint back to the
 instance.
@@ -35,7 +35,7 @@ into the sheet and never invents one.
 
 ## Where a thing goes
 
-T1.4, in its order.
+T2.12, in its order.
 
 | Rank | |
 |---|---|
@@ -58,7 +58,7 @@ new parts arrive in.
 | `Reference` | `ref_table.ref` |
 | `Value` | the blank-rank MPN of `aml_table`, or the description when the part has no part number yet |
 | `Footprint` | `parts_table.footprint`, hidden |
-| `ipn` | `parts_table.ipn`, hidden. The key back to the record, T1.1 |
+| `ipn` | `parts_table.ipn`, hidden. The key back to the record, T2.11 |
 
 `Value` shows the part the board was designed against, because that is what
 a person reads on a sheet. The IPN is the key and travels in its own field,
@@ -89,7 +89,7 @@ A page that already exists keeps the size it has.
 ## What it refuses
 
 - A project folder with no `board.db`, or one missing a table
-- No `.kicad_pro` and no `--project`
+- An empty `project_table` — the record names the project (T2.13)
 - A `symbol` naming a library that is not this project's — section 2 does
   not allow a sheet to point outside the repository, and `symbol-draw`
   copies the object in before it is placed
