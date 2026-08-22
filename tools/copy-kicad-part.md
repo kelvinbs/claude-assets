@@ -28,14 +28,19 @@ Drawing a symbol is the last resort. This is asked first.
 | 2 | Build or load the index, through `lib-index` | no |
 | 3 | Emit search queries per part — synonyms, family, class fallbacks, generic names | yes |
 | 4 | Run every query over the index; union the hits with the base shortlist, per-query cap, union cap | no |
-| 5 | Ask once which candidate is the part, and what its pins should be called | yes |
-| 6 | Copy it into `lib/`, rename the pins, set `origin`, print the library id | no |
+| 5 | Pick: an agent with read access to the index and the libraries chooses each part's symbol — or nulls | yes |
+| 6 | Copy it into `lib/`, rename the pins, park `unused` pins as NC, set `origin`, print the library id | no |
 
-Two model calls per run — steps 3 and 5 — and both read nothing: hints and
-candidates are in the prompt. Step 3 keeps recall off the hint's literal
-tokens, so a generic symbol (`Device:R`, `Device:Antenna`) stays reachable;
-step 4 is deterministic; step 5 can only pick from what step 4 fed it. If
-step 3 fails the run falls back to the base shortlist alone.
+Two model calls per run — steps 3 and 5. The pick is not confined to step
+4's leads: it carries `Read`, `Grep` and `Glob` over the symbols directory
+and the index — both inside this skill's declared Reads — follows
+`extends` parents itself, and may name any symbol in the libraries. Its
+rules are an engineer's: pins mappable → take it and rename; band,
+package, maker never disqualify; exact > family > generic, generics
+acceptable; spare pins parked `unused`; missing pins never invented.
+Validation runs at the source: the named symbol must exist in the named
+library, and every rename or unused entry must hit a real pin of the
+flattened symbol — a failure stops the run and names the pin.
 
 ## What counts as the part
 
@@ -70,7 +75,6 @@ it has. A run that fails either stops and says so.
 - No `.kicad_pro` and no `--nickname`
 - A library the answer names that is not on disk
 - A symbol the library does not hold
-- An answer naming a symbol that was not a candidate, or a pin the symbol
-  does not have
+- A rename or unused entry naming a pin the symbol does not have
 
 Each exits non-zero and names what it found.

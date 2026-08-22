@@ -45,37 +45,46 @@ STOCK_CANDIDATES = [
     "C:/Program Files/KiCad/share/kicad/symbols",
 ]
 
-PROMPT = """For each part below, which of its KiCad symbol candidates is the
-part's symbol?
+PROMPT = """You are choosing KiCad schematic symbols the way an engineer
+would. For each part below, pick the symbol to copy for it.
 
-Each part is a heading `== <name>: <hint>`, then its candidates, one per
-line: `library:symbol`, its pin count, its description, and its pins as
-number:name.
+Each part is a heading `== <name>: <hint>`, then leads - candidate lines
+`library:symbol`, pin count, description, pins as number:name. Leads are
+hints, not the menu: you may pick ANY symbol in the libraries.
 
 {sections}
 
-A similar part's symbol is this part's symbol when its pins do the same job.
-Take it, and rename the pins to the names this part's datasheet prints. The
-package and the maker belong to the footprint, not the symbol - a candidate
-in another package is not a reason to refuse.
+Sources you may read (read-only):
+- The index: {index} - every symbol, its description and pins
+- The libraries: {stock} - one .kicad_sym per library. A symbol with
+  `(extends "PARENT")` takes its pins from PARENT in the same file - read
+  the parent when a lead shows 0 pins.
 
-Null when nothing listed has pins that do the same job. Pin count alone is
-never the test. A part that is not on a schematic at all - a bare board, an
-enclosure, a host the board plugs into - is null.
+Judgment rules:
+- A similar part's symbol is this part's symbol when its pins can be
+  mapped to the part's pins. Rename covers different pin names AND
+  different pin functions - that is what rename is for.
+- Frequency band, package, and maker never disqualify - they belong to
+  the footprint.
+- exact > family > generic. A generic symbol (Device:R, Device:Antenna,
+  Connector:Conn_Coaxial, an RF gain block with bias) is a valid answer
+  at fit "generic".
+- A BOM row that carries a schematic page IS on the schematic. Null for
+  no-schematic-presence only when the part truly never appears (a bare
+  board, a bench host).
+- A candidate with SPARE pins may be taken: list the spare pin numbers in
+  "unused" and they are parked as NC. A candidate MISSING pins the part
+  needs is not fixable - do not invent pins.
+- Null only when no symbol's pins can be mapped, after actually looking.
 
-Write to {out} one JSON object, keyed by part name, one entry per part,
-and nothing else:
-
-    {{"U0001": {{"library": "as listed", "symbol": "as listed",
-                "rename": {{"3": "VCC"}}, "fit": "exact, family or generic",
-                "why": "one line"}},
-      "U0002": {{"library": null,
-                "why": "one line - the nearest candidate and why not"}}}}
-
-`rename` carries only the pins whose names differ. Leave it out when nothing
-needs changing. It is not a way to reshape a symbol: if the pins are not the
-part's pins, the answer is null.
-"""
+Write ONE json object to {out} - keys the part names, values:
+  {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
+    "unused": ["7", "8"], "fit": "exact, family or generic",
+    "why": one short line}}
+Null is {{"library": "", "why": ...}}. `rename` carries only pins whose
+names change; `unused` only spare pins. Nothing but the json object in
+the file. Verify a symbol you name outside the leads by reading its pins
+in the library file first."""
 
 
 class Bad(SystemExit):
@@ -274,40 +283,39 @@ def retrieve(rows, hint, queries):
 # ------------------------------------------------------------- 4, the asking
 
 def faults(spec, rows):
+    """Shape checks only. Pin-level checks run in copy(), against the
+    source block itself - the answer may name a symbol outside the leads."""
     if spec.get("library") in (None, ""):
         return []
     name, symbol = spec.get("library"), spec.get("symbol")
     if not isinstance(name, str) or not isinstance(symbol, str) or not symbol:
         return ["a library named without a symbol"]
-    match = [r for r in rows if r["library"] == name and r["symbol"] == symbol]
-    if not match:
-        return [f"{name}:{symbol} was not one of the candidates"]
-    numbers = {p["number"] for p in match[0]["pins"]}
     bad = []
     for key, value in (spec.get("rename") or {}).items():
-        if str(key) not in numbers:
-            bad.append(f"rename names pin {key}, not in {symbol}")
         if not str(value).strip():
             bad.append(f"rename gives pin {key} no name")
     return bad
 
 
-def ask(parts, lists, root):
+def ask(parts, lists, root, board):
     """One model call for every part in the run. `parts` is the batch,
-    `lists` its candidates by name. Returns the JSON object, keyed by name."""
+    `lists` its leads by name. Returns the JSON object, keyed by name."""
     sections = "\n\n".join(
-        f"== {p['name']}: {p['hint']}\n{as_lines(lists[p['name']])}"
-        for p in parts if lists[p["name"]])
+        f"== {p['name']}: {p['hint']}\n"
+        + (as_lines(lists[p["name"]]) or "    (no leads scored - search the index)")
+        for p in parts)
     handle, path = tempfile.mkstemp(suffix=".json")
     os.close(handle)
     out = Path(path)
     out.unlink()
-    prompt = PROMPT.format(sections=sections, out=out)
+    prompt = PROMPT.format(sections=sections, out=out,
+                           index=Path(board) / "lib" / "kicad-lib-index.json",
+                           stock=find_stock())
     beat = heartbeat(f"{len(parts)} part(s) - asking")
     try:
         run = subprocess.run(
             ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-             "--allowedTools", "Write"],
+             "--allowedTools", "Write,Read,Grep,Glob"],
             cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
         if not out.exists():
             tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
@@ -477,9 +485,15 @@ def copy(library, nickname, spec, name, extra):
     if block is None:
         raise Bad(f"{path} does not hold '{spec['symbol']}'")
     block = flatten(block, src, spec["symbol"])
+    numbers = set(re.findall(r'\(number "([^"]*)"', block))
+    for key in list((spec.get("rename") or {})) + list(spec.get("unused") or []):
+        if str(key) not in numbers:
+            raise Bad(f"{name}: pin {key} is not in "
+                      f"{spec['library']}:{spec['symbol']}")
     block = block.replace(f'(symbol "{spec["symbol"]}"', f'(symbol "{name}"', 1)
     block = block.replace(f'"{spec["symbol"]}_', f'"{name}_')
     block = rename_pins(block, spec.get("rename"))
+    block = rename_pins(block, {n: "NC" for n in (spec.get("unused") or [])})
     block = set_property(block, "Value", name)
     block = set_property(block, "Footprint", "")
     block = set_property(block, "origin",
@@ -533,18 +547,12 @@ def main(argv):
     lists = {p["name"]: retrieve(rows, p["hint"], queries.get(p["name"], []))
              for p in parts}
 
-    asked = [p for p in parts if lists[p["name"]]]
-    specs = ask(asked, lists, root) if asked else {}
+    specs = ask(parts, lists, root, board)
 
     misses = 0
     for p in parts:
         name = p["name"]
         spec = specs.get(name) or {}
-        if not lists[name]:
-            print(f"{name}  null")
-            print("    nothing in the index scored against the hint")
-            misses += 1
-            continue
         bad = faults(spec, lists[name])
         if bad:
             raise Bad(f"{name}: " + "; ".join(bad))
@@ -555,8 +563,10 @@ def main(argv):
             continue
         lib_id = copy(library, nickname, spec, name, args.lib)
         renames = spec.get("rename") or {}
+        parked = spec.get("unused") or []
         print(f"{name}  {lib_id}  ({spec.get('fit', '')})"
-              + (f"  {len(renames)} pin(s) renamed" if renames else ""))
+              + (f"  {len(renames)} pin(s) renamed" if renames else "")
+              + (f"  {len(parked)} pin(s) unused" if parked else ""))
         print(f"    from {spec['library']}:{spec['symbol']}")
         print(f"    {spec.get('why', '')}")
     return 0
