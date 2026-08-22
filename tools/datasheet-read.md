@@ -54,7 +54,7 @@ Three places, in order:
 |---|---|
 | `--datasheet <path>` | given on the command line |
 | `mpn_table.datasheet` | recorded by an earlier run |
-| `datasheets/` | tiered (n5.7): whole part number in a filename, unique hit; else prefix-run scoring, unique maximum of 6+; a tie or zero-hit goes to the reader model, which sees the listing, may open files, and names the file or NONE — the choice is recorded |
+| `datasheets/` | tiered (n5.7), scanned recursively: whole part number in a filename, unique hit; else prefix-run scoring, unique maximum of 6+; a tie or zero-hit goes to the reader model, which sees the listing, may open files, and names the file or NONE — the choice is recorded |
 
 Whatever it settles on is written back to `mpn_table.datasheet`, relative to
 the repository so the record survives a clone. The second run needs no

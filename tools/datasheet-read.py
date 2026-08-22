@@ -201,12 +201,15 @@ def find_sheet(folder, mpn):
     if not key:
         return None
     scored = []
-    for p in sorted(folder.glob("*.pdf")):
+    files = sorted(p for p in folder.rglob("*")
+                   if p.is_file() and p.suffix.lower() == ".pdf")
+    for p in files:
         stem = flat(p.stem)
         if key in stem:
             run = len(key)      # the whole part number, hyphens aside
         else:
             tokens = [flat(t) for t in re.split(r"[^A-Za-z0-9]+", p.stem)]
+            tokens.append(stem)     # the hyphen-blind whole name too
             run = max((prefix_run(t, key) for t in tokens if t), default=0)
         if run >= 6:
             scored.append((run, p))
@@ -278,7 +281,9 @@ def arbitrate_sheet(folder, mpn, candidates):
     """Tier 3 of n5.7: a tie or a zero-hit with files present goes to the
     model, which sees the listing and may open files. Returns a Path, or
     None when it answers NONE. An answer outside the folder is refused."""
-    names = [p.name for p in (candidates or sorted(folder.glob("*.pdf")))]
+    pool = candidates or sorted(p for p in folder.rglob("*")
+                                if p.is_file() and p.suffix.lower() == ".pdf")
+    names = [str(p.relative_to(folder)) for p in pool]
     if not names:
         return None
     handle, path = tempfile.mkstemp(suffix=".txt")
