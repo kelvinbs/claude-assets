@@ -24,6 +24,7 @@ import importlib.util
 import json
 import re
 import sqlite3
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -452,8 +453,18 @@ def main(argv):
     pages = sorted({r["page"] for r in drawable})
     root = uid(project, "root")
 
+    def normalize(path):
+        """n8.2 - the sheet must load with no dialogs. KiCad's own writer
+        has the final word on the format."""
+        run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                              str(path)], capture_output=True, text=True)
+        if run.returncode != 0:
+            raise Bad(f"kicad-cli could not normalize {path}: "
+                      + (run.stderr or run.stdout).strip())
+
     made = write_project_file(board, project)
     added = write_root(board, project, root, pages, None)
+    normalize(board / f"{project}.kicad_sch")
     print(f"{project}.kicad_pro  {'written' if made else 'kept'}")
     print(f"{project}.kicad_sch  {added} page(s) added, {len(pages)} in all")
 
@@ -461,6 +472,7 @@ def main(argv):
         on_page = [r for r in drawable if r["page"] == page]
         name, new, kept = write_page(board, project, root, page, on_page,
                                      blocks, None)
+        normalize(board / name)
         print(f"    {name}  {new} placed, {kept} left as they were")
 
     if nosymbol:
