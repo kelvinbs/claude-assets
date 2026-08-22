@@ -191,12 +191,12 @@ def prefix_run(a, b):
 
 
 def find_sheet(folder, mpn):
-    """Tiers 1 and 2 of n5.7 - procedural, free, for the bulk. Tier 1: the
-    whole part number in a filename, unique hit wins. Tier 2: longest
-    prefix-run between a filename token and the part number, unique maximum
-    of 6 or more wins - family-named files (ADA4896-2_ADA4897, USB334x)
-    match without per-vendor rules. One path back = a match; a list back =
-    a tie for the model to arbitrate; None = nothing scored."""
+    """Tier 1 of n5.11 decides alone: the whole part number in a filename,
+    unique hit wins. Every partial prefix-run match (family files:
+    ADA4896-2_ADA4897, USB334x) is a LEAD, never a decision - string
+    similarity cannot tell a datasheet from an app note. One path back =
+    the tier-1 unique hit; a list back = leads for the model to
+    arbitrate; None = nothing scored."""
     key = flat(mpn)
     if not key:
         return None
@@ -215,11 +215,11 @@ def find_sheet(folder, mpn):
             scored.append((run, p))
     if not scored:
         return None
-    best = max(run for run, _ in scored)
-    hits = [p for run, p in scored if run == best]
-    if len(hits) == 1:
-        return hits[0]
-    return hits    # a tie - the model arbitrates
+    exact = [p for run, p in scored if run == len(key)]
+    if len(exact) == 1:
+        return exact[0]    # tier 1: the whole part number, uniquely
+    scored.sort(key=lambda rp: (-rp[0], str(rp[1])))
+    return [p for _, p in scored]    # leads - the model arbitrates
 
 
 def as_recorded(path, board):
@@ -271,6 +271,10 @@ part number {mpn}?
 Files:
 {listing}
 
+Name-similarity leads (suggestions only, often wrong - an app note can
+outscore the real datasheet):
+{leads}
+
 Open a file (Read) if the name alone does not settle it. A user manual,
 devkit brief, app note or errata is not the datasheet. Answer by writing
 the exact filename - nothing else - to {out}. If no file documents the
@@ -281,17 +285,19 @@ def arbitrate_sheet(folder, mpn, candidates):
     """Tier 3 of n5.7: a tie or a zero-hit with files present goes to the
     model, which sees the listing and may open files. Returns a Path, or
     None when it answers NONE. An answer outside the folder is refused."""
-    pool = candidates or sorted(p for p in folder.rglob("*")
-                                if p.is_file() and p.suffix.lower() == ".pdf")
+    pool = sorted(p for p in folder.rglob("*")
+                  if p.is_file() and p.suffix.lower() == ".pdf")
     names = [str(p.relative_to(folder)) for p in pool]
     if not names:
         return None
+    leads = [str(p.relative_to(folder)) for p in (candidates or [])]
     handle, path = tempfile.mkstemp(suffix=".txt")
     os.close(handle)
     out = Path(path)
     out.unlink()
     prompt = ARBITRATE.format(folder=folder, mpn=mpn,
-                              listing="\n".join(names), out=out)
+                              listing="\n".join(names),
+                              leads="\n".join(leads) or "(none)", out=out)
     beat = heartbeat(f"{mpn} - arbitrating datasheet")
     try:
         subprocess.run(
