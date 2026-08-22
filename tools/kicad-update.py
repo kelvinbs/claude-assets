@@ -44,6 +44,13 @@ PAPERS = {
     "C": (558.8, 431.8),
     "D": (863.6, 558.8),
     "E": (1117.6, 863.6),
+    # ISO sizes appear on sheets other tools made (init-pipeline writes
+    # A4). An existing page keeps its size; only new pages take ANSI.
+    "A4": (297.0, 210.0),
+    "A3": (420.0, 297.0),
+    "A2": (594.0, 420.0),
+    "A1": (841.0, 594.0),
+    "A0": (1189.0, 841.0),
 }
 PAPER_ORDER = ["A", "B", "C", "D", "E"]
 
@@ -65,7 +72,7 @@ def sibling(name):
     return module
 
 
-draw = sibling("symbol-draw")
+copy_part = sibling("copy-kicad-part")
 
 
 def uid(*parts):
@@ -199,10 +206,11 @@ def library_blocks(board, nickname, lib_ids):
             raise Bad(f"{lib_id} is not in this project's library. "
                       f"symbol-draw copies a symbol in before it is placed")
         path = Path(board) / "lib" / f"{nick}.kicad_sym"
-        block = draw.extract_symbol(path, name)
+        src = path.read_text(errors="replace")
+        block = copy_part.top_level(src, name)
         if block is None:
             raise Bad(f"{path} does not hold '{name}'. Run symbol-draw")
-        block = draw.flatten_extends(block, path, name)
+        block = copy_part.flatten(block, src, name)
         out[lib_id] = block.replace(f'(symbol "{name}"',
                                     f'(symbol "{lib_id}"', 1)
     return out
