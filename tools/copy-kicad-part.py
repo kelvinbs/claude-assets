@@ -76,6 +76,10 @@ Judgment rules:
   "unused" and they are parked as NC. A candidate MISSING pins the part
   needs is not fixable - do not invent pins.
 - Null only when no symbol's pins can be mapped, after actually looking.
+- The floor: a symbol is the part's only when its pins genuinely do the
+  part's jobs. When nothing visible qualifies, answer null - a wrong
+  symbol is worse than none. Never rename an unrelated device into
+  shape.
 
 Write ONE json object to {out} - keys the part names, values:
   {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
@@ -555,13 +559,24 @@ def main(argv):
         spec = specs.get(name) or {}
         bad = faults(spec, lists[name])
         if bad:
-            raise Bad(f"{name}: " + "; ".join(bad))
+            # An unusable answer is a null with its reason, not a crash -
+            # the caller's next resort (drawing) must still get its turn.
+            print(f"{name}  null")
+            print(f"    answer rejected: " + "; ".join(bad))
+            misses += 1
+            continue
         if not spec.get("library"):
             print(f"{name}  null")
             print(f"    {spec.get('why', '')}")
             misses += 1
             continue
-        lib_id = copy(library, nickname, spec, name, args.lib)
+        try:
+            lib_id = copy(library, nickname, spec, name, args.lib)
+        except Bad as exc:
+            print(f"{name}  null")
+            print(f"    answer rejected: {exc}")
+            misses += 1
+            continue
         renames = spec.get("rename") or {}
         parked = spec.get("unused") or []
         print(f"{name}  {lib_id}  ({spec.get('fit', '')})"

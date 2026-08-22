@@ -73,8 +73,10 @@ it has. A run that fails either stops and says so.
 
 - A project folder that does not exist, or with no `lib/<nickname>.kicad_sym`
 - No `.kicad_pro` and no `--nickname`
-- A library the answer names that is not on disk
-- A symbol the library does not hold
-- A rename or unused entry naming a pin the symbol does not have
+
+An answer that fails validation — a library not on disk, a symbol the
+library does not hold, a rename or unused entry naming a pin the symbol
+does not have — becomes a null carrying the rejection reason, so the
+caller's next resort still runs. It is printed, never silently dropped.
 
 Each exits non-zero and names what it found.
