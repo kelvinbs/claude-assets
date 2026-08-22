@@ -10,8 +10,11 @@ libraries, copies it into `lib/`, renames the pins to what the part calls
 them, and prints one line per part: `<name>  <library>:<name>`, or
 `<name>  null` when no library holds anything that is the part.
 
-One model call per run, never per part: every part's candidates go into one
-prompt and one JSON object comes back. A single hint is a batch of one.
+Two model calls per run, never per part. Call A reads every hint and emits
+search queries - synonyms, family names, class fallbacks. Deterministic
+retrieval runs every query over the index and unions the hits with the base
+shortlist, so a generic symbol is always reachable. Call B picks each
+part's symbol from its union, or nulls. A single hint is a batch of one.
 
 It calls `lib-index` as a command. It imports nothing from another tool.
 """
@@ -31,6 +34,8 @@ HERE = Path(__file__).resolve().parent
 
 TIMEOUT = 600
 CANDIDATES = 24
+QUERY_TOP = 8        # rows each query contributes
+UNION_CAP = 40       # candidates a part may carry into the ask
 PINS_SHOWN = 24      # a 100-pin MCU does not need its pins listed to be found
 
 STOCK_CANDIDATES = [
@@ -192,6 +197,78 @@ def as_lines(rows):
         out.append(f"    {row['library']}:{row['symbol']}  "
                    f"{row['pin_count']} pins  {row['description']}  [{text}]")
     return "\n".join(out)
+
+
+# ---------------------------------------------------- 3a, the query expansion
+
+PROMPT_QUERIES = """For each part below, write search queries that would find
+its schematic symbol in the KiCad libraries.
+
+Each part is one line: `== <name>: <hint>`.
+
+{sections}
+
+Per part, 3 to 8 short queries: the part number and its family root, close
+pin-compatible parts, the device class in KiCad's own vocabulary (op-amp,
+LNA, MMIC amplifier, SPDT switch, accelerometer, GNSS module, TCXO, VCO,
+coaxial connector, test point, resistor, antenna...), and - when a generic
+library symbol could stand in - the generic name (R, C, L, Antenna,
+Conn_Coaxial, TestPoint, Jumper). Queries are search text, not sentences.
+
+Write ONE json object to {out} - keys the part names, values arrays of query
+strings. Nothing else. Do not read any file."""
+
+
+def ask_queries(parts, root):
+    """Model call A: per-part search queries. On any failure the run falls
+    back to the base shortlist alone - retrieval still works, just narrower."""
+    sections = "\n".join(f"== {p['name']}: {p['hint']}" for p in parts)
+    handle, path = tempfile.mkstemp(suffix=".json")
+    os.close(handle)
+    out = Path(path)
+    out.unlink()
+    prompt = PROMPT_QUERIES.format(sections=sections, out=out)
+    beat = heartbeat(f"{len(parts)} part(s) - expanding queries")
+    try:
+        subprocess.run(
+            ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
+             "--allowedTools", "Write"],
+            cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
+        if not out.exists():
+            return {}
+        try:
+            got = json.load(open(out))
+        except json.JSONDecodeError:
+            return {}
+    finally:
+        beat.set()
+        if out.exists():
+            out.unlink()
+    if not isinstance(got, dict):
+        return {}
+    return {k: [q for q in v if isinstance(q, str) and q.strip()]
+            for k, v in got.items() if isinstance(v, list)}
+
+
+def retrieve(rows, hint, queries):
+    """The base shortlist plus each query's best rows, deduplicated, capped."""
+    seen = {}
+    for row in shortlist(rows, hint):
+        seen.setdefault((row["library"], row["symbol"]), row)
+    for query in queries:
+        tokens = [t for t in re.split(r"[\s,;]+", query) if len(t) > 1]
+        keys = [re.sub(r"[^a-z0-9]", "", t.lower()) for t in tokens]
+        cores = [re.sub(r"[^a-z0-9]", "", re.split(r"[-/]", t)[0].lower())
+                 for t in tokens]
+        terms = words(query)
+        scored = [(score(r, keys, cores, terms), r) for r in rows]
+        scored = [(sc, r) for sc, r in scored if sc > 0]
+        scored.sort(key=lambda sr: (-sr[0], sr[1]["library"], sr[1]["symbol"]))
+        for _, row in scored[:QUERY_TOP]:
+            if len(seen) >= UNION_CAP:
+                break
+            seen.setdefault((row["library"], row["symbol"]), row)
+    return list(seen.values())
 
 
 # ------------------------------------------------------------- 4, the asking
@@ -445,13 +522,16 @@ def main(argv):
         raise Bad("a hint, or --batch")
 
     rows = index(board, args.lib)
-    lists = {p["name"]: shortlist(rows, p["hint"]) for p in parts}
 
     root = board.resolve()
     for folder in [root] + list(root.parents):
         if (folder / ".git").exists():
             root = folder
             break
+
+    queries = ask_queries(parts, root)
+    lists = {p["name"]: retrieve(rows, p["hint"], queries.get(p["name"], []))
+             for p in parts}
 
     asked = [p for p in parts if lists[p["name"]]]
     specs = ask(asked, lists, root) if asked else {}

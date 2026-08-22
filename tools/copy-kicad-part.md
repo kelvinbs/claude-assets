@@ -20,19 +20,22 @@ and `symbol-draw` owns the record.
 
 Drawing a symbol is the last resort. This is asked first.
 
-## Five steps
+## Six steps
 
 | # | Step | Model |
 |---|---|---|
 | 1 | Take the hint | no |
 | 2 | Build or load the index, through `lib-index` | no |
-| 3 | Score the index against the hint, take the candidates with their pins | no |
-| 4 | Ask once which candidate is the part, and what its pins should be called | yes |
-| 5 | Copy it into `lib/`, rename the pins, set `origin`, print the library id | no |
+| 3 | Emit search queries per part — synonyms, family, class fallbacks, generic names | yes |
+| 4 | Run every query over the index; union the hits with the base shortlist, per-query cap, union cap | no |
+| 5 | Ask once which candidate is the part, and what its pins should be called | yes |
+| 6 | Copy it into `lib/`, rename the pins, set `origin`, print the library id | no |
 
-Only step 4 runs a model, and it reads nothing — the candidates and their
-pins are in the prompt. A part costs one short run, not a search across
-hundreds of files.
+Two model calls per run — steps 3 and 5 — and both read nothing: hints and
+candidates are in the prompt. Step 3 keeps recall off the hint's literal
+tokens, so a generic symbol (`Device:R`, `Device:Antenna`) stays reachable;
+step 4 is deterministic; step 5 can only pick from what step 4 fed it. If
+step 3 fails the run falls back to the base shortlist alone.
 
 ## What counts as the part
 
