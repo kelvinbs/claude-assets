@@ -180,19 +180,43 @@ def flat(text):
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
+def prefix_run(a, b):
+    """Shared leading characters of two flat strings."""
+    n = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        n += 1
+    return n
+
+
 def find_sheet(folder, mpn):
-    """A datasheet is matched to a part number by name. Two matches is not a
-    match — the run says which files it saw and stops, because taking the
-    first one is how a symbol gets drawn from the wrong part."""
+    """A datasheet is matched to a part number by filename: each filename
+    token is compared to the part number by longest shared prefix-run, and
+    the file with the maximum run of 6 or more wins — family-named files
+    (ADA4896-2_ADA4897, USB334x) match without per-vendor rules. A tie at
+    the maximum is not a match — the run says which files it saw and stops,
+    because taking the first one is how a symbol gets drawn from the wrong
+    part."""
     key = flat(mpn)
-    hits = [p for p in sorted(folder.glob("*.pdf")) if key and key in flat(p.stem)]
-    if not hits:
-        hits = [p for p in sorted(folder.glob("*.pdf"))
-                if flat(p.stem) and flat(p.stem) in key]
+    if not key:
+        return None
+    scored = []
+    for p in sorted(folder.glob("*.pdf")):
+        stem = flat(p.stem)
+        if key in stem:
+            run = len(key)      # the whole part number, hyphens aside
+        else:
+            tokens = [flat(t) for t in re.split(r"[^A-Za-z0-9]+", p.stem)]
+            run = max((prefix_run(t, key) for t in tokens if t), default=0)
+        if run >= 6:
+            scored.append((run, p))
+    if not scored:
+        return None
+    best = max(run for run, _ in scored)
+    hits = [p for run, p in scored if run == best]
     if len(hits) == 1:
         return hits[0]
-    if not hits:
-        return None
     raise Bad(f"{mpn} matches {len(hits)} files in {folder}: "
               + ", ".join(p.name for p in hits) + ". Give --datasheet")
 

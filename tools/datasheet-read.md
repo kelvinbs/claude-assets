@@ -54,7 +54,7 @@ Three places, in order:
 |---|---|
 | `--datasheet <path>` | given on the command line |
 | `mpn_table.datasheet` | recorded by an earlier run |
-| `datasheets/` | matched to the part number by file name |
+| `datasheets/` | matched by filename: longest shared prefix-run between a filename token and the part number, maximum run of 6 or more wins, tie refuses — family-named files match without per-vendor rules |
 
 Whatever it settles on is written back to `mpn_table.datasheet`, relative to
 the repository so the record survives a clone. The second run needs no
