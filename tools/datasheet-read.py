@@ -191,13 +191,12 @@ def prefix_run(a, b):
 
 
 def find_sheet(folder, mpn):
-    """A datasheet is matched to a part number by filename: each filename
-    token is compared to the part number by longest shared prefix-run, and
-    the file with the maximum run of 6 or more wins — family-named files
-    (ADA4896-2_ADA4897, USB334x) match without per-vendor rules. A tie at
-    the maximum is not a match — the run says which files it saw and stops,
-    because taking the first one is how a symbol gets drawn from the wrong
-    part."""
+    """Tiers 1 and 2 of n5.7 - procedural, free, for the bulk. Tier 1: the
+    whole part number in a filename, unique hit wins. Tier 2: longest
+    prefix-run between a filename token and the part number, unique maximum
+    of 6 or more wins - family-named files (ADA4896-2_ADA4897, USB334x)
+    match without per-vendor rules. One path back = a match; a list back =
+    a tie for the model to arbitrate; None = nothing scored."""
     key = flat(mpn)
     if not key:
         return None
@@ -217,8 +216,7 @@ def find_sheet(folder, mpn):
     hits = [p for run, p in scored if run == best]
     if len(hits) == 1:
         return hits[0]
-    raise Bad(f"{mpn} matches {len(hits)} files in {folder}: "
-              + ", ".join(p.name for p in hits) + ". Give --datasheet")
+    return hits    # a tie - the model arbitrates
 
 
 def as_recorded(path, board):
@@ -246,7 +244,11 @@ def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
             raise Bad(f"{ipn}: mpn_table has {recorded} for {mpn}, "
                       f"and it is not on disk")
     else:
-        found = find_sheet(sheet_folder(board, folder), mpn)
+        where = sheet_folder(board, folder)
+        found = find_sheet(where, mpn)
+        if found is None or isinstance(found, list):
+            found = arbitrate_sheet(where, mpn,
+                                    found if isinstance(found, list) else None)
         if found is None:
             raise Bad(f"{ipn}: no datasheet found for {mpn}. "
                       f"Give --datasheet")
@@ -258,6 +260,53 @@ def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
                     (stored, mpn))
         con.commit()
     return path, stored
+
+
+ARBITRATE = """Which file in {folder} is the manufacturer datasheet for
+part number {mpn}?
+
+Files:
+{listing}
+
+Open a file (Read) if the name alone does not settle it. A user manual,
+devkit brief, app note or errata is not the datasheet. Answer by writing
+the exact filename - nothing else - to {out}. If no file documents the
+part, write NONE."""
+
+
+def arbitrate_sheet(folder, mpn, candidates):
+    """Tier 3 of n5.7: a tie or a zero-hit with files present goes to the
+    model, which sees the listing and may open files. Returns a Path, or
+    None when it answers NONE. An answer outside the folder is refused."""
+    names = [p.name for p in (candidates or sorted(folder.glob("*.pdf")))]
+    if not names:
+        return None
+    handle, path = tempfile.mkstemp(suffix=".txt")
+    os.close(handle)
+    out = Path(path)
+    out.unlink()
+    prompt = ARBITRATE.format(folder=folder, mpn=mpn,
+                              listing="\n".join(names), out=out)
+    beat = heartbeat(f"{mpn} - arbitrating datasheet")
+    try:
+        subprocess.run(
+            ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
+             "--allowedTools", "Write,Read,Glob"],
+            cwd=folder, capture_output=True, text=True, timeout=TIMEOUT)
+        if not out.exists():
+            raise Bad(f"{mpn}: datasheet arbitration wrote nothing")
+        answer = out.read_text().strip()
+    finally:
+        beat.set()
+        if out.exists():
+            out.unlink()
+    if answer == "NONE":
+        return None
+    chosen = folder / answer
+    if answer not in names or not chosen.exists():
+        raise Bad(f"{mpn}: arbitration named '{answer}', "
+                  f"not a file in {folder}")
+    return chosen
 
 
 # ------------------------------------------------------------------ the reader
