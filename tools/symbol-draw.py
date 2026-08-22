@@ -347,6 +347,10 @@ def one(con, board, ipn, nickname, library, args):
         print(f"{ipn}  {written}  s  copied")
         return True
 
+    if args.copy_only:
+        raise Bad(f"{ipn}: no library holds it - secondary (draw) awaits "
+                  f"the User's word")
+
     pins = try_read(board, ipn, args.datasheets)
     if not pins:
         raise Bad(f"{ipn}: no library holds it and no pinout could be read")
@@ -366,6 +370,9 @@ def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("ipn", nargs="?")
+    ap.add_argument("--copy-only", action="store_true",
+                    help="stage primary pass: a copy miss is reported, "
+                         "never drawn (T4.1 - secondary needs the User)")
     ap.add_argument("--all", action="store_true",
                     help="every part on a page with no symbol yet")
     ap.add_argument("--redraw", action="store_true",
@@ -417,6 +424,8 @@ def main(argv):
 
             def run_one(ipn):
                 argv = [sys.executable, __file__, str(board), ipn]
+                if args.copy_only:
+                    argv.append("--copy-only")
                 if args.redraw:
                     argv.append("--redraw")
                 for folder in args.lib or []:

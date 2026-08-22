@@ -73,6 +73,12 @@ drawing; top and bottom run left to right at twice the pitch, clear of the
 corners, so a name reading up the body does not land on its neighbour.
 
 
+## The stage's primary pass
+
+`--copy-only` is the Update-library stage's first pass, per T4.1: the
+copy resort only. A part no library holds is reported and left — drawing
+is secondary and waits for the User's word.
+
 ## Batch
 
 `--all` runs the parts as a batch of worker subprocesses (n5.17 — the
