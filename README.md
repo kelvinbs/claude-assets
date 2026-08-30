@@ -8,7 +8,7 @@ A human-in-the-loop development/problem-solving process.
 
 | # | Step |
 |---|---|
-| 1 | Use the `docs/` file templates to define what is being done. |
+| 1 | Use the `docs/` file templates (just a suggestion) to define what is being done. |
 | 2 | (optional) In `docs/04-approach.md`, break the project into 3–5 parts. Each part is a plan. |
 
 **Plan**
