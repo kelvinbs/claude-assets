@@ -502,8 +502,94 @@ def show_pins(block):
         i = k
 
 
+def spans_of(block, opener):
+    """Balanced spans of every block starting with `opener`."""
+    spans, i = [], 0
+    while True:
+        j = block.find(opener, i)
+        if j < 0:
+            return spans
+        depth, k, in_str = 0, j, False
+        while k < len(block):
+            c = block[k]
+            if in_str:
+                if c == "\\":
+                    k += 1
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    k += 1
+                    break
+            k += 1
+        spans.append((j, k))
+        i = k
+
+
+PIN_AT = re.compile(r"(\(pin [a-z_]+ line\n\s*\(at )(-?[\d.]+) (-?[\d.]+) (\d+)\)")
+
+
+def spread_pins(block):
+    """No overlapping pins - n9_1.24. Stock symbols stack duplicate power
+    pins on one point; every pin gets its own grid slot, stepped along
+    its side. Units share the canvas with the common unit, so occupancy
+    is judged per unit against unit 0."""
+    grid = 2.54
+    # child sections carry the drawing; the opener at the block's own
+    # start must not swallow them, so children are found by their names
+    sections = []
+    for m in re.finditer(r'\n\s*\(symbol "[^"]*?_(\d+)_\d+"', block):
+        a = m.start() + 1
+        span = spans_of(block[a:], '(symbol "')[0]
+        sections.append((a + span[0], a + span[1]))
+    def unit_of(text):
+        m = re.match(r'\s*\(symbol "[^"]*?_(\d+)_\d+"', text)
+        return int(m.group(1)) if m else None
+    occupied = {}
+    for a, b in sections:
+        u = unit_of(block[a:b])
+        if u is None:
+            continue
+        for m in PIN_AT.finditer(block[a:b]):
+            occupied.setdefault(u, set()).add(
+                (float(m.group(2)), float(m.group(3))))
+    def taken(u, pt):
+        return pt in occupied.get(0, set()) or pt in occupied.get(u, set())
+    out = block
+    for a, b in reversed(sections):
+        sec = block[a:b]
+        u = unit_of(sec)
+        if u is None:
+            continue
+        seen, new_sec, changed = set(), sec, False
+        for m in PIN_AT.finditer(sec):
+            x, y, ang = float(m.group(2)), float(m.group(3)), int(m.group(4))
+            if (x, y) not in seen:
+                seen.add((x, y))
+                continue
+            # stacked: step along the side to the first free slot
+            dx, dy = ((0.0, -grid) if ang in (0, 180) else (grid, 0.0))
+            nx, ny = x, y
+            while taken(u, (nx, ny)) or (nx, ny) in seen:
+                nx, ny = nx + dx, ny + dy
+            old = m.group(0)
+            new = f"{m.group(1)}{nx:g} {ny:g} {ang})"
+            new_sec = new_sec.replace(old, new, 1)
+            seen.add((nx, ny))
+            occupied.setdefault(u, set()).add((nx, ny))
+            changed = True
+        if changed:
+            out = out[:a] + new_sec + out[b:]
+    return out
+
+
 def write(library, name, block):
-    block = show_pins(block)
+    block = spread_pins(show_pins(block))
     """Add to the library, or replace what is there under this name. Every
     other symbol in it is left exactly as it is."""
     src = library.read_text()
