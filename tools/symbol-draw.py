@@ -318,14 +318,27 @@ def build_symbol(spec):
 
 # ------------------------------------------------------------- the two resorts
 
-def try_copy(board, ipn, hint, extra):
+def try_copy(board, ipn, hint, extra, pins=None):
     """`copy-kicad-part`, run as a command. Returns the library id it wrote,
-    or None."""
+    or None. `pins` is the datasheet pinout; the copy renames by number
+    from it and refuses a count mismatch."""
     argv = [sys.executable, str(HERE / "copy-kicad-part.py"), str(board),
             hint, "--ipn", ipn]
+    handle = None
+    if pins:
+        import tempfile, os as _os
+        handle, path = tempfile.mkstemp(suffix=".json")
+        _os.close(handle)
+        Path(path).write_text(json.dumps(pins))
+        argv += ["--pinout", path]
     for folder in extra or []:
         argv += ["--lib", folder]
     run = subprocess.run(argv, capture_output=True, text=True)
+    if handle is not None:
+        Path(path).unlink(missing_ok=True)
+    for line in run.stdout.splitlines():
+        if line.startswith("kpi "):
+            print(f"    {line}")
     if run.returncode != 0:
         raise Bad((run.stderr or run.stdout).strip())
     # copy-kicad-part prints `<name>  <library:id>` or `<name>  null`
@@ -361,18 +374,23 @@ def one(con, board, ipn, nickname, library, args):
     mpn = mpn_of(con, ipn)
     hint = " ".join(filter(None, [mpn, description]))
 
-    written = try_copy(board, ipn, hint, args.lib)
+    # Gather before picking - n9_1.29. The pinout is read first; the pick
+    # runs knowing the part's pin count. No pinout, no count - the pick
+    # still runs, held to the guidelines alone.
+    pins = try_read(board, ipn, args.datasheets)
+
+    written = try_copy(board, ipn, hint, args.lib, pins)
     if written:
         write_fields(con, ipn, written, "s", source)
         push_symbol_fields(con, board, ipn, written)
-        print(f"{ipn}  {written}  s  copied")
+        print(f"{ipn}  {written}  s  copied"
+              + (f", pinout known, {len(pins)} pins" if pins else ""))
         return True
 
     if args.copy_only:
         raise Bad(f"{ipn}: no library holds it - secondary (draw) awaits "
                   f"the User's word")
 
-    pins = try_read(board, ipn, args.datasheets)
     if not pins:
         raise Bad(f"{ipn}: no library holds it and no pinout could be read")
 

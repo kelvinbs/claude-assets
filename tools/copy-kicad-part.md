@@ -13,8 +13,15 @@ python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--l
 ```
 
 `--pins N` gives the part's pin count; a symbol with any other count is
-refused, the numbers named. A batch entry may carry `"pins"`. The count
-is the symbol's style — an exposed pad counts as a pin.
+refused, the numbers named. `--pinout FILE` gives the datasheet's pinout
+— `[[number, name, type, side], ...]` from `datasheet-read` — and is the
+better input: it sets the count, and the script renames every pin by
+number to the datasheet's printed name, deterministically; the model only
+chooses the symbol. A batch entry may carry `"pins"` or `"pinout"`. The
+count is the symbol's style — an exposed pad counts as a pin.
+
+Every run ends with a KPI line: parts, tokens, tokens per part. Elapsed
+is the caller's to measure.
 
 `<hint>` is a part number, a description, or both. `--ipn` names the copy;
 without it the copy is named after the hint.

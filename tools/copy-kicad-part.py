@@ -74,6 +74,8 @@ Guidelines:
   board, a bench host).
 - The symbol carries the part's pin count - no spares, none missing,
   none invented. A heading that names a pin count binds.
+- Renames take the datasheet's printed names. Where a heading carries the
+  pinout, the script renames every pin by number itself - name nothing.
 - Null when no symbol's pins genuinely do the part's jobs, after
   actually looking - a wrong symbol is worse than none. Never rename an
   unrelated device into shape.
@@ -91,6 +93,22 @@ in the library file first."""
 class Bad(SystemExit):
     def __init__(self, message):
         super().__init__(f"copy-kicad-part: {message}")
+
+
+def usage_of(run):
+    """Tokens a `claude -p --output-format json` call spent - n9_1.33.
+    The envelope is on stdout; the answer travels by file, so stdout is
+    free to carry it. 0 when the envelope is absent or unreadable."""
+    try:
+        envelope = json.loads(run.stdout)
+        usage = envelope.get("usage") or {}
+        return int(usage.get("input_tokens", 0)) \
+            + int(usage.get("output_tokens", 0))
+    except (json.JSONDecodeError, TypeError, ValueError, AttributeError):
+        return 0
+
+
+TOKENS = {"spent": 0}
 
 
 def heartbeat(label):
@@ -240,10 +258,11 @@ def ask_queries(parts, root):
     prompt = PROMPT_QUERIES.format(sections=sections, out=out)
     beat = heartbeat(f"{len(parts)} part(s) - expanding queries")
     try:
-        subprocess.run(
+        run = subprocess.run(
             ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-             "--allowedTools", "Write"],
+             "--allowedTools", "Write", "--output-format", "json"],
             cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
+        TOKENS["spent"] += usage_of(run)
         if not out.exists():
             return {}
         try:
@@ -303,7 +322,10 @@ def ask(parts, lists, root, board):
     `lists` its leads by name. Returns the JSON object, keyed by name."""
     sections = "\n\n".join(
         f"== {p['name']}: {p['hint']}"
-        + (f" ({p['pins']} pins)" if p.get("pins") else "") + "\n"
+        + (f" ({len(p['pinout'])} pins: "
+           + " ".join(f"{n}:{name}" for n, name, *_ in p["pinout"]) + ")"
+           if p.get("pinout") else
+           (f" ({p['pins']} pins)" if p.get("pins") else "")) + "\n"
         + (as_lines(lists[p["name"]]) or "    (no leads scored - search the index)")
         for p in parts)
     handle, path = tempfile.mkstemp(suffix=".json")
@@ -317,8 +339,10 @@ def ask(parts, lists, root, board):
     try:
         run = subprocess.run(
             ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-             "--allowedTools", "Write,Read,Grep,Glob"],
+             "--allowedTools", "Write,Read,Grep,Glob",
+             "--output-format", "json"],
             cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
+        TOKENS["spent"] += usage_of(run)
         if not out.exists():
             tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
             raise Bad("nothing written. " + " / ".join(tail))
@@ -601,7 +625,7 @@ def write(library, name, block):
     library.write_text(src[:close] + block + src[close:])
 
 
-def copy(library, nickname, spec, name, extra, pins=None):
+def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
     path = source_path(spec["library"], extra)
     src = path.read_text(errors="replace")
     block = top_level(src, spec["symbol"])
@@ -609,9 +633,22 @@ def copy(library, nickname, spec, name, extra, pins=None):
         raise Bad(f"{path} does not hold '{spec['symbol']}'")
     block = flatten(block, src, spec["symbol"])
     numbers = set(re.findall(r'\(number "([^"]*)"', block))
+    if pinout:
+        pins = len(pinout)
     if pins and len(numbers) != pins:
         raise Bad(f"{name}: {spec['library']}:{spec['symbol']} has "
                   f"{len(numbers)} pins, the part has {pins}")
+    if pinout:
+        # The datasheet names the pins - copy-kicad-part.md. The rename
+        # is the script's, by number, deterministic; the model only
+        # chose the symbol (n9_1.31).
+        missing = [str(n) for n, *_ in pinout if str(n) not in numbers]
+        if missing:
+            raise Bad(f"{name}: {spec['library']}:{spec['symbol']} has no "
+                      f"pin(s) {', '.join(missing)}")
+        spec = dict(spec)
+        spec["rename"] = {str(n): pname for n, pname, *_ in pinout}
+        spec["unused"] = []
     for key in list((spec.get("rename") or {})) + list(spec.get("unused") or []):
         if str(key) not in numbers:
             raise Bad(f"{name}: pin {key} is not in "
@@ -642,6 +679,10 @@ def main(argv):
     ap.add_argument("--pins", type=int,
                     help="the part's pin count - a copy with any other "
                          "count is refused")
+    ap.add_argument("--pinout",
+                    help="JSON file of [[number, name, type, side], ...] - "
+                         "the datasheet's pinout. Sets the count, and the "
+                         "pins are renamed to these names by number")
     ap.add_argument("--batch",
                     help='JSON list of {"name", "hint", "pins"?} - one '
                          'run, one ask')
@@ -661,7 +702,9 @@ def main(argv):
                 raise Bad("--batch entries carry a name and a hint")
     elif args.hint:
         name = args.ipn or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
-        parts = [{"name": name, "hint": args.hint, "pins": args.pins}]
+        pinout = json.load(open(args.pinout)) if args.pinout else None
+        parts = [{"name": name, "hint": args.hint, "pins": args.pins,
+                  "pinout": pinout}]
     else:
         raise Bad("a hint, or --batch")
 
@@ -698,7 +741,7 @@ def main(argv):
             continue
         try:
             lib_id = copy(library, nickname, spec, name, args.lib,
-                          p.get("pins"))
+                          p.get("pins"), p.get("pinout"))
         except Bad as exc:
             print(f"{name}  null")
             print(f"    answer rejected: {exc}")
@@ -711,6 +754,8 @@ def main(argv):
               + (f"  {len(parked)} pin(s) unused" if parked else ""))
         print(f"    from {spec['library']}:{spec['symbol']}")
         print(f"    {spec.get('why', '')}")
+    print(f"kpi  parts {len(parts)}  tokens {TOKENS['spent']}  "
+          f"tokens/part {TOKENS['spent'] // max(len(parts), 1)}")
     return 0
 
 

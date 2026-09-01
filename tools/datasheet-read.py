@@ -373,9 +373,16 @@ def read(ipn, description, mpn, datasheet, root, quiet=False):
         run = subprocess.run(
             ["claude", "-p", prompt,
              "--permission-mode", "acceptEdits",
-             "--allowedTools", "Bash,Read,Write,WebSearch,WebFetch"],
+             "--allowedTools", "Bash,Read,Write,WebSearch,WebFetch",
+             "--output-format", "json"],
             cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
         beat.set()
+        try:
+            usage = (json.loads(run.stdout).get("usage") or {})
+            spent = int(usage.get("input_tokens", 0)) \
+                + int(usage.get("output_tokens", 0))
+        except (json.JSONDecodeError, ValueError, AttributeError):
+            spent = 0
 
         if not out.exists():
             if not quiet:
@@ -399,7 +406,8 @@ def read(ipn, description, mpn, datasheet, root, quiet=False):
             for fault in bad:
                 print(f"    {ipn}: {fault}")
         return None
-    return {"pins": sorted(spec["pins"], key=lambda row: row[0])}
+    return {"pins": sorted(spec["pins"], key=lambda row: row[0]),
+            "tokens": spent}
 
 
 def pinout(con, board, ipn, datasheet=None, folder=None):
@@ -429,9 +437,11 @@ def one(con, board, ipn, args):
     if args.json:
         # What another tool reads. `symbol-draw` runs this as a command.
         print(json.dumps({"ipn": ipn, "datasheet": spec["datasheet"],
-                          "pins": spec["pins"]}))
+                          "pins": spec["pins"],
+                          "tokens": spec.get("tokens", 0)}))
         return True
-    print(f"{ipn}  {len(spec['pins'])} pins  {spec['datasheet']}")
+    print(f"{ipn}  {len(spec['pins'])} pins  {spec['datasheet']}  "
+          f"tokens {spec.get('tokens', 0)}")
     for number, name, etype, side in spec["pins"]:
         print(f"    {number:>4}  {name:<16} {etype:<15} {side}")
     return True

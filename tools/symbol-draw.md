@@ -17,6 +17,14 @@ on a page. A part on no page is not on a sheet and has no symbol — a bare
 board, an enclosure, a host the board plugs into. The run names them and
 leaves them. `kicad-update` reads a blank page the same way.
 
+## Gather before picking
+
+The pinout is read first — `datasheet-read`, the recorded datasheet. The
+pick then runs knowing the part's pin count, and `copy-kicad-part`
+refuses a symbol with any other count. A part with no readable pinout is
+picked on the guidelines alone. The pins in hand serve the draw when the
+pick returns null — one read either way.
+
 ## The fields
 
 A symbol this skill copies or draws carries the part's fields, written

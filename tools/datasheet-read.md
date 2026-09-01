@@ -11,7 +11,7 @@ python3 tools/board-build/tools/datasheet-read.py <board-dir> <ipn> [options]
 python3 tools/board-build/tools/datasheet-read.py <board-dir> --all [options]
 ```
 
-It writes no file of its own. `symbol-draw` calls it and draws what comes
+Each read reports the tokens it spent (n9_1.33). It writes no file of its own. `symbol-draw` calls it and draws what comes
 back; run alone it prints the pins. The pins belong in the symbol, and a
 second copy of them beside the symbol is a second thing to keep true.
 
