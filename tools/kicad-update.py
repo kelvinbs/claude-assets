@@ -40,7 +40,8 @@ HERE = Path(__file__).resolve().parent
 SCH_VERSION = 20250114
 GRID = 2.54
 FONT = 1.27
-FIELD_GAP = FONT * 1.5   # centre of the text, one and a half lines off the body edge
+REF_RAISE = 4.0   # Reference sits 4 mm above the drawing's top edge
+LINE = 2.54       # Value sits one line under the Reference
 
 # A fixed namespace, so a rerun that changes nothing produces no diff.
 NS = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
@@ -145,18 +146,19 @@ def order_of(row):
 
 # ------------------------------------------------------------------ the symbol
 
-def property_sexp(name, value, x, y, hide=False):
+def property_sexp(name, value, x, y, hide=False, justify=None):
     hidden = "\t\t\t\t(hide yes)\n" if hide else ""
+    just = f"\t\t\t\t(justify {justify})\n" if justify else ""
     return (
         f"\t\t(property \"{name}\" \"{value}\"\n"
         f"\t\t\t(at {x} {y} 0)\n"
         f"\t\t\t(effects\n\t\t\t\t(font\n\t\t\t\t\t(size {FONT} {FONT})\n"
-        f"\t\t\t\t)\n{hidden}\t\t\t)\n"
+        f"\t\t\t\t)\n{just}{hidden}\t\t\t)\n"
         f"\t\t)\n"
     )
 
 
-def instance_sexp(project, path_uuid, row, x, y, top, bottom):
+def instance_sexp(project, path_uuid, row, x, y, top, left):
     return (
         "\t(symbol\n"
         f"\t\t(lib_id \"{row['symbol']}\")\n"
@@ -165,10 +167,10 @@ def instance_sexp(project, path_uuid, row, x, y, top, bottom):
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
         "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
         f"\t\t(uuid \"{row['uuid']}\")\n"
-        + property_sexp("Reference", row["ref"], f"{x:.2f}",
-                        f"{y - top - FIELD_GAP:.2f}")
-        + property_sexp("Value", row["value"], f"{x:.2f}",
-                        f"{y + bottom + FIELD_GAP:.2f}")
+        + property_sexp("Reference", row["ref"], f"{x - left:.2f}",
+                        f"{y - top - REF_RAISE:.2f}", justify="left")
+        + property_sexp("Value", row["value"], f"{x - left:.2f}",
+                        f"{y - top - REF_RAISE + LINE:.2f}", justify="left")
         + property_sexp("Footprint", row["footprint"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
@@ -250,14 +252,16 @@ def extent(block):
 
 
 def edges(block):
-    """How far the drawing reaches above and below the origin, each side on
-    its own (n9_1.6). Reference sits just above the top edge, Value just
-    below the bottom edge — where the drawing ends on that side, not at a
-    symmetric radius. Pins count: a field over a pin stub is unreadable."""
-    ys = [float(y) for _, y in re.findall(COORD, drawing(block))]
-    if not ys:
+    """How far the drawing reaches up and to the left of the origin, each
+    side on its own (n9_1.6, n9_1.12). The fields hang off these edges.
+    Pins count: a field over a pin stub is unreadable."""
+    pts = [(float(x), float(y))
+           for x, y in re.findall(COORD, drawing(block))]
+    if not pts:
         return GRID, GRID
-    return max(max(ys), 0.0), max(-min(ys), 0.0)
+    top = max(max(y for _, y in pts), 0.0)
+    left = max(-min(x for x, _ in pts), 0.0)
+    return top, left
 
 
 def indent_block(block, tabs):
@@ -537,7 +541,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         group = key
 
         half_w, half_h = extent(blocks[row["symbol"]])
-        top, bottom = edges(blocks[row["symbol"]])
+        top, left = edges(blocks[row["symbol"]])
         clear = half_h + GRID
         if cur_x + 2 * half_w > width - margin and cur_x > margin:
             cur_x, cur_y, row_h = margin, snap(cur_y + row_h + gap), 0.0
@@ -546,7 +550,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         cur_x = snap(x + half_w + gap)
         row_h = max(row_h, 2 * (clear + half_h))
         page_h = max(page_h, y + clear + half_h + margin)
-        body += instance_sexp(project, path_uuid, row, x, y, top, bottom)
+        body += instance_sexp(project, path_uuid, row, x, y, top, left)
     return body, page_h
 
 
