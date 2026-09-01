@@ -60,7 +60,7 @@ Sources you may read (read-only):
   `(extends "PARENT")` takes its pins from PARENT in the same file - read
   the parent when a lead shows 0 pins.
 
-Judgment rules:
+Guidelines:
 - A similar part's symbol is this part's symbol when its pins can be
   mapped to the part's pins. Rename covers different pin names AND
   different pin functions - that is what rename is for.
