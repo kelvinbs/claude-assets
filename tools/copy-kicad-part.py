@@ -76,6 +76,12 @@ Guidelines:
   none invented. A heading that names a pin count binds.
 - Renames take the datasheet's printed names. Where a heading carries the
   pinout, the script renames every pin by number itself - name nothing.
+- The delivered symbol shows every pin on the body, each on its own
+  point, none hidden. When the source drawing stacks pins, hides them,
+  or runs them off the package, lay the pins out yourself: give
+  "layout" - every pin's position. Left side runs down, right runs up,
+  supplies top, grounds bottom; the body may need to be bigger, so
+  "body" may give its corners. Grid is 2.54.
 - Null when no symbol's pins genuinely do the part's jobs, after
   actually looking - a wrong symbol is worse than none. Never rename an
   unrelated device into shape.
@@ -83,7 +89,11 @@ Guidelines:
 Write ONE json object to {out} - keys the part names, values:
   {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
     "unused": ["7", "8"], "fit": "exact, family or generic",
-    "why": one short line}}
+    "why": one short line,
+    "layout": {{"1": [x, y, angle]}} - optional, every pin when given;
+    angle 0 points right (left side), 180 left (right side), 270 down
+    (top side), 90 up (bottom side); x, y in mm on the 2.54 grid,
+    "body": [x1, y1, x2, y2] - optional, with layout}}
 Null is {{"library": "", "why": ...}}. `rename` carries only pins whose
 names change; `unused` only spare pins. Nothing but the json object in
 the file. Verify a symbol you name outside the leads by reading its pins
@@ -554,64 +564,87 @@ def spans_of(block, opener):
 
 
 PIN_AT = re.compile(r"(\(pin [a-z_]+ line\n\s*\(at )(-?[\d.]+) (-?[\d.]+) (\d+)\)")
+def apply_layout(block, layout, body):
+    """The model's own pin positions, applied. Deterministic: the LLM
+    judged the layout (n9_1.43), this only writes it."""
+    if body:
+        x1, y1, x2, y2 = [float(v) for v in body]
+        block = re.sub(
+            r"\(rectangle\n(\s*)\(start [^)]*\)\n(\s*)\(end [^)]*\)",
+            f"(rectangle\n\\1(start {x1:g} {y1:g})\n\\2(end {x2:g} {y2:g})",
+            block, count=1)
+    for number, place in layout.items():
+        x, y, angle = [float(v) for v in place[:3]]
+        pat = re.compile(
+            r"(\(pin [a-z_]+ line\n\s*\(at )(-?[\d.]+) (-?[\d.]+) (\d+)"
+            r"(\)(?:.|\n)*?\(number \"" + re.escape(str(number)) + r"\")")
+        hit = None
+        for m in re.finditer(r"\(pin [a-z_]+ line\n(\s*)\(at (-?[\d.]+) "
+                             r"(-?[\d.]+) (\d+)\)", block):
+            span = block[m.start():]
+            depth = 0; k = 0; in_str = False
+            while k < len(span):
+                c = span[k]
+                if in_str:
+                    if c == "\\": k += 1
+                    elif c == '"': in_str = False
+                elif c == '"': in_str = True
+                elif c == "(": depth += 1
+                elif c == ")":
+                    depth -= 1
+                    if depth == 0: k += 1; break
+                k += 1
+            pin = span[:k]
+            num = re.search(r'\(number "([^"]*)"', pin)
+            if num and num.group(1) == str(number):
+                new = pin.replace(m.group(0),
+                                  f"(pin {pin.split()[1]} line\n{m.group(1)}"
+                                  f"(at {x:g} {y:g} {int(angle)})", 1)
+                block = block[:m.start()] + new + block[m.start() + k:]
+                hit = True
+                break
+        if not hit:
+            raise Bad(f"layout names pin {number}, not in the symbol")
+    return block
 
 
-def spread_pins(block):
-    """No overlapping pins - n9_1.24. Stock symbols stack duplicate power
-    pins on one point; every pin gets its own grid slot, stepped along
-    its side. Units share the canvas with the common unit, so occupancy
-    is judged per unit against unit 0."""
-    grid = 2.54
-    # child sections carry the drawing; the opener at the block's own
-    # start must not swallow them, so children are found by their names
-    sections = []
-    for m in re.finditer(r'\n\s*\(symbol "[^"]*?_(\d+)_\d+"', block):
-        a = m.start() + 1
-        span = spans_of(block[a:], '(symbol "')[0]
-        sections.append((a + span[0], a + span[1]))
-    def unit_of(text):
-        m = re.match(r'\s*\(symbol "[^"]*?_(\d+)_\d+"', text)
-        return int(m.group(1)) if m else None
-    occupied = {}
-    for a, b in sections:
-        u = unit_of(block[a:b])
-        if u is None:
-            continue
-        for m in PIN_AT.finditer(block[a:b]):
-            occupied.setdefault(u, set()).add(
-                (float(m.group(2)), float(m.group(3))))
-    def taken(u, pt):
-        return pt in occupied.get(0, set()) or pt in occupied.get(u, set())
-    out = block
-    for a, b in reversed(sections):
-        sec = block[a:b]
-        u = unit_of(sec)
-        if u is None:
-            continue
-        seen, new_sec, changed = set(), sec, False
-        for m in PIN_AT.finditer(sec):
-            x, y, ang = float(m.group(2)), float(m.group(3)), int(m.group(4))
-            if (x, y) not in seen:
-                seen.add((x, y))
-                continue
-            # stacked: step along the side to the first free slot
-            dx, dy = ((0.0, -grid) if ang in (0, 180) else (grid, 0.0))
-            nx, ny = x, y
-            while taken(u, (nx, ny)) or (nx, ny) in seen:
-                nx, ny = nx + dx, ny + dy
-            old = m.group(0)
-            new = f"{m.group(1)}{nx:g} {ny:g} {ang})"
-            new_sec = new_sec.replace(old, new, 1)
-            seen.add((nx, ny))
-            occupied.setdefault(u, set()).add((nx, ny))
-            changed = True
-        if changed:
-            out = out[:a] + new_sec + out[b:]
-    return out
+def illegible(block):
+    """The dumb check - stacked, hidden, or off-body pins, named. The
+    script verifies, never repairs (n9_1.43)."""
+    bad = []
+    pts = {}
+    xs, ys = [], []
+    for m in re.finditer(r"\((?:start|end|center|xy) (-?[\d.]+) (-?[\d.]+)",
+                         block):
+        xs.append(float(m.group(1))); ys.append(float(m.group(2)))
+    pins = []
+    for m in re.finditer(r"\(pin [a-z_]+ line\n\s*\(at (-?[\d.]+) "
+                         r"(-?[\d.]+) (\d+)\)\n\s*\(length ([\d.]+)\)"
+                         r"((?:.|\n)*?)\(number \"([^\"]*)\"", block):
+        x, y, ang, ln, mid, num = (float(m.group(1)), float(m.group(2)),
+                                   int(m.group(3)), float(m.group(4)),
+                                   m.group(5), m.group(6))
+        pins.append((num, x, y, ang, ln))
+        if "(hide yes)" in mid.split("(name")[0]:
+            bad.append(f"pin {num} hidden")
+        pts.setdefault((x, y), []).append(num)
+    for point, names in pts.items():
+        if len(names) > 1:
+            bad.append(f"pins stacked at {point}: {' '.join(names)}")
+    if xs and ys and pins:
+        import math
+        lo_x, hi_x = min(xs) - 0.13, max(xs) + 0.13
+        lo_y, hi_y = min(ys) - 0.13, max(ys) + 0.13
+        for num, x, y, ang, ln in pins:
+            bx = x + ln * {0: 1, 180: -1}.get(ang, 0)
+            by = y + ln * {90: 1, 270: -1}.get(ang, 0)
+            if not (lo_x <= bx <= hi_x and lo_y <= by <= hi_y):
+                bad.append(f"pin {num} off the body")
+    return bad
 
 
 def write(library, name, block):
-    block = spread_pins(show_pins(block))
+    block = show_pins(block)
     """Add to the library, or replace what is there under this name. Every
     other symbol in it is left exactly as it is."""
     src = library.read_text()
@@ -657,6 +690,13 @@ def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
     block = block.replace(f'"{spec["symbol"]}_', f'"{name}_')
     block = rename_pins(block, spec.get("rename"))
     block = rename_pins(block, {n: "NC" for n in (spec.get("unused") or [])})
+    if spec.get("layout"):
+        block = apply_layout(block, spec["layout"], spec.get("body"))
+    problems = illegible(show_pins(block) if False else block)
+    problems = [p for p in problems if not p.startswith("pin") or
+                "hidden" not in p] if False else problems
+    if problems:
+        raise Bad(f"{name}: illegible symbol - " + "; ".join(problems[:6]))
     block = set_property(block, "Value", name)
     block = set_property(block, "Footprint", "")
     block = set_property(block, "origin",
