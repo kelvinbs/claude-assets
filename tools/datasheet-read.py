@@ -11,12 +11,13 @@ Run alone it prints them.
 It writes no file of its own. The pins belong in the symbol, and the symbol
 is where `symbol-draw` puts them.
 
-There is no parser here. Datasheets do not share a layout - a table, a
-package drawing, a column beside prose, a scan with no text in it - so a
-parser is a new special case for every part and never converges. Reading a
-pinout is looking at the page, which is what `claude -p` is handed the job
-of doing. What comes back is checked here, and a pinout that does not hold
-up is thrown away, so a bad one never reaches a symbol.
+There is no parser here, and there are two tiers - n9_1.38. Tier 1:
+`pdftotext` extracts the pages that look like a pin table and one plain
+text-in, JSON-out model completion reads them - no tools, no rendering,
+seconds. Tier 2, only when tier 1 yields nothing - a scan, a figure-only
+sheet: the full reader session that renders pages and looks at them.
+What comes back is checked here either way, and a pinout that does not
+hold up is thrown away, so a bad one never reaches a symbol.
 """
 
 import argparse
@@ -88,6 +89,31 @@ family — take that variant's pinout.
 Before you finish, read your file back against the figure pin by pin. A
 wrong pin number passes ERC, passes the netlist, passes layout, and is
 found on the bench with a board in your hand.
+"""
+
+
+PROMPT_TEXT = """Below is text extracted from the datasheet of {mpn} —
+the part is {ipn}, {description}; the file is {datasheet}.
+
+Read the pin table and answer with ONLY a JSON object - no fences, no
+prose:
+
+    {{"pins": [[1, "GND", "power_in", "B"], [2, "RFIN", "input", "L"]]}}
+
+    number   as printed on the package. Every pin, 1 to N, none missing
+    name     as printed, exactly. Do not tidy it or expand it
+    type     one of: input output bidirectional tri_state passive free
+             unspecified power_in power_out open_collector open_emitter
+             no_connect
+    side     L R T B. Inputs left, outputs right, supplies top, grounds
+             bottom, and use your judgement where that does not fit
+
+An exposed pad is a pin. It numbers after the last numbered pin. Where
+the part number names a package variant the text tabulates separately,
+take {mpn}'s variant. If the text does not carry a complete pin table
+for this part, answer exactly NONE.
+
+{text}
 """
 
 
@@ -356,8 +382,83 @@ def faults(spec):
     return bad
 
 
-def read(ipn, description, mpn, datasheet, root, quiet=False):
-    """Hand the datasheet over and take back a pinout, or None.
+def candidate_pages(pdf):
+    """The pages whose text looks like a pin table, extracted. Empty for a
+    scan - there is no text layer to match."""
+    info = subprocess.run(["pdfinfo", str(pdf)], capture_output=True,
+                          text=True)
+    m = re.search(r"Pages:\s+(\d+)", info.stdout or "")
+    total = int(m.group(1)) if m else 0
+    found = []
+    for page in range(1, total + 1):
+        run = subprocess.run(
+            ["pdftotext", "-layout", "-f", str(page), "-l", str(page),
+             str(pdf), "-"], capture_output=True, text=True)
+        text = run.stdout or ""
+        if re.search(r"(?i)pin\s*(configuration|function|descriptions?)"
+                     r"|mnemonic", text):
+            found.append((page, text))
+        if len(found) >= 4:
+            break
+    return found
+
+
+def read_text(ipn, description, mpn, pdf, stored, quiet=False):
+    """Tier 1: the extracted text and one plain completion - no tools, no
+    rendering. None when the text carries no table or the answer does not
+    hold up."""
+    pages = candidate_pages(pdf)
+    if not pages:
+        return None
+    text = "\n".join(f"[page {n}]\n{t}" for n, t in pages)[:40000]
+    prompt = PROMPT_TEXT.format(ipn=ipn,
+                                description=description or "no description",
+                                mpn=mpn, datasheet=stored, text=text)
+    beat = heartbeat(f"{ipn} reading the text")
+    try:
+        run = subprocess.run(
+            ["claude", "-p", prompt, "--output-format", "json"],
+            capture_output=True, text=True, timeout=300)
+    finally:
+        beat.set()
+    try:
+        envelope = json.loads(run.stdout)
+        usage = envelope.get("usage") or {}
+        spent = int(usage.get("input_tokens", 0)) \
+            + int(usage.get("output_tokens", 0))
+        answer = envelope.get("result") or ""
+    except (json.JSONDecodeError, ValueError, AttributeError):
+        return None
+    if answer.strip() == "NONE":
+        return None
+    start, end = answer.find("{"), answer.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        spec = json.loads(answer[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    bad = faults(spec)
+    if bad:
+        if not quiet:
+            for fault in bad:
+                print(f"    {ipn}: text tier: {fault}")
+        return None
+    return {"pins": sorted(spec["pins"], key=lambda row: row[0]),
+            "tokens": spent, "tier": 1}
+
+
+def read(ipn, description, mpn, pdf, datasheet, root, quiet=False):
+    """Tier 1 first; the rendered reader only when the text yields
+    nothing."""
+    spec = read_text(ipn, description, mpn, pdf, datasheet, quiet)
+    if spec is not None:
+        return spec
+    return read_rendered(ipn, description, mpn, datasheet, root, quiet)
+
+
+def read_rendered(ipn, description, mpn, datasheet, root, quiet=False):
+    """Tier 2: the full reader session - renders pages and looks at them.
 
     The reader writes a file because that is how it is told what to produce.
     The file is scratch: it is read back here and deleted, and nothing of it
@@ -407,7 +508,7 @@ def read(ipn, description, mpn, datasheet, root, quiet=False):
                 print(f"    {ipn}: {fault}")
         return None
     return {"pins": sorted(spec["pins"], key=lambda row: row[0]),
-            "tokens": spent}
+            "tokens": spent, "tier": 2}
 
 
 def pinout(con, board, ipn, datasheet=None, folder=None):
@@ -417,7 +518,7 @@ def pinout(con, board, ipn, datasheet=None, folder=None):
     mpn, recorded = designed_mpn(con, ipn)
     path, stored = resolve_sheet(con, board, ipn, mpn, recorded,
                                  datasheet, folder)
-    spec = read(ipn, description, mpn, stored, repo_root(board))
+    spec = read(ipn, description, mpn, path, stored, repo_root(board))
     if spec is None:
         return None
     spec["datasheet"] = stored
@@ -438,10 +539,11 @@ def one(con, board, ipn, args):
         # What another tool reads. `symbol-draw` runs this as a command.
         print(json.dumps({"ipn": ipn, "datasheet": spec["datasheet"],
                           "pins": spec["pins"],
-                          "tokens": spec.get("tokens", 0)}))
+                          "tokens": spec.get("tokens", 0),
+                          "tier": spec.get("tier", 0)}))
         return True
     print(f"{ipn}  {len(spec['pins'])} pins  {spec['datasheet']}  "
-          f"tokens {spec.get('tokens', 0)}")
+          f"tokens {spec.get('tokens', 0)}  tier {spec.get('tier', 0)}")
     for number, name, etype, side in spec["pins"]:
         print(f"    {number:>4}  {name:<16} {etype:<15} {side}")
     return True

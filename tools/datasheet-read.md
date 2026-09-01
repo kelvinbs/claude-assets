@@ -18,12 +18,14 @@ second copy of them beside the symbol is a second thing to keep true.
 `--all` is every part whose `symbol` is null — the parts process 2 exists to
 serve, per T2.2.
 
-## There is no parser
+## There is no parser — there are two tiers
 
-Datasheets do not share a layout. A table, a package drawing, a column
-beside prose, a scan with no text in it. A parser is a new special case for
-every part and never converges, so reading a pinout is looking at the page,
-and the tool hands that job to `claude -p`.
+Datasheets do not share a layout, and a parser never converges. Tier 1
+(n9_1.38): `pdftotext` extracts the pages that look like a pin table and
+one plain text-in, JSON-out completion reads them — no tools, no page
+rendering, seconds and a few thousand tokens. Tier 2, only when the text
+yields nothing — a scan, a figure-only pinout: the full reader session
+that renders pages and looks at them. The report names the tier.
 
 The instruction it sends is the `PROMPT` string in `datasheet-read.py`. That
 is the thing to change when a pinout comes out wrong. It says to render pages
