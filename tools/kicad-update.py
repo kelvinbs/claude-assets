@@ -126,14 +126,16 @@ def instances(con):
     that has no part number yet. The IPN is on the row either way, in its
     own field, and that is what the record keys on."""
     rows = []
-    for uuid_, ipn, ref, page, room, symbol, footprint, description in con.execute(
-            "select r.uuid, r.ipn, r.ref, r.page, r.room, "
+    for uuid_, ipn, ref, page, room, unit, symbol, footprint, description \
+            in con.execute(
+            "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, "
             "       p.symbol, p.footprint, p.description "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
-            "order by r.ipn, r.ref"):
+            "order by r.ipn, r.ref, r.unit"):
         rows.append({
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
+            "unit": unit or 1,
             "symbol": symbol, "footprint": footprint or "",
             "value": value_of(con, ipn, description),
         })
@@ -146,9 +148,10 @@ def order_of(row):
     inside it."""
     ref = re.match(r"^([A-Za-z]+)(\d+)$", row["ref"])
     number = int(ref.group(2)) if ref else 0
+    unit = row.get("unit") or 1
     if row["room"]:
-        return (0, row["room"], "", number)
-    return (1, "", IPN.match(row["ipn"]).group(1), number)
+        return (0, row["room"], "", number, unit)
+    return (1, "", IPN.match(row["ipn"]).group(1), number, unit)
 
 
 # ------------------------------------------------------------------ the symbol
@@ -166,25 +169,28 @@ def property_sexp(name, value, x, y, hide=False, justify=None):
 
 
 def instance_sexp(project, path_uuid, row, x, y, bottom, right):
+    unit = row.get("unit") or 1
+    first = unit == 1
     return (
         "\t(symbol\n"
         f"\t\t(lib_id \"{row['symbol']}\")\n"
         f"\t\t(at {x:.2f} {y:.2f} 0)\n"
-        "\t\t(unit 1)\n"
+        f"\t\t(unit {unit})\n"
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
         "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
         f"\t\t(uuid \"{row['uuid']}\")\n"
         + property_sexp("Reference", row["ref"], f"{x + right:.2f}",
                         f"{y + bottom + LINE:.2f}", justify="left")
         + property_sexp("Value", row["value"], f"{x + right:.2f}",
-                        f"{y + bottom + 2 * LINE:.2f}", justify="left")
+                        f"{y + bottom + 2 * LINE:.2f}", justify="left",
+                        hide=not first)
         + property_sexp("Footprint", row["footprint"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + "\t\t(instances\n"
         f"\t\t\t(project \"{project}\"\n"
         f"\t\t\t\t(path \"{path_uuid}\"\n"
-        f"\t\t\t\t\t(reference \"{row['ref']}\")\n\t\t\t\t\t(unit 1)\n"
+        f"\t\t\t\t\t(reference \"{row['ref']}\")\n\t\t\t\t\t(unit {unit})\n"
         "\t\t\t\t)\n\t\t\t)\n\t\t)\n"
         "\t)\n"
     )
@@ -211,6 +217,14 @@ def sheet_sexp(project, root, name, filename, page_number, x, y, w, h):
 
 
 # ---------------------------------------------------------------- the library
+
+def unit_count(block, name):
+    """How many units the symbol has - the greatest x in its NAME_x_y
+    children. 0 and shared children do not add units."""
+    return max([int(m) for m in
+                re.findall(r'\(symbol "%s_(\d+)_\d+"' % re.escape(name),
+                           block)] or [1])
+
 
 def library_blocks(board, nickname, lib_ids):
     """The symbol definitions a page has to carry, keyed by lib_id. KiCad
@@ -838,6 +852,51 @@ def main(argv):
     finally:
         con.close()
     by_uuid = {r["uuid"]: r for r in rows}
+
+    # Multi-unit packages, n9_1.22: the record holds one row per unit.
+    # Where the symbol has more units than the record has rows, the
+    # missing rows are minted here - in the record first, never invented
+    # on a sheet. Same ref, unit numbering from 1.
+    lib_path = board / "lib" / f"{project}.kicad_sym"
+    lib_src = lib_path.read_text() if lib_path.exists() else ""
+    lib_spans = lib_blocks(lib_src)
+    con = connect(board)
+    try:
+        minted = 0
+        for ipn, symbol in con.execute(
+                "select ipn, symbol from parts_table "
+                "where symbol is not null").fetchall():
+            name = symbol.partition(":")[2]
+            if name not in lib_spans:
+                continue
+            a, b = lib_spans[name]
+            units = unit_count(lib_src[a:b], name)
+            if units < 2:
+                continue
+            for ref, page, room in con.execute(
+                    "select ref, page, room from ref_table where ipn = ? "
+                    "and (unit is null or unit = 1)", (ipn,)).fetchall():
+                con.execute("update ref_table set unit = 1 where ipn = ? "
+                            "and ref = ? and (unit is null or unit = 1)",
+                            (ipn, ref))
+                have = {r[0] for r in con.execute(
+                    "select unit from ref_table where ipn = ? and ref = ?",
+                    (ipn, ref))}
+                for u in range(2, units + 1):
+                    if u in have:
+                        continue
+                    con.execute(
+                        "insert into ref_table (uuid, ipn, parent, ref, "
+                        "page, room, unit) values (?, ?, null, ?, ?, ?, ?)",
+                        (str(uuid.uuid4()), ipn, ref, page, room, u))
+                    minted += 1
+        con.commit()
+        if minted:
+            rows = instances(con)
+            by_uuid = {r["uuid"]: r for r in rows}
+            print(f"{minted} unit row(s) minted in ref_table")
+    finally:
+        con.close()
 
     # An instance already on some page is never placed again, even when
     # the record now names another page: moving it would cut its wires.

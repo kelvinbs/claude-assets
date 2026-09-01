@@ -114,6 +114,7 @@
 | 4 | `ref` | TEXT | | Yes |
 | 5 | `page` | TEXT | | Yes |
 | 6 | `room` | TEXT | | Yes |
+| 7 | `unit` | INTEGER | | Yes |
 
 **T2.5 — `source` letters**
 
@@ -208,6 +209,9 @@
 
 - Ten letters match the KiCad reference designator for the same class.
 - `U0001` is a part, `U1` an instance.
+- A multi-unit package is one instance: one row per unit, same `ref`,
+  own uuid, `unit` numbering them from 1. Every unit is placed and every
+  pin is visible — no hidden pins.
 
 ### 2.7 — What the KiCad project carries
 

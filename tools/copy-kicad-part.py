@@ -468,7 +468,42 @@ def rename_pins(block, rename):
     return block
 
 
+def show_pins(block):
+    """No hidden pins - T2.10 rule, n9_1.21. A `(hide yes)` at the top
+    level of a pin block is removed as the symbol is copied in, so every
+    pin of every unit is visible on the sheet."""
+    out, i = [], 0
+    while True:
+        j = block.find("(pin ", i)
+        if j < 0:
+            out.append(block[i:])
+            return "".join(out)
+        depth, k, in_str = 0, j, False
+        while k < len(block):
+            c = block[k]
+            if in_str:
+                if c == "\\":
+                    k += 1
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    k += 1
+                    break
+            k += 1
+        pin = re.sub(r"\n\s*\(hide yes\)", "", block[j:k])
+        out.append(block[i:j])
+        out.append(pin)
+        i = k
+
+
 def write(library, name, block):
+    block = show_pins(block)
     """Add to the library, or replace what is there under this name. Every
     other symbol in it is left exactly as it is."""
     src = library.read_text()

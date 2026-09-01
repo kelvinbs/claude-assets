@@ -128,6 +128,15 @@ page mismatches, instances with no page, instances with no symbol. A
 second run straight after the first reports zeros and empty lists; that is
 the proof the two sides agree.
 
+## Units
+
+A multi-unit package is one instance. The record holds one row per unit —
+same reference, own uuid, `unit` from 1 (T2.4). Where the symbol has more
+units than the record has rows, place mints the missing rows in the
+record, then draws every unit — U15A, U15B, and the power unit — side by
+side. Fields ride on unit 1; the other units show the reference alone. No
+pin is hidden: `copy-kicad-part` strips pin hiding as a symbol comes in.
+
 ## Paper
 
 A new page takes the smallest ANSI size, `A` to `E`, that its parts fit on.

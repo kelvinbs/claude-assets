@@ -11,9 +11,10 @@ read, never derived. Project filenames take the project name.
 
     python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
 
-It adds what is missing and leaves what is there. An existing table whose
-columns do not match the schema stops the run and is named. Nothing is
-dropped, altered or emptied, ever.
+It adds what is missing and leaves what is there — a table, or a column
+the schema names that an existing table lacks (added at the end, T2.4
+`unit` was one). Any other column mismatch stops the run and is named.
+Nothing is dropped or emptied, ever.
 """
 
 import json
@@ -62,6 +63,7 @@ SCHEMA = {
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
+            "unit          INTEGER",
         ),
         # the manufacturer part itself. Kept, and never fetched away
         "mpn_table": (
@@ -123,6 +125,10 @@ def create_sql(table, spec):
 
 # ------------------------------------------------------------------- run
 
+def extra_of(found, wanted):
+    return [c for c in found if c not in wanted]
+
+
 def init_file(path, tables):
     """Create the file and any missing table. Report what happened per table."""
     made_file = not path.exists()
@@ -141,9 +147,18 @@ def init_file(path, tables):
                 continue
             found = [r[1] for r in con.execute(f"PRAGMA table_info({table})")]
             wanted = columns_of(spec)
+            if found != wanted and not extra_of(found, wanted) \
+                    and wanted[:len(found)] == found:
+                for line in spec:
+                    name = line.split()[0]
+                    if name not in found and name != "PRIMARY":
+                        con.execute(f"ALTER TABLE {table} ADD COLUMN "
+                                    + line.strip())
+                report.append((table, "column(s) added"))
+                continue
             if found != wanted:
                 missing = [c for c in wanted if c not in found]
-                extra = [c for c in found if c not in wanted]
+                extra = extra_of(found, wanted)
                 detail = []
                 if missing:
                     detail.append("missing " + ", ".join(missing))
