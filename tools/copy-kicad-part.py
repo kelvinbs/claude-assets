@@ -72,14 +72,11 @@ Guidelines:
 - A BOM row that carries a schematic page IS on the schematic. Null for
   no-schematic-presence only when the part truly never appears (a bare
   board, a bench host).
-- A candidate with SPARE pins may be taken: list the spare pin numbers in
-  "unused" and they are parked as NC. A candidate MISSING pins the part
-  needs is not fixable - do not invent pins.
-- Null only when no symbol's pins can be mapped, after actually looking.
-- The floor: a symbol is the part's only when its pins genuinely do the
-  part's jobs. When nothing visible qualifies, answer null - a wrong
-  symbol is worse than none. Never rename an unrelated device into
-  shape.
+- The symbol carries the part's pin count - no spares, none missing,
+  none invented. A heading that names a pin count binds.
+- Null when no symbol's pins genuinely do the part's jobs, after
+  actually looking - a wrong symbol is worse than none. Never rename an
+  unrelated device into shape.
 
 Write ONE json object to {out} - keys the part names, values:
   {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
@@ -305,7 +302,8 @@ def ask(parts, lists, root, board):
     """One model call for every part in the run. `parts` is the batch,
     `lists` its leads by name. Returns the JSON object, keyed by name."""
     sections = "\n\n".join(
-        f"== {p['name']}: {p['hint']}\n"
+        f"== {p['name']}: {p['hint']}"
+        + (f" ({p['pins']} pins)" if p.get("pins") else "") + "\n"
         + (as_lines(lists[p["name"]]) or "    (no leads scored - search the index)")
         for p in parts)
     handle, path = tempfile.mkstemp(suffix=".json")
@@ -603,7 +601,7 @@ def write(library, name, block):
     library.write_text(src[:close] + block + src[close:])
 
 
-def copy(library, nickname, spec, name, extra):
+def copy(library, nickname, spec, name, extra, pins=None):
     path = source_path(spec["library"], extra)
     src = path.read_text(errors="replace")
     block = top_level(src, spec["symbol"])
@@ -611,6 +609,9 @@ def copy(library, nickname, spec, name, extra):
         raise Bad(f"{path} does not hold '{spec['symbol']}'")
     block = flatten(block, src, spec["symbol"])
     numbers = set(re.findall(r'\(number "([^"]*)"', block))
+    if pins and len(numbers) != pins:
+        raise Bad(f"{name}: {spec['library']}:{spec['symbol']} has "
+                  f"{len(numbers)} pins, the part has {pins}")
     for key in list((spec.get("rename") or {})) + list(spec.get("unused") or []):
         if str(key) not in numbers:
             raise Bad(f"{name}: pin {key} is not in "
@@ -638,8 +639,12 @@ def main(argv):
     ap.add_argument("--nickname",
                     help="the project library's nickname, when no "
                          ".kicad_pro names it")
+    ap.add_argument("--pins", type=int,
+                    help="the part's pin count - a copy with any other "
+                         "count is refused")
     ap.add_argument("--batch",
-                    help='JSON list of {"name", "hint"} - one run, one ask')
+                    help='JSON list of {"name", "hint", "pins"?} - one '
+                         'run, one ask')
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
     args = ap.parse_args(argv[1:])
@@ -656,7 +661,7 @@ def main(argv):
                 raise Bad("--batch entries carry a name and a hint")
     elif args.hint:
         name = args.ipn or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint)[:48]
-        parts = [{"name": name, "hint": args.hint}]
+        parts = [{"name": name, "hint": args.hint, "pins": args.pins}]
     else:
         raise Bad("a hint, or --batch")
 
@@ -692,7 +697,8 @@ def main(argv):
             misses += 1
             continue
         try:
-            lib_id = copy(library, nickname, spec, name, args.lib)
+            lib_id = copy(library, nickname, spec, name, args.lib,
+                          p.get("pins"))
         except Bad as exc:
             print(f"{name}  null")
             print(f"    answer rejected: {exc}")

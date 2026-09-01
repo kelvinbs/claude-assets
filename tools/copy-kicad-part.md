@@ -12,6 +12,10 @@ python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
 ```
 
+`--pins N` gives the part's pin count; a symbol with any other count is
+refused, the numbers named. A batch entry may carry `"pins"`. The count
+is the symbol's style — an exposed pad counts as a pin.
+
 `<hint>` is a part number, a description, or both. `--ipn` names the copy;
 without it the copy is named after the hint.
 
