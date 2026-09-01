@@ -7,14 +7,13 @@
 3. [The project folder](#3--the-project-folder)
 4. [The pipeline](#4--the-pipeline)
 5. [Skills](#5--skills)
-6. [Installation](#6--installation)
 
 ## 1 — Introduction
 
 ### 1.1 — What it is
 
 - Claude-assisted hardware design in KiCad.
-- The plugin carries:
+- The tool carries:
   - The stages that carry a project through KiCad
   - The documents that define them
   - The scripts they call
@@ -25,7 +24,7 @@
 - The project is designed by working the stages of T4.1 in order — as often as
   needed.
 - Revision re-enters a stage.
-- The plugin is entered at whichever stage is next.
+- The tool is entered at whichever stage is next.
 
 ### 1.3 — How it works
 
@@ -38,22 +37,22 @@
   - The nine skills — T5.1
   - The six tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
-- The plugin is stateless.
+- The tool is stateless.
 - The User may add a field to any table at runtime. All other schema change
   is on the User's request only.
 - No code or skill outside T5.1. Authoring scripts at runtime is
   prohibited.
-- ERC and DRC: the plugin does not run the checks, but may set up the
+- ERC and DRC: the tool does not run the checks, but may set up the
   checks to be performed.
 - On a failure — or when a skill does not cover the work:
   - Abort the stage
   - Report the bug
-  - The plugin is unusable until fixed
-  - The runtime agent is not authorized to fix the plugin
+  - The tool is unusable until fixed
+  - The runtime agent is not authorized to fix the tool
 
 ### 1.5 — How it is organized
 
-- The plugin lives in `tools/board-build/`.
+- The tool lives in `tools/board-build/`.
 - Work files live in the project folder.
 
 ## 2 — Data
@@ -272,8 +271,8 @@
 | 5 | `lib/3d/` | Hand |
 | 6 | `datasheets/` | Hand |
 | 7 | `*.kicad_pro` | Generated once |
-| 8 | `*.kicad_sch` | Updated by the plugin, wired by the User |
-| 9 | `*.kicad_pcb` | Updated by the plugin, routed by the User |
+| 8 | `*.kicad_sch` | Updated by the tool, wired by the User |
+| 9 | `*.kicad_pcb` | Updated by the tool, routed by the User |
 | 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 11 | `out/` — RF-simulation file | Generated |
 | 12 | `lib/kicad-lib-index.json` | Generated |
@@ -351,12 +350,10 @@ One skill, one run — T4.2.
   - Each layer names a vertical position and a height
   - The objects on it are the boxes at that level — dielectric or conductor
 
-### 4.5 — One agent per stage
+### 4.5 — A stage is its skills
 
-- They are written in pipeline order — each agreed working before the
-  next.
-- Every stage runs as an agent — holding its own context and reporting at
-  the end.
+- A stage runs its skills in T4.1 order on the project folder and reports
+  at the end.
 - A stage does not prompt for missing information — it processes what it
   can and reports the omissions.
 
@@ -392,27 +389,3 @@ One skill, one run — T4.2.
 
 - `board-build-tool.md` — the only document at the top level
 - `tools/` — one `<skill>.md` and its script, per skill
-- `.claude-plugin/` — `plugin.json`, `marketplace.json`
-- `agents/` — one per stage, section 4.5
-- `skills/` — skills they load
-
-## 6 — Installation
-
-- Claude Code reads its assets from fixed paths — the folder is carried as a
-  plugin and its files stay plugin assets — T6.1.
-
-**T6.1 — Plugin paths**
-
-| # | Path | Holds |
-|---|---|---|
-| 1 | `.claude-plugin/plugin.json` | The plugin manifest |
-| 2 | `.claude-plugin/marketplace.json` | The local marketplace entry |
-| 3 | `agents/<stage>.md` | One agent per stage |
-| 4 | `skills/<name>/SKILL.md` | Skills the agents load |
-
-- A fresh clone installs it once:
-
-```
-/plugin marketplace add ./tools/board-build
-/plugin install board-build
-```
