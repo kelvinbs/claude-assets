@@ -40,8 +40,7 @@ HERE = Path(__file__).resolve().parent
 SCH_VERSION = 20250114
 GRID = 2.54
 FONT = 1.27
-REF_RAISE = 4.0   # Reference sits 4 mm above the drawing's top edge
-LINE = 2.54       # Value sits one line under the Reference
+LINE = 2.54   # field line pitch; Reference over Value at the lower right
 
 # A fixed namespace, so a rerun that changes nothing produces no diff.
 NS = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
@@ -166,7 +165,7 @@ def property_sexp(name, value, x, y, hide=False, justify=None):
     )
 
 
-def instance_sexp(project, path_uuid, row, x, y, top, left):
+def instance_sexp(project, path_uuid, row, x, y, bottom, right):
     return (
         "\t(symbol\n"
         f"\t\t(lib_id \"{row['symbol']}\")\n"
@@ -175,10 +174,10 @@ def instance_sexp(project, path_uuid, row, x, y, top, left):
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
         "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
         f"\t\t(uuid \"{row['uuid']}\")\n"
-        + property_sexp("Reference", row["ref"], f"{x - left:.2f}",
-                        f"{y - top - REF_RAISE:.2f}", justify="left")
-        + property_sexp("Value", row["value"], f"{x - left:.2f}",
-                        f"{y - top - REF_RAISE + LINE:.2f}", justify="left")
+        + property_sexp("Reference", row["ref"], f"{x + right:.2f}",
+                        f"{y + bottom + LINE:.2f}", justify="left")
+        + property_sexp("Value", row["value"], f"{x + right:.2f}",
+                        f"{y + bottom + 2 * LINE:.2f}", justify="left")
         + property_sexp("Footprint", row["footprint"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
@@ -260,16 +259,17 @@ def extent(block):
 
 
 def edges(block):
-    """How far the drawing reaches up and to the left of the origin, each
-    side on its own (n9_1.6, n9_1.12). The fields hang off these edges.
-    Pins count: a field over a pin stub is unreadable."""
+    """How far the drawing reaches down and to the right of the origin,
+    each side on its own (n9_1.6, n9_1.19). The field pair hangs off the
+    lower right corner. Pins count: a field over a pin stub is
+    unreadable."""
     pts = [(float(x), float(y))
            for x, y in re.findall(COORD, drawing(block))]
     if not pts:
         return GRID, GRID
-    top = max(max(y for _, y in pts), 0.0)
-    left = max(-min(x for x, _ in pts), 0.0)
-    return top, left
+    bottom = max(-min(y for _, y in pts), 0.0)
+    right = max(max(x for x, _ in pts), 0.0)
+    return bottom, right
 
 
 def indent_block(block, tabs):
@@ -550,7 +550,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         group = key
 
         half_w, half_h = extent(blocks[row["symbol"]])
-        top, left = edges(blocks[row["symbol"]])
+        bottom, right = edges(blocks[row["symbol"]])
         clear = half_h + GRID
         if cur_x + 2 * half_w > width - margin and cur_x > margin:
             cur_x, cur_y, row_h = margin, snap(cur_y + row_h + gap), 0.0
@@ -559,7 +559,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         cur_x = snap(x + half_w + gap)
         row_h = max(row_h, 2 * (clear + half_h))
         page_h = max(page_h, y + clear + half_h + margin)
-        body += instance_sexp(project, path_uuid, row, x, y, top, left)
+        body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
     return body, page_h
 
 
