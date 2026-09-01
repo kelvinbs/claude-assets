@@ -111,6 +111,14 @@ def connect(board):
     return con
 
 
+def value_of(con, ipn, description):
+    """T2.11: the blank-rank MPN, else the description, else the IPN -
+    Value is what a person reads on a sheet."""
+    mpn = con.execute("select mpn from aml_table where ipn = ? and rank "
+                      "is null", (ipn,)).fetchone()
+    return (mpn and mpn[0]) or description or ipn
+
+
 def instances(con):
     """One row per thing to draw, with everything the sheet needs on it.
 
@@ -128,7 +136,7 @@ def instances(con):
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
             "symbol": symbol, "footprint": footprint or "",
-            "value": ipn,
+            "value": value_of(con, ipn, description),
         })
     return rows
 
@@ -409,7 +417,8 @@ def field_rows(con, nickname):
             "select a.mpn, m.manufacturer, m.datasheet from aml_table a "
             "join mpn_table m on m.mpn = a.mpn "
             "where a.ipn = ? and a.rank is null", (ipn,)).fetchone()
-        out[name] = {"ipn": ipn, "Value": ipn,
+        out[name] = {"ipn": ipn,
+                     "Value": (mpn and mpn[0]) or description or ipn,
                      "Footprint": footprint or "",
                      "Description": description or "",
                      "Datasheet": (mpn and mpn[2]) or "",

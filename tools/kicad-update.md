@@ -19,7 +19,7 @@ python3 tools/board-build/tools/kicad-update.py <board-dir> --pull
 |---|---|---|
 | place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
 | `--push` | record to library | rewrites every library symbol's fields from the record — T2.11. Graphics untouched |
-| `--pull` | library to record | reads library fields back: `Description`, `Footprint`, `note` to `parts_table`; `Manufacturer`, `Datasheet` to the blank-rank MPN's `mpn_table` row. `MPN` and `Value` are reported on mismatch, never written — an approval is `table-write`'s act, and `Value` is the IPN |
+| `--pull` | library to record | reads library fields back: `Description`, `Footprint`, `note` to `parts_table`; `Manufacturer`, `Datasheet` to the blank-rank MPN's `mpn_table` row. `MPN` and `Value` are reported on mismatch, never written — an approval is `table-write`'s act, and `Value` is the blank-rank MPN, else the description |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
 then `--pull`. Claude's is `table-write`, then `--push`. Instances take

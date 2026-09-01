@@ -71,7 +71,7 @@
 | # | File | Holds |
 |---|---|---|
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
-| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` = IPN, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
+| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` — blank-rank MPN, else description — `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
 - `board.db` is master. Part fields push to the library symbol; instance
@@ -216,7 +216,7 @@
 | # | Field | Lives on | Record column |
 |---|---|---|---|
 | 1 | `Reference` | the instance | `ref_table.ref` |
-| 2 | `Value` | the library symbol | the IPN |
+| 2 | `Value` | the library symbol | `aml_table.mpn` blank rank, else `parts_table.description` |
 | 3 | `Footprint` | the library symbol | `parts_table.footprint` |
 | 4 | `Description` | the library symbol | `parts_table.description` |
 | 5 | `Datasheet` | the library symbol | `mpn_table.datasheet`, blank-rank MPN |
@@ -225,7 +225,8 @@
 | 8 | `note` | the library symbol | `parts_table.note` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 
-- `Value` is drawn from the IPN.
+- `Value` shows the part the board was designed against — what a person
+  reads on a sheet. The IPN is the key and travels in its own field.
 
 ### 2.8 — Where a thing is placed
 
