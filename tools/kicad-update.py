@@ -224,10 +224,19 @@ def library_blocks(board, nickname, lib_ids):
 
 
 def extent(block):
-    """Half-width and half-height of everything drawn, so the layout can give
-    each part the room it takes."""
+    """Half-width and half-height of what is drawn — pins and graphics. The
+    library's own field positions are not drawing (n9.7: they sat far out
+    and pushed Reference and Value away from the body), and a polyline
+    whose points all coincide draws nothing."""
     xs, ys = [], []
-    for x, y in re.findall(r'\((?:start|end|xy|at) (-?[\d.]+) (-?[\d.]+)', block):
+    body = re.sub(r'\n\s*\(property "[^"]*" "(?:[^"\\]|\\.)*"\n(?:.*?\n)*?\s*\)',
+                  "", block)
+    for m in re.finditer(r'\(polyline\n(?:.*?\n)*?\s*\(pts\n((?:.*?\n)*?)\s*\)', body):
+        pts = set(re.findall(r'\(xy (-?[\d.]+) (-?[\d.]+)\)', m.group(1)))
+        if len(pts) < 2:
+            body = body.replace(m.group(0), "", 1)
+    for x, y in re.findall(r'\((?:start|end|xy|at|center) (-?[\d.]+) (-?[\d.]+)',
+                           body):
         xs.append(abs(float(x)))
         ys.append(abs(float(y)))
     return (max(xs) if xs else GRID), (max(ys) if ys else GRID)
