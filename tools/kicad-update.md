@@ -1,13 +1,14 @@
 # kicad-update
 
-Push the record into the KiCad project. The tool of processes 3 and 4.
+Carry the record into the KiCad project, and the User's placements back.
+The skill of stages 4 and 6.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/<project>.kicad_sym` | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once |
+| `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`board.db` — `ref_table` |
 
 ```
-python3 tools/board-build/tools/kicad-update.py <board-dir>
+python3 tools/board-build/tools/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
 ```
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
@@ -80,6 +81,38 @@ wires are on these pages.
 
 Close the editor before running. KiCad holds the file in memory and will
 write it back over anything added underneath it.
+
+## The return direction
+
+The record is master for the part — section 2.2. The sheet is where the
+User works, and a part placed there by hand is a real use of a real part.
+Each run reads every page back and settles the difference both ways.
+
+| Found | Done |
+|---|---|
+| Instance in the record, not on its page | Placed — the forward direction above |
+| Symbol on a page, uuid not in the record, `ipn` field names a part | Entered in `ref_table` under the symbol's own uuid, with its `Reference` and page. The field values are then rewritten from the record |
+| Symbol on a page, no `ipn` field, or one naming no part | Reported, left as is. The LLM names the part from the symbol and its `Value`, creates it with `table-write` if it is new, and reruns with `--assign <uuid>=<ipn>`; the script writes the `ipn` field and enters the row |
+| Symbol on a page whose `Reference` is held by another instance | Reported as a conflict, left as is. The User renames one |
+| Symbol on both sides, a field differs | `Reference`, `Value`, `Footprint`, `ipn` rewritten from the record. Position, rotation and wiring untouched |
+| Symbol on both sides, on a page other than `ref_table.page` | Reported. Moving a symbol between sheets would cut its wires |
+
+The tool deletes on neither side. It cannot tell an instance the User
+removed from a sheet from one it has not placed yet, and it keeps no state
+to learn the difference — section 1.4. Removal is the User's: delete the
+symbol on the sheet first, then `table-write drop` in the record. The other
+order re-enters the symbol on the next run.
+
+`--assign` is the one judgment the skill has. The script decides nothing
+about which part a symbol is; it reports the symbol and applies the answer.
+
+## The report
+
+One line per page: placed, left, fields refreshed, entered. Then the
+lists — unresolved symbols with their `Value` and `lib_id`, conflicts,
+page mismatches, instances with no page, instances with no symbol. A
+second run straight after the first reports zeros and empty lists; that is
+the proof the two sides agree.
 
 ## Paper
 

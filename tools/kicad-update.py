@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""kicad-update — place symbols on their page.
+"""kicad-update — carry the record onto the pages, and the pages back.
 
-    kicad-update.py <board-dir>
+    kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
 
-The tool of process 3. Every instance in `ref_table` that carries a page and
-whose part carries a symbol is drawn on that page, in the order of T2.12:
-room first, then family for the instances with no room.
+The skill of stages 4 and 6. Every instance in `ref_table` that carries a
+page and whose part carries a symbol is drawn on that page, in the order of
+T2.12: room first, then family for the instances with no room.
+
+The return direction, section 2.2: every page is read back. A symbol the
+User placed enters `ref_table` under its own uuid when its `ipn` field names
+a part, or when `--assign` names one for it. A field the sheet holds
+differently from the record is rewritten from the record. The tool deletes
+on neither side.
 
 It adds what is missing and leaves what is there. A symbol already on a page
 keeps its position, and every wire, label and graphic on that page is left
@@ -232,6 +238,121 @@ def indent_block(block, tabs):
     return "\n".join(pad + ln if ln.strip() else ln for ln in block.split("\n"))
 
 
+# ------------------------------------------------------------- reading back
+
+def esc(value):
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def unesc(value):
+    return value.replace('\\"', '"').replace("\\\\", "\\")
+
+
+def symbol_blocks(src):
+    """Every placed symbol on a page — the top-level `(symbol` blocks, as
+    (start, end) spans of the text. Library definitions sit one level down
+    inside `lib_symbols` and are not matched."""
+    spans, i = [], 0
+    while True:
+        j = src.find("\n\t(symbol\n", i)
+        if j < 0:
+            return spans
+        start = j + 1
+        depth, k, in_str = 0, start, False
+        while k < len(src):
+            c = src[k]
+            if in_str:
+                if c == "\\":
+                    k += 1
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    k += 1
+                    break
+            k += 1
+        spans.append((start, k))
+        i = k
+
+
+PROP = r'\n\t\t\(property "%s" "((?:[^"\\]|\\.)*)"'
+
+
+def read_symbol(block):
+    """What the sheet says about one placed symbol: its uuid, its lib_id and
+    the four fields of T2.11."""
+    u = re.search(r'\n\t\t\(uuid "([^"]+)"\)', block)
+    lib = re.search(r'\(lib_id "([^"]+)"\)', block)
+    unit = re.search(r'\n\t\t\(unit (\d+)\)', block)
+    props = {name: unesc(val) for name, val in re.findall(
+        r'\n\t\t\(property "([^"]+)" "((?:[^"\\]|\\.)*)"', block)}
+    return {"uuid": u.group(1) if u else None,
+            "lib_id": lib.group(1) if lib else "",
+            "unit": int(unit.group(1)) if unit else 1,
+            "props": props}
+
+
+def set_property(block, name, value):
+    """Rewrite one field's value in a symbol block, adding the field, hidden,
+    at the symbol's own position when the block does not carry it."""
+    pat = re.compile(PROP % re.escape(name))
+    if pat.search(block):
+        return pat.sub(lambda m: m.group(0)[:m.start(1) - m.start(0)]
+                       + esc(value) + '"', block, count=1)
+    at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+)', block)
+    x, y = (at.group(1), at.group(2)) if at else ("0", "0")
+    prop = property_sexp(name, esc(value), x, y, hide=True)
+    anchor = block.find("\n\t\t(pin ")
+    if anchor < 0:
+        anchor = block.find("\n\t\t(instances")
+    if anchor < 0:
+        raise Bad("a symbol block with no pins and no instances")
+    return block[:anchor + 1] + prop + block[anchor + 1:]
+
+
+def set_reference(block, ref):
+    block = set_property(block, "Reference", ref)
+    return re.sub(r'\(reference "[^"]*"\)', f'(reference "{esc(ref)}")',
+                  block)
+
+
+def page_names(root_src):
+    """Sheetfile to Sheetname, from the root's sheet symbols."""
+    names = re.findall(r'\(property "Sheetname" "([^"]*)"', root_src)
+    files = re.findall(r'\(property "Sheetfile" "([^"]*)"', root_src)
+    return dict(zip(files, names))
+
+
+def read_pages(board, project, root_src):
+    """Every symbol on every page: uuid -> (file name, page name, symbol,
+    block span). Pages are the files the root names, plus any
+    `<project>-*.kicad_sch` beside them."""
+    by_file = page_names(root_src)
+    found = {}
+    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+        page = by_file.get(path.name)
+        if page is None:
+            continue
+        src = path.read_text()
+        for start, end in symbol_blocks(src):
+            sym = read_symbol(src[start:end])
+            if sym["uuid"]:
+                found[sym["uuid"]] = (path.name, page, sym)
+    return found
+
+
+def next_ref_free(con, prefix, taken):
+    n = 1
+    while f"{prefix}{n}" in taken:
+        n += 1
+    return f"{prefix}{n}"
+
+
 # ---------------------------------------------------------------- the placing
 
 def flow(rows, blocks, project, path_uuid, width, start_y):
@@ -420,7 +541,19 @@ def write_project_file(board, project):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
+    ap.add_argument("--assign", action="append", default=[],
+                    metavar="UUID=IPN",
+                    help="the part a placed symbol is, when its ipn field "
+                         "does not say")
     args = ap.parse_args(argv[1:])
+    assign = {}
+    for item in args.assign:
+        if "=" not in item:
+            raise Bad(f"--assign takes <uuid>=<ipn>, not '{item}'")
+        u, ipn = item.split("=", 1)
+        if not IPN.match(ipn):
+            raise Bad(f"'{ipn}' does not read as an IPN")
+        assign[u.strip()] = ipn
 
     board = Path(args.board)
     if not board.is_dir():
@@ -436,31 +569,98 @@ def main(argv):
         raise Bad("project_table is empty. Run init-pipeline first")
     project = row[0]
 
-    con = connect(board)
-    try:
-        rows = instances(con)
-    finally:
-        con.close()
-
-    unplaced = [r for r in rows if not r["page"]]
-    nosymbol = [r for r in rows if r["page"] and not r["symbol"]]
-    drawable = [r for r in rows if r["page"] and r["symbol"]]
-    if not drawable:
-        raise Bad("nothing to place. Every instance is missing a page, a "
-                  "symbol, or both")
-
-    blocks = library_blocks(board, project, {r["symbol"] for r in drawable})
-    pages = sorted({r["page"] for r in drawable})
     # n8.4: instance paths are rooted at the ROOT SHEET'S OWN uuid -
     # init-pipeline wrote it. Inventing one makes KiCad repair every
     # path on load.
     root_path = board / f"{project}.kicad_sch"
     if not root_path.exists():
         raise Bad(f"{root_path} does not exist. Run init-pipeline first")
-    found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', root_path.read_text())
+    root_src = root_path.read_text()
+    found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', root_src)
     if not found:
         raise Bad(f"{root_path} carries no uuid")
     root = found.group(1)
+
+    # The return direction. Read every page back before anything is placed,
+    # and enter what the User put there.
+    placed = read_pages(board, project, root_src)
+    con = connect(board)
+    try:
+        known = {r["uuid"] for r in instances(con)}
+        parts = {r[0] for r in con.execute("select ipn from parts_table")}
+        refs = {r[0]: r[1] for r in con.execute(
+            "select ref, uuid from ref_table where ref is not null")}
+        entered, unresolved, conflicts = [], [], []
+        for u, (fname, page, sym) in sorted(placed.items()):
+            if u in known:
+                continue
+            ipn = assign.get(u) or sym["props"].get("ipn", "").strip()
+            if not ipn or ipn not in parts:
+                unresolved.append((u, fname, sym))
+                continue
+            ref = sym["props"].get("Reference", "").strip()
+            if ref in refs and refs[ref] != u:
+                conflicts.append((u, fname, ref, refs[ref]))
+                continue
+            if not ref or ref.endswith("?"):
+                prefix = re.match(r"^[A-Za-z]+", ref or "U")
+                ref = next_ref_free(con, prefix.group(0) if prefix else "U",
+                                    set(refs))
+            con.execute("insert into ref_table (uuid, ipn, parent, ref, page, "
+                        "room) values (?, ?, null, ?, ?, null)",
+                        (u, ipn, ref, page))
+            refs[ref] = u
+            entered.append((u, fname, ref, ipn))
+        con.commit()
+        rows = instances(con)
+    finally:
+        con.close()
+    by_uuid = {r["uuid"]: r for r in rows}
+
+    # An instance already on some page is never placed again, even when
+    # the record now names another page: moving it would cut its wires.
+    mismatched = [(by_uuid[u]["ref"], fname, by_uuid[u]["page"])
+                  for u, (fname, page, sym) in sorted(placed.items())
+                  if u in by_uuid and by_uuid[u]["page"] not in ("", page)]
+    elsewhere = {u for u, (fname, page, sym) in placed.items()
+                 if u in by_uuid and by_uuid[u]["page"] != page}
+
+    unplaced = [r for r in rows if not r["page"]]
+    nosymbol = [r for r in rows if r["page"] and not r["symbol"]]
+    drawable = [r for r in rows if r["page"] and r["symbol"]
+                and r["uuid"] not in elsewhere]
+    if not drawable and not placed:
+        raise Bad("nothing to place. Every instance is missing a page, a "
+                  "symbol, or both")
+
+    blocks = library_blocks(board, project, {r["symbol"] for r in drawable})
+    pages = sorted({r["page"] for r in drawable})
+
+    # Fields: the record is master, 2.2. Rewrite what differs, in place.
+    refreshed = {}
+    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+        src = path.read_text()
+        out, last, count = [], 0, 0
+        for start, end in symbol_blocks(src):
+            block = src[start:end]
+            sym = read_symbol(block)
+            row = by_uuid.get(sym["uuid"])
+            if row is None:
+                continue
+            want = {"Reference": row["ref"], "Value": row["value"],
+                    "Footprint": row["footprint"], "ipn": row["ipn"]}
+            new = block
+            for name, value in want.items():
+                if sym["props"].get(name) != value:
+                    new = (set_reference(new, value) if name == "Reference"
+                           else set_property(new, name, value))
+            if new != block:
+                out.append(src[last:start]); out.append(new); last = end
+                count += 1
+        if count:
+            out.append(src[last:])
+            path.write_text("".join(out))
+            refreshed[path.name] = count
 
     def normalize(path):
         """n8.2 - the sheet must load with no dialogs. KiCad's own writer
@@ -477,13 +677,41 @@ def main(argv):
     print(f"{project}.kicad_pro  {'written' if made else 'kept'}")
     print(f"{project}.kicad_sch  {added} page(s) added, {len(pages)} in all")
 
+    touched = set(refreshed)
     for page in pages:
         on_page = [r for r in drawable if r["page"] == page]
         name, new, kept = write_page(board, project, root, page, on_page,
                                      blocks, None)
+        touched.discard(name)
         normalize(board / name)
-        print(f"    {name}  {new} placed, {kept} left as they were")
+        came_in = sum(1 for _, f, _, _ in entered if f == name)
+        print(f"    {name}  {new} placed, {kept} left as they were, "
+              f"{refreshed.get(name, 0)} field(s) refreshed, "
+              f"{came_in} entered")
+    for name in sorted(touched):
+        normalize(board / name)
+        print(f"    {name}  {refreshed[name]} field(s) refreshed")
 
+    if entered:
+        print(f"\n{len(entered)} symbol(s) entered in ref_table from the "
+              "sheets: " + " ".join(f"{ref}={ipn}" for _, _, ref, ipn in entered))
+    if unresolved:
+        print(f"\n{len(unresolved)} symbol(s) on a sheet with no part in "
+              "the record. Name each with --assign <uuid>=<ipn>:")
+        for u, fname, sym in unresolved:
+            print(f"    {u}  {fname}  {sym['lib_id']}  "
+                  f"Reference={sym['props'].get('Reference', '')!r}  "
+                  f"Value={sym['props'].get('Value', '')!r}  "
+                  f"ipn={sym['props'].get('ipn', '')!r}")
+    if conflicts:
+        print(f"\n{len(conflicts)} symbol(s) whose Reference is held by "
+              "another instance, left as they are:")
+        for u, fname, ref, other in conflicts:
+            print(f"    {u}  {fname}  {ref} is {other}")
+    if mismatched:
+        print(f"\n{len(mismatched)} instance(s) on a page other than the "
+              "record's, left where they are: "
+              + " ".join(f"{ref}:{f}!={p}" for ref, f, p in mismatched))
     if nosymbol:
         print(f"\n{len(nosymbol)} instance(s) with a page and no symbol: "
               + " ".join(sorted(r["ref"] for r in nosymbol)))

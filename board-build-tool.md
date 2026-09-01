@@ -73,7 +73,9 @@
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
 | 2 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
 
-- `board.db` is master and pushes to KiCad.
+- `board.db` is master for the part and pushes to KiCad. The schematic
+  returns an instance the User placed on it. `kicad-update` carries both
+  ways and deletes on neither side.
 - Table names end in `_table`; keys carry the bare word.
 **T2.2 — Progress queries**
 
@@ -342,6 +344,10 @@ One skill, one run — T4.2.
   - Its wiring
   - Its routing
 - Each run reports what it left untouched.
+- A symbol the User placed on a sheet enters `ref_table` under its own
+  uuid. A field the sheet holds differently from the record is rewritten
+  from the record.
+- Removal is the User's, on the sheet first and then in the record.
 
 ### 4.4 — The RF-simulation file
 
@@ -383,7 +389,7 @@ One skill, one run — T4.2.
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| 9 | `kicad-update` | Push the record into the KiCad project | `board.db`, `lib/` | `*.kicad_sch`, `*.kicad_pcb` |
+| 9 | `kicad-update` | Carry the record into the KiCad project, and the User's placements back | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`<br>`board.db` — `ref_table` |
 
 ### 5.3 — Layout
 
