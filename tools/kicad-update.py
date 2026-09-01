@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve().parent
 SCH_VERSION = 20250114
 GRID = 2.54
 FONT = 1.27
+FIELD_GAP = FONT * 1.5   # centre of the text, one and a half lines off the body edge
 
 # A fixed namespace, so a rerun that changes nothing produces no diff.
 NS = uuid.UUID("6f9619ff-8b86-d011-b42d-00c04fc964ff")
@@ -158,7 +159,7 @@ def property_sexp(name, value, x, y, hide=False):
     )
 
 
-def instance_sexp(project, path_uuid, row, x, y, clear):
+def instance_sexp(project, path_uuid, row, x, y, top, bottom):
     return (
         "\t(symbol\n"
         f"\t\t(lib_id \"{row['symbol']}\")\n"
@@ -167,8 +168,10 @@ def instance_sexp(project, path_uuid, row, x, y, clear):
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
         "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
         f"\t\t(uuid \"{row['uuid']}\")\n"
-        + property_sexp("Reference", row["ref"], f"{x:.2f}", f"{y - clear:.2f}")
-        + property_sexp("Value", row["value"], f"{x:.2f}", f"{y + clear:.2f}")
+        + property_sexp("Reference", row["ref"], f"{x:.2f}",
+                        f"{y - top - FIELD_GAP:.2f}")
+        + property_sexp("Value", row["value"], f"{x:.2f}",
+                        f"{y + bottom + FIELD_GAP:.2f}")
         + property_sexp("Footprint", row["footprint"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
@@ -223,23 +226,41 @@ def library_blocks(board, nickname, lib_ids):
     return out
 
 
-def extent(block):
-    """Half-width and half-height of what is drawn — pins and graphics. The
-    library's own field positions are not drawing (n9.7: they sat far out
-    and pushed Reference and Value away from the body), and a polyline
-    whose points all coincide draws nothing."""
-    xs, ys = [], []
+def drawing(block):
+    """The block with everything that draws nothing removed: the library's
+    own field positions (n9.7 — they sat far out and pushed the fields
+    away) and polylines whose points all coincide."""
     body = re.sub(r'\n\s*\(property "[^"]*" "(?:[^"\\]|\\.)*"\n(?:.*?\n)*?\s*\)',
                   "", block)
     for m in re.finditer(r'\(polyline\n(?:.*?\n)*?\s*\(pts\n((?:.*?\n)*?)\s*\)', body):
         pts = set(re.findall(r'\(xy (-?[\d.]+) (-?[\d.]+)\)', m.group(1)))
         if len(pts) < 2:
             body = body.replace(m.group(0), "", 1)
-    for x, y in re.findall(r'\((?:start|end|xy|at|center) (-?[\d.]+) (-?[\d.]+)',
-                           body):
+    return body
+
+
+COORD = r'\((?:start|end|xy|at|center) (-?[\d.]+) (-?[\d.]+)'
+
+
+def extent(block):
+    """Half-width and half-height of what is drawn — pins and graphics —
+    for the spacing between parts, so pins never overlap (n6.7)."""
+    xs, ys = [], []
+    for x, y in re.findall(COORD, drawing(block)):
         xs.append(abs(float(x)))
         ys.append(abs(float(y)))
     return (max(xs) if xs else GRID), (max(ys) if ys else GRID)
+
+
+def edges(block):
+    """How far the drawing reaches above and below the origin, each side on
+    its own (n9_1.6). Reference sits just above the top edge, Value just
+    below the bottom edge — where the drawing ends on that side, not at a
+    symmetric radius. Pins count: a field over a pin stub is unreadable."""
+    ys = [float(y) for _, y in re.findall(COORD, drawing(block))]
+    if not ys:
+        return GRID, GRID
+    return max(max(ys), 0.0), max(-min(ys), 0.0)
 
 
 def indent_block(block, tabs):
@@ -379,6 +400,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         group = key
 
         half_w, half_h = extent(blocks[row["symbol"]])
+        top, bottom = edges(blocks[row["symbol"]])
         clear = half_h + GRID
         if cur_x + 2 * half_w > width - margin and cur_x > margin:
             cur_x, cur_y, row_h = margin, snap(cur_y + row_h + gap), 0.0
@@ -387,7 +409,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
         cur_x = snap(x + half_w + gap)
         row_h = max(row_h, 2 * (clear + half_h))
         page_h = max(page_h, y + clear + half_h + margin)
-        body += instance_sexp(project, path_uuid, row, x, y, clear)
+        body += instance_sexp(project, path_uuid, row, x, y, top, bottom)
     return body, page_h
 
 
