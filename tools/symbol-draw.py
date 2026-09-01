@@ -92,6 +92,26 @@ def datasheet_of(con, ipn):
     return (row[0] if row else None) or ""
 
 
+def sibling(name):
+    import importlib.util
+    from pathlib import Path as _P
+    here = _P(__file__).resolve().parent
+    spec = importlib.util.spec_from_file_location(
+        name.replace("-", "_"), here / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def push_symbol_fields(con, board, ipn, lib_id):
+    """The fields of T2.11, written onto the just-copied or just-drawn
+    symbol from the record - kicad-update owns the writer."""
+    ku = sibling("kicad-update")
+    nickname, name = lib_id.split(":", 1)
+    library = Path(board) / "lib" / f"{nickname}.kicad_sym"
+    ku.push_fields(con, library, nickname, only=name)
+
+
 def write_fields(con, ipn, lib_id, letter, was_source):
     """`source` is two letters, symbol then footprint. This tool owns the
     first and does not touch the second."""
@@ -344,6 +364,7 @@ def one(con, board, ipn, nickname, library, args):
     written = try_copy(board, ipn, hint, args.lib)
     if written:
         write_fields(con, ipn, written, "s", source)
+        push_symbol_fields(con, board, ipn, written)
         print(f"{ipn}  {written}  s  copied")
         return True
 
@@ -360,6 +381,7 @@ def one(con, board, ipn, nickname, library, args):
             "datasheet": datasheet_of(con, ipn)}
     merge(library, ipn, build_symbol(spec), True)
     write_fields(con, ipn, f"{nickname}:{ipn}", "h", source)
+    push_symbol_fields(con, board, ipn, f"{nickname}:{ipn}")
     print(f"{ipn}  {nickname}:{ipn}  h  drawn, {len(pins)} pins")
     return True
 

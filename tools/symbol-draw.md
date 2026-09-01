@@ -17,6 +17,14 @@ on a page. A part on no page is not on a sheet and has no symbol — a bare
 board, an enclosure, a host the board plugs into. The run names them and
 leaves them. `kicad-update` reads a blank page the same way.
 
+## The fields
+
+A symbol this skill copies or draws carries the part's fields, written
+from the record per T2.11 — `Value` is the IPN; `Footprint`,
+`Description`, `note` from `parts_table`; `MPN`, `Manufacturer`,
+`Datasheet` from the blank-rank approval. `kicad-update --push` rewrites
+them later when the record changes.
+
 ## The order of the resorts
 
 Drawing a symbol is the last thing tried, not the first.

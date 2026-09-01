@@ -6,7 +6,7 @@ Create or modify a part. The skill of Update parts.
 |---|---|
 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` |
 
-It never opens a KiCad file, and of the sourcing tables it touches only
+Part fields reach KiCad by `kicad-update --push`. It never opens a KiCad file, and of the sourcing tables it touches only
 `aml_table`. `init-pipeline` must have run first.
 
 It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves

@@ -1,15 +1,29 @@
 # kicad-update
 
-Carry the record into the KiCad project, and the User's placements back.
-The skill of stages 4 and 6.
+Place instances, push record to library fields, pull library fields to
+record. The skill of stages 4 and 6.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`board.db` — `ref_table` |
+| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table`, `mpn_table` on pull |
 
 ```
 python3 tools/board-build/tools/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
+python3 tools/board-build/tools/kicad-update.py <board-dir> --push
+python3 tools/board-build/tools/kicad-update.py <board-dir> --pull
 ```
+
+## The three verbs
+
+| Verb | Direction | Does |
+|---|---|---|
+| place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
+| `--push` | record to library | rewrites every library symbol's fields from the record — T2.11. Graphics untouched |
+| `--pull` | library to record | reads library fields back: `Description`, `Footprint`, `note` to `parts_table`; `Manufacturer`, `Datasheet` to the blank-rank MPN's `mpn_table` row. `MPN` and `Value` are reported on mismatch, never written — an approval is `table-write`'s act, and `Value` is the IPN |
+
+The User's UI for part data is the Symbol Editor: edit the field there,
+then `--pull`. Claude's is `table-write`, then `--push`. Instances take
+changed fields in KiCad — Update Symbols from Library.
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
 the parts on the page so there is something to wire.
@@ -94,7 +108,7 @@ Each run reads every page back and settles the difference both ways.
 | Symbol on a page, uuid not in the record, `ipn` field names a part | Entered in `ref_table` under the symbol's own uuid, with its `Reference` and page. The field values are then rewritten from the record |
 | Symbol on a page, no `ipn` field, or one naming no part | Reported, left as is. The LLM names the part from the symbol and its `Value`, creates it with `table-write` if it is new, and reruns with `--assign <uuid>=<ipn>`; the script writes the `ipn` field and enters the row |
 | Symbol on a page whose `Reference` is held by another instance | Reported as a conflict, left as is. The User renames one |
-| Symbol on both sides, a field differs | `Reference`, `Value`, `Footprint`, `ipn` rewritten from the record. Position, rotation and wiring untouched |
+| Symbol on both sides, a field differs | left alone. Fields flow to instances by Update Symbols from Library, not by this tool |
 | Symbol on both sides, on a page other than `ref_table.page` | Reported. Moving a symbol between sheets would cut its wires |
 
 The tool deletes on neither side. It cannot tell an instance the User

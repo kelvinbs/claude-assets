@@ -71,11 +71,15 @@
 | # | File | Holds |
 |---|---|---|
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
-| 2 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `Value`, `Footprint`, `ipn` |
+| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` = IPN, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
+| 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
-- `board.db` is master for the part and pushes to KiCad. The schematic
-  returns an instance the User placed on it. `kicad-update` carries both
-  ways and deletes on neither side.
+- `board.db` is master. Part fields push to the library symbol; instance
+  data pushes to the sheet; pull reads library fields back into the
+  record. Push and pull are explicit and User-run.
+- The schematic returns an instance the User placed on it — its existence
+  and its `Reference`, nothing else. The tool deletes on neither side.
+- Instances take library fields in KiCad — Update Symbols from Library.
 - Table names end in `_table`; keys carry the bare word.
 **T2.2 — Progress queries**
 
@@ -209,10 +213,17 @@
 
 **T2.11 — KiCad project fields**
 
-| # | Field | Origin |
-|---|---|---|
-| 1 | `Reference`, `Value`, `Footprint`, `3D model` | Built in |
-| 2 | `ipn` | Custom, the key to `parts_table` |
+| # | Field | Lives on | Record column |
+|---|---|---|---|
+| 1 | `Reference` | the instance | `ref_table.ref` |
+| 2 | `Value` | the library symbol | the IPN |
+| 3 | `Footprint` | the library symbol | `parts_table.footprint` |
+| 4 | `Description` | the library symbol | `parts_table.description` |
+| 5 | `Datasheet` | the library symbol | `mpn_table.datasheet`, blank-rank MPN |
+| 6 | `Manufacturer` | the library symbol | `mpn_table.manufacturer`, blank-rank MPN |
+| 7 | `MPN` | the library symbol | `aml_table.mpn`, blank rank |
+| 8 | `note` | the library symbol | `parts_table.note` |
+| 9 | `ipn` | both | `parts_table.ipn`, the key |
 
 - `Value` is drawn from the IPN.
 
@@ -268,7 +279,7 @@
 |---|---|---|
 | 1 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
 | 2 | `board.db` — `offer_table` | Fetched. Discardable |
-| 3 | `lib/*.kicad_sym` | Hand |
+| 3 | `lib/*.kicad_sym` | Hand for graphics; the tool writes the fields |
 | 4 | `lib/*.pretty` | Hand |
 | 5 | `lib/3d/` | Hand |
 | 6 | `datasheets/` | Hand |
@@ -345,8 +356,10 @@ One skill, one run — T4.2.
   - Its routing
 - Each run reports what it left untouched.
 - A symbol the User placed on a sheet enters `ref_table` under its own
-  uuid. A field the sheet holds differently from the record is rewritten
-  from the record.
+  uuid, with its `Reference`. No other field returns from a sheet.
+- Push rewrites library-symbol fields from the record; pull reads them
+  back into it. Instance fields are not touched on re-entry — the User
+  pulls them in KiCad, Update Symbols from Library.
 - Removal is the User's, on the sheet first and then in the record.
 
 ### 4.4 — The RF-simulation file
@@ -386,10 +399,10 @@ One skill, one run — T4.2.
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 6 | `symbol-draw` | Copy or draw a symbol into `lib/` | KiCad libraries, pins from `datasheet-read` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
+| 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| 9 | `kicad-update` | Carry the record into the KiCad project, and the User's placements back | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`<br>`board.db` — `ref_table` |
+| 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table`, `mpn_table` |
 
 ### 5.3 — Layout
 

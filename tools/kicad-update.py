@@ -123,14 +123,11 @@ def instances(con):
             "       p.symbol, p.footprint, p.description "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "order by r.ipn, r.ref"):
-        mpn = con.execute(
-            "select mpn from aml_table where ipn = ? "
-            "order by rank is not null, rank", (ipn,)).fetchone()
         rows.append({
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
             "symbol": symbol, "footprint": footprint or "",
-            "value": (mpn[0] if mpn else None) or description or ipn,
+            "value": ipn,
         })
     return rows
 
@@ -337,11 +334,10 @@ def set_property(block, name, value):
     at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+)', block)
     x, y = (at.group(1), at.group(2)) if at else ("0", "0")
     prop = property_sexp(name, esc(value), x, y, hide=True)
-    anchor = block.find("\n\t\t(pin ")
-    if anchor < 0:
-        anchor = block.find("\n\t\t(instances")
-    if anchor < 0:
-        raise Bad("a symbol block with no pins and no instances")
+    spots = [i for i in (block.find("\n\t\t(pin "),
+                         block.find("\n\t\t(instances"),
+                         block.find('\n\t\t(symbol "')) if i >= 0]
+    anchor = min(spots) if spots else block.rstrip().rfind("\n")
     return block[:anchor + 1] + prop + block[anchor + 1:]
 
 
@@ -381,6 +377,147 @@ def next_ref_free(con, prefix, taken):
     while f"{prefix}{n}" in taken:
         n += 1
     return f"{prefix}{n}"
+
+
+# ------------------------------------------------- the library fields (T2.11)
+
+FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
+          "MPN", "note", "ipn"]
+
+PULLED = {"Description": ("parts_table", "description"),
+          "Footprint": ("parts_table", "footprint"),
+          "note": ("parts_table", "note"),
+          "Manufacturer": ("mpn_table", "manufacturer"),
+          "Datasheet": ("mpn_table", "datasheet")}
+
+
+def field_rows(con, nickname):
+    """One dict of T2.11 fields per part whose symbol is in this project's
+    library, keyed by the symbol name."""
+    out = {}
+    for ipn, description, footprint, note, symbol in con.execute(
+            "select ipn, description, footprint, note, symbol "
+            "from parts_table where symbol is not null"):
+        nick, _, name = symbol.partition(":")
+        if nick != nickname:
+            continue
+        mpn = con.execute(
+            "select a.mpn, m.manufacturer, m.datasheet from aml_table a "
+            "join mpn_table m on m.mpn = a.mpn "
+            "where a.ipn = ? and a.rank is null", (ipn,)).fetchone()
+        out[name] = {"ipn": ipn, "Value": ipn,
+                     "Footprint": footprint or "",
+                     "Description": description or "",
+                     "Datasheet": (mpn and mpn[2]) or "",
+                     "Manufacturer": (mpn and mpn[1]) or "",
+                     "MPN": (mpn and mpn[0]) or "",
+                     "note": note or ""}
+    return out
+
+
+def lib_blocks(src):
+    """The library's top-level symbols: name -> (start, end)."""
+    out, i = {}, 0
+    while True:
+        j = src.find('\n\t(symbol "', i)
+        if j < 0:
+            return out
+        start = j + 1
+        name = re.match(r'\t\(symbol "([^"]+)"', src[start:]).group(1)
+        depth, k, in_str = 0, start, False
+        while k < len(src):
+            c = src[k]
+            if in_str:
+                if c == "\\":
+                    k += 1
+                elif c == '"':
+                    in_str = False
+            elif c == '"':
+                in_str = True
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth == 0:
+                    k += 1
+                    break
+            k += 1
+        out[name] = (start, k)
+        i = k
+
+
+def normalize_lib(path):
+    run = subprocess.run(["kicad-cli", "sym", "upgrade", "--force",
+                          str(path)], capture_output=True, text=True)
+    if run.returncode != 0:
+        raise Bad(f"kicad-cli could not normalize {path}: "
+                  + (run.stderr or run.stdout).strip())
+
+
+def push_fields(con, library, nickname, only=None):
+    """Record to library: rewrite every symbol's T2.11 fields. Graphics are
+    not touched. Returns the names whose text changed."""
+    before = src = library.read_text()
+    want = field_rows(con, nickname)
+    changed = []
+    # Highest span first: an edit changes the offsets of everything after
+    # it, so the blocks still untouched must all sit before the edit.
+    for name, (a, b) in sorted(lib_blocks(src).items(),
+                               key=lambda kv: -kv[1][0]):
+        if name not in want or (only and name != only):
+            continue
+        block = new = src[a:b]
+        for field in FIELDS:
+            new = set_property(new, field, want[name][field])
+        if new != block:
+            src = src[:a] + new + src[b:]
+            changed.append(name)
+    if changed:
+        library.write_text(src)
+        try:
+            normalize_lib(library)
+        except BaseException:
+            library.write_text(before)
+            raise
+    return changed
+
+
+def pull_fields(con, library, nickname):
+    """Library to record: Description, Footprint, note to `parts_table`;
+    Manufacturer, Datasheet to the blank-rank MPN. MPN and Value are
+    reported on mismatch, never written."""
+    src = library.read_text()
+    want = field_rows(con, nickname)
+    blocks = lib_blocks(src)
+    applied, reported = [], []
+    for name, fields in sorted(want.items()):
+        if name not in blocks:
+            continue
+        a, b = blocks[name]
+        props = read_symbol(src[a:b])["props"]
+        ipn = fields["ipn"]
+        if props.get("ipn", "").strip() != ipn:
+            reported.append((ipn, "ipn", ipn, props.get("ipn", "")))
+            continue
+        for field in FIELDS:
+            if field == "ipn" or field not in props:
+                continue
+            have, held = props[field].strip(), fields[field]
+            if have == held:
+                continue
+            table, column = PULLED.get(field, (None, None))
+            if table == "parts_table":
+                con.execute(f"update parts_table set {column} = ? "
+                            "where ipn = ?", (have or None, ipn))
+                applied.append((ipn, field, held, have))
+            elif table == "mpn_table" and fields["MPN"]:
+                con.execute(f"update mpn_table set {column} = ? "
+                            "where mpn = ?", (have or None, fields["MPN"]))
+                applied.append((ipn, field, held, have))
+            else:
+                reported.append((ipn, field, held, have))
+    con.commit()
+    return applied, reported
 
 
 # ---------------------------------------------------------------- the placing
@@ -572,6 +709,10 @@ def write_project_file(board, project):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
+    ap.add_argument("--push", action="store_true",
+                    help="record to library: rewrite the T2.11 fields")
+    ap.add_argument("--pull", action="store_true",
+                    help="library to record: read the T2.11 fields back")
     ap.add_argument("--assign", action="append", default=[],
                     metavar="UUID=IPN",
                     help="the part a placed symbol is, when its ipn field "
@@ -600,6 +741,36 @@ def main(argv):
         raise Bad("project_table is empty. Run init-pipeline first")
     project = row[0]
 
+    if args.push and args.pull:
+        raise Bad("--push or --pull, not both")
+    if args.push or args.pull:
+        library = board / "lib" / f"{project}.kicad_sym"
+        if not library.exists():
+            raise Bad(f"{library} does not exist. Run init-pipeline first")
+        con = connect(board)
+        try:
+            if args.push:
+                changed = push_fields(con, library, project)
+                print(f"push  {len(changed)} symbol(s) updated"
+                      + (": " + " ".join(changed) if changed else ""))
+            else:
+                applied, reported = pull_fields(con, library, project)
+                print(f"pull  {len(applied)} field(s) into the record")
+                for ipn, field, held, have in applied:
+                    print(f"    {ipn}  {field}  {held!r} -> {have!r}")
+                for ipn, field, held, have in reported:
+                    if field == "ipn":
+                        print(f"    {ipn}  never pushed - no ipn field on "
+                              "the library symbol; pull skipped it. Push "
+                              "first")
+                    else:
+                        print(f"    {ipn}  {field}  library {have!r} != "
+                              f"record {held!r} - reported only, not "
+                              "written")
+        finally:
+            con.close()
+        return 0
+
     # n8.4: instance paths are rooted at the ROOT SHEET'S OWN uuid -
     # init-pipeline wrote it. Inventing one makes KiCad repair every
     # path on load.
@@ -621,7 +792,7 @@ def main(argv):
         parts = {r[0] for r in con.execute("select ipn from parts_table")}
         refs = {r[0]: r[1] for r in con.execute(
             "select ref, uuid from ref_table where ref is not null")}
-        entered, unresolved, conflicts = [], [], []
+        entered, unresolved, conflicts, fixes = [], [], [], {}
         for u, (fname, page, sym) in sorted(placed.items()):
             if u in known:
                 continue
@@ -642,6 +813,13 @@ def main(argv):
                         (u, ipn, ref, page))
             refs[ref] = u
             entered.append((u, fname, ref, ipn))
+            fix = {}
+            if sym["props"].get("ipn", "").strip() != ipn:
+                fix["ipn"] = ipn
+            if sym["props"].get("Reference", "").strip() != ref:
+                fix["Reference"] = ref
+            if fix:
+                fixes.setdefault(fname, {})[u] = fix
         con.commit()
         rows = instances(con)
     finally:
@@ -667,24 +845,23 @@ def main(argv):
     blocks = library_blocks(board, project, {r["symbol"] for r in drawable})
     pages = sorted({r["page"] for r in drawable})
 
-    # Fields: the record is master, 2.2. Rewrite what differs, in place.
+    # An entered symbol gets its `ipn` field, and its Reference when the
+    # tool renumbered it. Nothing else on a sheet is rewritten - the User
+    # pulls fields in KiCad, Update Symbols from Library (n9_1.9).
     refreshed = {}
-    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+    for fname, by_id in fixes.items():
+        path = board / fname
         src = path.read_text()
         out, last, count = [], 0, 0
         for start, end in symbol_blocks(src):
             block = src[start:end]
-            sym = read_symbol(block)
-            row = by_uuid.get(sym["uuid"])
-            if row is None:
+            fix = by_id.get(read_symbol(block)["uuid"])
+            if not fix:
                 continue
-            want = {"Reference": row["ref"], "Value": row["value"],
-                    "Footprint": row["footprint"], "ipn": row["ipn"]}
             new = block
-            for name, value in want.items():
-                if sym["props"].get(name) != value:
-                    new = (set_reference(new, value) if name == "Reference"
-                           else set_property(new, name, value))
+            for name, value in fix.items():
+                new = (set_reference(new, value) if name == "Reference"
+                       else set_property(new, name, value))
             if new != block:
                 out.append(src[last:start]); out.append(new); last = end
                 count += 1
@@ -717,11 +894,9 @@ def main(argv):
         normalize(board / name)
         came_in = sum(1 for _, f, _, _ in entered if f == name)
         print(f"    {name}  {new} placed, {kept} left as they were, "
-              f"{refreshed.get(name, 0)} field(s) refreshed, "
               f"{came_in} entered")
     for name in sorted(touched):
         normalize(board / name)
-        print(f"    {name}  {refreshed[name]} field(s) refreshed")
 
     if entered:
         print(f"\n{len(entered)} symbol(s) entered in ref_table from the "
