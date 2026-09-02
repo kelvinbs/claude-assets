@@ -105,7 +105,7 @@ def connect(board):
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
-    if not {"parts_table", "ref_table", "aml_table", "mpn_table"} <= have:
+    if not {"parts_table", "ref_table"} <= have:
         raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
@@ -113,8 +113,8 @@ def connect(board):
 def value_of(con, ipn, description):
     """T2.11: the blank-rank MPN, else the description, else the IPN -
     Value is what a person reads on a sheet."""
-    mpn = con.execute("select mpn from aml_table where ipn = ? and rank "
-                      "is null", (ipn,)).fetchone()
+    mpn = con.execute("select mpn from parts_table where ipn = ?",
+                      (ipn,)).fetchone()
     return (mpn and mpn[0]) or description or ipn
 
 
@@ -413,31 +413,29 @@ FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
 PULLED = {"Description": ("parts_table", "description"),
           "Footprint": ("parts_table", "footprint"),
           "note": ("parts_table", "note"),
-          "Manufacturer": ("mpn_table", "manufacturer"),
-          "Datasheet": ("mpn_table", "datasheet")}
+          "Manufacturer": ("parts_table", "manufacturer"),
+          "Datasheet": ("parts_table", "datasheet")}
 
 
 def field_rows(con, nickname):
     """One dict of T2.11 fields per part whose symbol is in this project's
     library, keyed by the symbol name."""
     out = {}
-    for ipn, description, footprint, note, symbol in con.execute(
-            "select ipn, description, footprint, note, symbol "
-            "from parts_table where symbol is not null"):
+    for ipn, description, footprint, note, symbol, mpn, manufacturer, \
+            datasheet in con.execute(
+            "select ipn, description, footprint, note, symbol, mpn, "
+            "manufacturer, datasheet from parts_table "
+            "where symbol is not null"):
         nick, _, name = symbol.partition(":")
         if nick != nickname:
             continue
-        mpn = con.execute(
-            "select a.mpn, m.manufacturer, m.datasheet from aml_table a "
-            "join mpn_table m on m.mpn = a.mpn "
-            "where a.ipn = ? and a.rank is null", (ipn,)).fetchone()
         out[name] = {"ipn": ipn,
-                     "Value": (mpn and mpn[0]) or description or ipn,
+                     "Value": mpn or description or ipn,
                      "Footprint": footprint or "",
                      "Description": description or "",
-                     "Datasheet": (mpn and mpn[2]) or "",
-                     "Manufacturer": (mpn and mpn[1]) or "",
-                     "MPN": (mpn and mpn[0]) or "",
+                     "Datasheet": datasheet or "",
+                     "Manufacturer": manufacturer or "",
+                     "MPN": mpn or "",
                      "note": note or ""}
     return out
 
@@ -536,10 +534,6 @@ def pull_fields(con, library, nickname):
             if table == "parts_table":
                 con.execute(f"update parts_table set {column} = ? "
                             "where ipn = ?", (have or None, ipn))
-                applied.append((ipn, field, held, have))
-            elif table == "mpn_table" and fields["MPN"]:
-                con.execute(f"update mpn_table set {column} = ? "
-                            "where mpn = ?", (have or None, fields["MPN"]))
                 applied.append((ipn, field, held, have))
             else:
                 reported.append((ipn, field, held, have))
