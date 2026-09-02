@@ -5,7 +5,7 @@ record. The skill of stages 4 and 6.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table`, `mpn_table` on pull |
+| `board.db` — `parts_table`, `ref_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
 python3 tools/board-build/tools/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
@@ -19,7 +19,7 @@ python3 tools/board-build/tools/kicad-update.py <board-dir> --pull
 |---|---|---|
 | place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
 | `--push` | record to library | rewrites every library symbol's fields from the record — T2.11. Graphics untouched |
-| `--pull` | library to record | reads library fields back: `Description`, `Footprint`, `note` to `parts_table`; `Manufacturer`, `Datasheet` to the blank-rank MPN's `mpn_table` row. `MPN` and `Value` are reported on mismatch, never written — an approval is `table-write`'s act, and `Value` is the blank-rank MPN, else the description |
+| `--pull` | library to record | reads library fields back onto the part: `Description`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` and `Value` are reported on mismatch, never written — `Value` is the part's MPN, else the description |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
 then `--pull`. Claude's is `table-write`, then `--push`. Instances take
@@ -71,7 +71,7 @@ new parts arrive in.
 | Field | Takes |
 |---|---|
 | `Reference` | `ref_table.ref` |
-| `Value` | the blank-rank MPN of `aml_table`, or the description when the part has no part number yet |
+| `Value` | the part's `mpn`, or the description when the part has no part number yet |
 | `Footprint` | `parts_table.footprint`, hidden |
 | `ipn` | `parts_table.ipn`, hidden. The key back to the record, T2.11 |
 

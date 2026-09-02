@@ -6,7 +6,7 @@ else.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.7, T2.8, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
+| `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
 python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
@@ -23,7 +23,7 @@ beside the design files.
 
 ## The schema
 
-Six tables in one file, and their columns are T2.3 through T2.8 and
+Three tables in one file, and their columns are T2.3, T2.4 and
 T2.13 of
 `board-build-tool.md`.
 `tools/init-pipeline.py` holds them in executable form and is the only
@@ -31,13 +31,12 @@ place they are written as DDL. A column added to those tables is added
 there in the same commit.
 
 Keys carry the constraint the document states: `ipn` on `parts_table`,
-`uuid` on `ref_table`, `ipn` + `mpn` on `aml_table`, `mpn` on `mpn_table`,
-`mpn` + `distributor` + `break_qty` on `offer_table`.
+`uuid` on `ref_table`.
 
 Every relation of T2.9 is declared — there are five and none is exempt.
 `parent` sits on `ref_table`: parenthood is a property of use.
 Tables are created in an order that lets a reference resolve, and
-`aml_table` carries the unique index that holds one blank rank per IPN.
+`parts_table` carries the unique index over `name`.
 
 Everything else is nullable. A part is defined over several passes and a
 row that is not finished is still a row; the skill that writes a field is

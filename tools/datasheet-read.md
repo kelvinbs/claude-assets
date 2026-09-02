@@ -4,7 +4,7 @@ Read a pinout out of a datasheet. The first tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `aml_table`, `mpn_table`<br>`datasheets/` | the pins, to `symbol-draw` or to standard output<br>`board.db` — `mpn_table.datasheet` |
+| `board.db` — `parts_table`<br>`datasheets/` | the pins, to `symbol-draw` or to standard output<br>`board.db` — `parts_table.datasheet` |
 
 ```
 python3 tools/board-build/tools/datasheet-read.py <board-dir> <ipn> [options]
@@ -44,7 +44,7 @@ to come out identical twice. Run one IPN alone to see why one part fails.
 
 ## Which part number
 
-The blank-rank row of `aml_table` — the MPN the board was designed against,
+The part's `mpn` column — the number the board was designed against,
 per T2.6. The alternatives take the board as designed, so they take its
 symbol, and no pinout is read for them.
 
@@ -55,10 +55,10 @@ Three places, in order:
 | | |
 |---|---|
 | `--datasheet <path>` | given on the command line |
-| `mpn_table.datasheet` | recorded by an earlier run |
+| `parts_table.datasheet` | recorded by an earlier run |
 | `datasheets/` | tiered (n5.11), scanned recursively: whole part number in a filename, unique hit, decides; every partial prefix-run match is a lead only — the model sees the full listing plus leads, which sees the listing, may open files, and names the file or NONE — the choice is recorded |
 
-Whatever it settles on is written back to `mpn_table.datasheet`, relative to
+Whatever it settles on is written back to `parts_table.datasheet`, relative to
 the repository so the record survives a clone. The second run needs no
 argument.
 
@@ -87,10 +87,10 @@ a datasheet is read once per symbol drawn and not again.
 ## What it refuses
 
 - An IPN that does not read as one, or names no row
-- A part with no row in `aml_table` — the part number comes first
+- A part with no `mpn` — the part number comes first
 - A part number matching more than one file in `datasheets/`
 - A part number matching none, with no `--datasheet`
-- A path in `mpn_table.datasheet` that is not on disk
+- A path in `parts_table.datasheet` that is not on disk
 - `--all` with `--datasheet`, which names one file and so names one part
 - A project folder with no `board.db`, or one missing a table
 

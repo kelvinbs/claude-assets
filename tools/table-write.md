@@ -4,10 +4,10 @@ Create or modify a part. The skill of Update parts.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` |
+| `board.db` — `parts_table`, `ref_table` | `board.db` — `parts_table`, `ref_table` |
 
 Part fields reach KiCad by `kicad-update --push`. It never opens a KiCad file, and of the sourcing tables it touches only
-`aml_table`. `init-pipeline` must have run first.
+`init-pipeline` must have run first.
 
 It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves
 them off otherwise and the keys of T2.9 would not be checked.
@@ -70,31 +70,11 @@ Sets one instance's parent: `parent R3 --under U1`. `--none` clears it. It
 refuses a reference that names no instance, and a parent chain that closes
 a loop.
 
-## mpn
+## mpn — retired into set
 
-Records an approval in `aml_table` — this manufacturer part may be built
-against this IPN. Choosing a part and choosing the part number it is bought
-as are the same act, which is why it is here and not in a sourcing tool.
-
-Naming a part number creates its `mpn_table` row too, with every field but
-the key empty. The part number's identity exists from the moment you name it;
-what is in the package and who makes it gets filled in later, and nothing
-that is fetched belongs there at all — see T2.7.
-
-The row is the approval. A part number that may not be built does not get a
-row, and neither does one that would need the board changed to take — every
-MPN in the table drops in. There is no flag to set and none to forget.
-
-`--rank` orders the alternatives and is left blank on the one you designed
-against — see T2.6. Give a number only when there is something to order.
-The database refuses a second blank rank for one IPN.
-
-`--note` is a sentence a person writes, and is normally left alone. The
-tool never fills it in.
-
-Naming the same IPN and MPN again updates the rank and the note rather than
-adding a second row. `aml_table` is kept, unlike the fetched
-tables beside it, so it is never discarded and refetched.
+The part number is a column on the part (n0.4): `set <part> --mpn ...`,
+with `--manufacturer` and `--datasheet` beside it. A prototype buys one
+part one way.
 
 ## drop
 

@@ -5,7 +5,7 @@ it is. The second tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table`<br>`copy-kicad-part`, `datasheet-read` — run as commands | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
+| `board.db` — `parts_table`, `ref_table`<br>`copy-kicad-part`, `datasheet-read` — run as commands | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
 python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
@@ -30,7 +30,7 @@ pick returns null — one read either way.
 A symbol this skill copies or draws carries the part's fields, written
 from the record per T2.11 — `Value` is the IPN; `Footprint`,
 `Description`, `note` from `parts_table`; `MPN`, `Manufacturer`,
-`Datasheet` from the blank-rank approval. `kicad-update --push` rewrites
+`Datasheet` from the part's own columns. `kicad-update --push` rewrites
 them later when the record changes.
 
 ## The order of the resorts
@@ -65,7 +65,7 @@ name, one row, one object.
 | `Reference` | the reference prefix of the part's class, T2.10 |
 | `Value` | the IPN. `kicad-update` decides what an instance shows |
 | `Description` | `parts_table.description` |
-| `Datasheet` | `mpn_table.datasheet` of the blank-rank MPN |
+| `Datasheet` | `parts_table.datasheet` |
 | `Footprint` | left empty. `footprint-draw` owns it |
 
 The class table is read from `table-write.py`, where it is already written
