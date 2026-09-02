@@ -107,7 +107,9 @@ The library is merged, never rewritten. A symbol already in it is left alone
 and a part that already carries a `symbol` is skipped, because either may
 have been corrected by hand in the symbol editor.
 
-`--redraw` replaces one. It is the only way this tool overwrites anything.
+`--redraw` replaces one. It is the only way this tool overwrites
+anything. `--draw` skips the copy resort and draws from the pinout — the
+User's word for secondary, given per part.
 
 ## What it refuses
 

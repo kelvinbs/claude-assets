@@ -379,7 +379,8 @@ def one(con, board, ipn, nickname, library, args):
     # still runs, held to the guidelines alone.
     pins = try_read(board, ipn, args.datasheets)
 
-    written = try_copy(board, ipn, hint, args.lib, pins)
+    written = None if args.draw else try_copy(board, ipn, hint, args.lib,
+                                              pins)
     if written:
         write_fields(con, ipn, written, "s", source)
         push_symbol_fields(con, board, ipn, written)
@@ -417,6 +418,8 @@ def main(argv):
                     help="every part on a page with no symbol yet")
     ap.add_argument("--redraw", action="store_true",
                     help="replace a symbol the library already holds")
+    ap.add_argument("--draw", action="store_true",
+                    help="skip the copy resort - draw from the pinout")
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
     ap.add_argument("--datasheets", help="the directory of datasheets")
