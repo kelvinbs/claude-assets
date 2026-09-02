@@ -38,7 +38,7 @@ together, at any point.
 
 | View | One row per | Columns | Answers |
 |---|---|---|---|
-| `parts_view` | IPN | ipn, description, parent, count, pages, mpn | What is on the board |
+| `parts_view` | IPN | name, ipn, description, count, pages, mpn | What is on the board |
 | `assembly_view` | IPN, children under their parent | parent, ipn, description, count | What a function is built from |
 | `page_view` | instance | page, ref, ipn, description | What goes on a sheet |
 | `library_view` | IPN | ipn, description, symbol, footprint, source | What is drawn and what is not |
@@ -49,8 +49,8 @@ together, at any point.
 
 | View | Statement |
 |---|---|
-| `parts_view` | `select p.name, p.ipn, p.description, p.parent, count(r.uuid) as count, group_concat(distinct r.page) as pages, (select a.mpn from aml_table a where a.ipn = p.ipn order by a.rank) as mpn from parts_table p left join ref_table r using (ipn) group by p.ipn order by p.ipn;` |
-| `assembly_view` | `select coalesce(p.parent, p.ipn) as parent, p.name, p.ipn, p.description, count(r.uuid) as count from parts_table p left join ref_table r using (ipn) group by p.ipn order by parent, p.parent is null desc, p.ipn;` |
+| `parts_view` | `select p.name, p.ipn, p.description, count(r.uuid) as count, group_concat(distinct r.page) as pages, (select a.mpn from aml_table a where a.ipn = p.ipn order by a.rank) as mpn from parts_table p left join ref_table r using (ipn) group by p.ipn order by p.ipn;` |
+| `assembly_view` | `select coalesce(pp.ipn, p.ipn) as parent, p.name, p.ipn, p.description, count(r.uuid) as count from parts_table p left join ref_table r using (ipn) left join ref_table rp on rp.uuid = r.parent left join parts_table pp on pp.ipn = rp.ipn group by p.ipn, pp.ipn order by parent, pp.ipn is null desc, p.ipn;` |
 | `page_view` | `select r.page, r.ref, p.name, r.ipn, p.description from ref_table r join parts_table p using (ipn) order by r.page, r.ref;` |
 | `library_view` | `select name, ipn, description, symbol, footprint, source from parts_table order by symbol is not null, footprint is not null, ipn;` |
 | `sourcing_view` | `select p.name, a.ipn, p.description, a.mpn, a.rank, m.manufacturer, m.datasheet from aml_table a join parts_table p on p.ipn = a.ipn join mpn_table m on m.mpn = a.mpn order by a.ipn, a.rank;` |
