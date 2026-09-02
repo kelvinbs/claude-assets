@@ -262,7 +262,9 @@ def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
         if not path.exists():
             raise Bad(f"{path} does not exist")
     elif recorded:
-        path = repo_root(board) / recorded
+        path = Path(board) / recorded   # the project folder first (n2.10)
+        if not path.exists():
+            path = repo_root(board) / recorded
         if not path.exists():
             path = Path(recorded)
         if not path.exists():
