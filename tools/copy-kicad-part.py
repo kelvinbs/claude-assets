@@ -79,6 +79,9 @@ Guidelines:
 - Null when no symbol's pins genuinely do the part's jobs, after
   actually looking - a wrong symbol is worse than none. Never rename an
   unrelated device into shape.
+- Never take a candidate whose drawing cannot show the part's pins - a
+  body drawn for 3 pins wearing 17, pins piled on one point, pins past
+  the package edge. The drawing must read like the part.
 
 Write ONE json object to {out} - keys the part names, values:
   {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
