@@ -783,10 +783,12 @@ def main(argv):
             con.execute("update parts_table set name = ? where ipn = ?",
                         (new, ipn))
             renamed_lib = False
+            written = []   # (path, original text) - restored on any failure
             if symbol == f"{project}:{old}":
                 src = library.read_text()
                 if f'(symbol "{old}"' not in src:
                     raise Bad(f"{library} does not hold '{old}'")
+                written.append((library, src))
                 src = src.replace(f'(symbol "{old}"', f'(symbol "{new}"')
                 src = src.replace(f'(symbol "{old}_', f'(symbol "{new}_')
                 src = src.replace(f'(extends "{old}"', f'(extends "{new}"')
@@ -798,10 +800,15 @@ def main(argv):
                     text = path.read_text()
                     if f"{project}:{old}" not in text:
                         continue
+                    written.append((path, text))
                     text = text.replace(f'"{project}:{old}"',
                                         f'"{project}:{new}"')
                     text = text.replace(f'(symbol "{project}:{old}_',
                                         f'(symbol "{project}:{new}_')
+                    # The sheet's embedded lib copy names its unit blocks
+                    # bare - (symbol "OLD_0_1") - nickname stripped (n3.12)
+                    text = text.replace(f'(symbol "{old}_',
+                                        f'(symbol "{new}_')
                     path.write_text(text)
                     run = subprocess.run(
                         ["kicad-cli", "sch", "upgrade", "--force",
@@ -813,6 +820,12 @@ def main(argv):
             print(f"renamed  {old} -> {new}"
                   + ("  (library and sheets)" if renamed_lib
                      else "  (record only)"))
+        except BaseException:
+            # One pass or no pass - the record rolls back with the
+            # connection; the files roll back here (n3.12).
+            for path, text in written:
+                path.write_text(text)
+            raise
         finally:
             con.close()
         return 0

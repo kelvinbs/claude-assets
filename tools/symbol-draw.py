@@ -431,7 +431,7 @@ def one(con, board, ipn, nickname, library, args):
     merge(library, label, build_symbol(spec), True)
     write_fields(con, ipn, f"{nickname}:{label}", "h", source)
     push_symbol_fields(con, board, ipn, f"{nickname}:{label}")
-    print(f"{ipn}  {nickname}:{ipn}  h  drawn, {len(pins)} pins")
+    print(f"{ipn}  {nickname}:{label}  h  drawn, {len(pins)} pins")
     return True
 
 
