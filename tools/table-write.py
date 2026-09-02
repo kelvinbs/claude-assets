@@ -147,7 +147,8 @@ def add(con, args):
 
     for _ in range(args.count):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+        con.execute("insert into ref_table (uuid, ipn, parent, ref, "
+                    "page, room) values (?,?,?,?,?,?)",
                     (str(uuid.uuid4()), ipn, under, ref, args.page,
                      args.room))
         print(f"    {ref}  {args.page or '—'}")
@@ -181,7 +182,8 @@ def place(con, args):
     under = parent_uuid(con, args.parent) if args.parent else None
     for _ in range(args.count - have):
         ref = next_ref(con, prefix)
-        con.execute("insert into ref_table values (?,?,?,?,?,?)",
+        con.execute("insert into ref_table (uuid, ipn, parent, ref, "
+                    "page, room) values (?,?,?,?,?,?)",
                     (str(uuid.uuid4()), args.ipn, under, ref, args.page,
                      args.room))
         print(f"{args.ipn}  {ref}  {args.page or '—'}")
