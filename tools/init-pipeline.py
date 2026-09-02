@@ -54,6 +54,7 @@ SCHEMA = {
             "footprint     TEXT",
             "source        TEXT",
             "note          TEXT",
+            "name          TEXT",
         ),
         "ref_table": (
             "uuid          TEXT PRIMARY KEY NOT NULL",
@@ -110,6 +111,11 @@ def columns_of(spec):
 
 # an index a table needs to hold a rule its columns cannot
 INDEXES = {
+    "parts_table": (
+        ("parts_one_name",
+         "create unique index if not exists parts_one_name on "
+         "parts_table(name) where name is not null"),
+    ),
     "aml_table": (
         ("aml_one_default",
          "create unique index if not exists aml_one_default on aml_table(ipn)"
@@ -154,6 +160,8 @@ def init_file(path, tables):
                     if name not in found and name != "PRIMARY":
                         con.execute(f"ALTER TABLE {table} ADD COLUMN "
                                     + line.strip())
+                for name, sql in INDEXES.get(table, ()):
+                    con.execute(sql)
                 report.append((table, "column(s) added"))
                 continue
             if found != wanted:

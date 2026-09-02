@@ -49,9 +49,9 @@ together, at any point.
 
 | View | Statement |
 |---|---|
-| `parts_view` | `select p.ipn, p.description, p.parent, count(r.uuid) as count, group_concat(distinct r.page) as pages, (select a.mpn from aml_table a where a.ipn = p.ipn order by a.rank) as mpn from parts_table p left join ref_table r using (ipn) group by p.ipn order by p.ipn;` |
-| `assembly_view` | `select coalesce(p.parent, p.ipn) as parent, p.ipn, p.description, count(r.uuid) as count from parts_table p left join ref_table r using (ipn) group by p.ipn order by parent, p.parent is null desc, p.ipn;` |
-| `page_view` | `select r.page, r.ref, r.ipn, p.description from ref_table r join parts_table p using (ipn) order by r.page, r.ref;` |
-| `library_view` | `select ipn, description, symbol, footprint, source from parts_table order by symbol is not null, footprint is not null, ipn;` |
-| `sourcing_view` | `select a.ipn, p.description, a.mpn, a.rank, m.manufacturer, m.datasheet from aml_table a join parts_table p on p.ipn = a.ipn join mpn_table m on m.mpn = a.mpn order by a.ipn, a.rank;` |
-| `ready_view` | `select p.ipn, p.description, trim(case when not exists (select 1 from aml_table a where a.ipn = p.ipn) then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |
+| `parts_view` | `select p.name, p.ipn, p.description, p.parent, count(r.uuid) as count, group_concat(distinct r.page) as pages, (select a.mpn from aml_table a where a.ipn = p.ipn order by a.rank) as mpn from parts_table p left join ref_table r using (ipn) group by p.ipn order by p.ipn;` |
+| `assembly_view` | `select coalesce(p.parent, p.ipn) as parent, p.name, p.ipn, p.description, count(r.uuid) as count from parts_table p left join ref_table r using (ipn) group by p.ipn order by parent, p.parent is null desc, p.ipn;` |
+| `page_view` | `select r.page, r.ref, p.name, r.ipn, p.description from ref_table r join parts_table p using (ipn) order by r.page, r.ref;` |
+| `library_view` | `select name, ipn, description, symbol, footprint, source from parts_table order by symbol is not null, footprint is not null, ipn;` |
+| `sourcing_view` | `select p.name, a.ipn, p.description, a.mpn, a.rank, m.manufacturer, m.datasheet from aml_table a join parts_table p on p.ipn = a.ipn join mpn_table m on m.mpn = a.mpn order by a.ipn, a.rank;` |
+| `ready_view` | `select p.name, p.ipn, p.description, trim(case when not exists (select 1 from aml_table a where a.ipn = p.ipn) then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |

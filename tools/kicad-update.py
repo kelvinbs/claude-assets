@@ -740,6 +740,9 @@ def main(argv):
                     help="record to library: rewrite the T2.11 fields")
     ap.add_argument("--pull", action="store_true",
                     help="library to record: read the T2.11 fields back")
+    ap.add_argument("--rename", nargs=2, metavar=("OLD", "NEW"),
+                    help="rename a part: parts_table.name, the library "
+                         "symbol, every sheet lib_id, one pass")
     ap.add_argument("--assign", action="append", default=[],
                     metavar="UUID=IPN",
                     help="the part a placed symbol is, when its ipn field "
@@ -767,6 +770,58 @@ def main(argv):
     if not row:
         raise Bad("project_table is empty. Run init-pipeline first")
     project = row[0]
+
+    if args.rename:
+        old, new = args.rename
+        library = board / "lib" / f"{project}.kicad_sym"
+        con = connect(board)
+        try:
+            row = con.execute(
+                "select ipn, symbol, name from parts_table "
+                "where name = ? or symbol = ?",
+                (old, f"{project}:{old}")).fetchone()
+            if row is None:
+                raise Bad(f"no part named '{old}'")
+            ipn, symbol, _ = row
+            if con.execute("select 1 from parts_table where name = ?",
+                           (new,)).fetchone():
+                raise Bad(f"'{new}' is already a part's name")
+            con.execute("update parts_table set name = ? where ipn = ?",
+                        (new, ipn))
+            renamed_lib = False
+            if symbol == f"{project}:{old}":
+                src = library.read_text()
+                if f'(symbol "{old}"' not in src:
+                    raise Bad(f"{library} does not hold '{old}'")
+                src = src.replace(f'(symbol "{old}"', f'(symbol "{new}"')
+                src = src.replace(f'(symbol "{old}_', f'(symbol "{new}_')
+                src = src.replace(f'(extends "{old}"', f'(extends "{new}"')
+                library.write_text(src)
+                normalize_lib(library)
+                con.execute("update parts_table set symbol = ? "
+                            "where ipn = ?", (f"{project}:{new}", ipn))
+                for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+                    text = path.read_text()
+                    if f"{project}:{old}" not in text:
+                        continue
+                    text = text.replace(f'"{project}:{old}"',
+                                        f'"{project}:{new}"')
+                    text = text.replace(f'(symbol "{project}:{old}_',
+                                        f'(symbol "{project}:{new}_')
+                    path.write_text(text)
+                    run = subprocess.run(
+                        ["kicad-cli", "sch", "upgrade", "--force",
+                         str(path)], capture_output=True, text=True)
+                    if run.returncode != 0:
+                        raise Bad(f"could not normalize {path}")
+                renamed_lib = True
+            con.commit()
+            print(f"renamed  {old} -> {new}"
+                  + ("  (library and sheets)" if renamed_lib
+                     else "  (record only)"))
+        finally:
+            con.close()
+        return 0
 
     if args.push and args.pull:
         raise Bad("--push or --pull, not both")

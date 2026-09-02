@@ -61,8 +61,8 @@ def connect(board):
 
 def part_row(con, ipn):
     row = con.execute(
-        "select ipn, description, symbol, source from parts_table "
-        "where ipn = ?", (ipn,)).fetchone()
+        "select ipn, description, symbol, source, name from parts_table "
+        "where ipn = ? or name = ?", (ipn, ipn)).fetchone()
     if row is None:
         raise Bad(f"{ipn} is not in parts_table")
     return row
@@ -371,7 +371,8 @@ def try_read(board, ipn, extra):
 
 
 def one(con, board, ipn, nickname, library, args):
-    ipn, description, symbol, source = part_row(con, ipn)
+    ipn, description, symbol, source, pname = part_row(con, ipn)
+    label = pname or ipn
     if symbol and not args.redraw:
         print(f"{ipn}  already {symbol}")
         return True
@@ -384,7 +385,7 @@ def one(con, board, ipn, nickname, library, args):
     # still runs, held to the guidelines alone.
     pins = try_read(board, ipn, args.datasheets)
 
-    written = None if args.draw else try_copy(board, ipn, hint, args.lib,
+    written = None if args.draw else try_copy(board, label, hint, args.lib,
                                               pins)
     if written:
         write_fields(con, ipn, written, "s", source)
@@ -400,12 +401,12 @@ def one(con, board, ipn, nickname, library, args):
     if not pins:
         raise Bad(f"{ipn}: no library holds it and no pinout could be read")
 
-    spec = {"name": ipn, "reference": prefix_of(con, ipn), "pins": pins,
+    spec = {"name": label, "reference": prefix_of(con, ipn), "pins": pins,
             "description": description or "",
             "datasheet": datasheet_of(con, ipn)}
-    merge(library, ipn, build_symbol(spec), True)
-    write_fields(con, ipn, f"{nickname}:{ipn}", "h", source)
-    push_symbol_fields(con, board, ipn, f"{nickname}:{ipn}")
+    merge(library, label, build_symbol(spec), True)
+    write_fields(con, ipn, f"{nickname}:{label}", "h", source)
+    push_symbol_fields(con, board, ipn, f"{nickname}:{label}")
     print(f"{ipn}  {nickname}:{ipn}  h  drawn, {len(pins)} pins")
     return True
 

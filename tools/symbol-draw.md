@@ -56,8 +56,9 @@ it landed in.
 
 ## The name and the fields
 
-The symbol is named for the IPN, and `parts_table.symbol` becomes
-`<nickname>:<IPN>`. One name, one row, one object.
+The symbol is named for the part's `name` when one is set, else the
+IPN, and `parts_table.symbol` records whichever was used (n0.3). One
+name, one row, one object.
 
 | Property | Takes |
 |---|---|

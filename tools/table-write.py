@@ -53,7 +53,7 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
-FIELDS = ("description", "note")
+FIELDS = ("description", "note", "name")
 
 
 class Bad(SystemExit):
@@ -97,6 +97,20 @@ def next_ref(con, prefix):
     while n in used:
         n += 1
     return f"{prefix}{n}"
+
+
+def resolve(con, token):
+    """A part named any way a person would: the name, else an approved
+    MPN, else the IPN itself (n0.3)."""
+    row = con.execute("select ipn from parts_table where name = ?",
+                      (token,)).fetchone()
+    if row:
+        return row[0]
+    row = con.execute("select ipn from aml_table where mpn = ?",
+                      (token,)).fetchone()
+    if row:
+        return row[0]
+    return token
 
 
 def part(con, ipn):
@@ -362,10 +376,13 @@ def main(argv):
     w.set_defaults(run=show)
 
     args = ap.parse_args(argv[1:])
-    if args.verb in ("place", "set", "mpn") and not IPN.match(args.ipn):
-        raise Bad(f"'{args.ipn}' is not an IPN")
     con = connect(args.board)
     try:
+        if getattr(args, "ipn", None):
+            # n0.3: a name or an approved MPN serves anywhere an IPN does
+            args.ipn = resolve(con, args.ipn)
+        if args.verb in ("place", "set", "mpn") and not IPN.match(args.ipn):
+            raise Bad(f"'{args.ipn}' names no part")
         args.run(con, args)
     finally:
         con.close()

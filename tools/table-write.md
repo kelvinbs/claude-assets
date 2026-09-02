@@ -22,6 +22,10 @@ table-write.py <board-dir> drop   <ref>
 table-write.py <board-dir> show   [<ipn>]
 ```
 
+Anywhere a verb takes an IPN, the part's `name` or an approved MPN
+serves instead — resolved name first, then MPN, then IPN (n0.3).
+`--name` on `add` and `set` writes the name: yours, unique.
+
 ## add
 
 Creates one `parts_table` row and the `ref_table` rows that go with it.

@@ -103,6 +103,7 @@
 | 4 | `footprint` | TEXT | | Yes |
 | 5 | `source` | TEXT | | Yes |
 | 6 | `note` | TEXT | | Yes |
+| 7 | `name` | TEXT | Unique | Yes |
 
 **T2.4 — `ref_table`**
 

@@ -427,7 +427,8 @@ def main(argv):
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("hint", nargs="?",
                     help="a part number, or a description")
-    ap.add_argument("--ipn", help="name the copy this. Defaults to the hint")
+    ap.add_argument("--ipn", help="the written symbol's name - the part's name, per "
+                         "n0.3. Defaults to the hint")
     ap.add_argument("--nickname",
                     help="the project library's nickname, when no "
                          ".kicad_pro names it")
