@@ -148,23 +148,19 @@ def connect(board):
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
-    if not {"parts_table", "aml_table", "mpn_table"} <= have:
+    if not {"parts_table"} <= have:
         raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
 
 def designed_mpn(con, ipn):
-    """The MPN the board was designed against — the blank-rank row of T2.6.
-    A pinout is read for that one part, not for the alternatives, which take
-    the board as designed and so take its symbol too."""
-    rows = con.execute(
-        "select a.mpn, m.datasheet from aml_table a "
-        "left join mpn_table m on m.mpn = a.mpn "
-        "where a.ipn = ? order by a.rank is not null, a.rank",
-        (ipn,)).fetchall()
-    if not rows:
-        raise Bad(f"{ipn} has no row in aml_table. Name a part number first")
-    return rows[0]
+    """The part's MPN and recorded datasheet, off the part itself (n0.4)."""
+    row = con.execute(
+        "select mpn, datasheet from parts_table where ipn = ?",
+        (ipn,)).fetchone()
+    if row is None or not row[0]:
+        raise Bad(f"{ipn} has no mpn. Set a part number first")
+    return row
 
 
 def part_row(con, ipn):
@@ -260,7 +256,7 @@ def as_recorded(path, board):
 
 def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
     """Given, then recorded, then found. Whatever it settles on is written
-    back to mpn_table, so the second run needs no argument."""
+    back to the part, so the second run needs no argument."""
     if given:
         path = Path(given)
         if not path.exists():
@@ -270,7 +266,7 @@ def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
         if not path.exists():
             path = Path(recorded)
         if not path.exists():
-            raise Bad(f"{ipn}: mpn_table has {recorded} for {mpn}, "
+            raise Bad(f"{ipn}: the record has {recorded} for {mpn}, "
                       f"and it is not on disk")
     else:
         where = sheet_folder(board, folder)
@@ -285,8 +281,8 @@ def resolve_sheet(con, board, ipn, mpn, recorded, given, folder):
 
     stored = as_recorded(path, board)
     if stored != recorded:
-        con.execute("update mpn_table set datasheet = ? where mpn = ?",
-                    (stored, mpn))
+        con.execute("update parts_table set datasheet = ? where ipn = ?",
+                    (stored, ipn))
         con.commit()
     return path, stored
 
