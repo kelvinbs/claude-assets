@@ -11,7 +11,6 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> set    <ipn> [--field value ...]
     table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
     table-write.py <board-dir> parent <ref> --under <ref> | --none
-    table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
     table-write.py <board-dir> drop   <ref>
     table-write.py <board-dir> show   [<ipn>]
 
@@ -53,7 +52,8 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
-FIELDS = ("description", "note", "name")
+FIELDS = ("description", "note", "name", "mpn", "manufacturer",
+          "datasheet")
 
 
 class Bad(SystemExit):
@@ -62,7 +62,7 @@ class Bad(SystemExit):
 
 
 def connect(board, name="board.db",
-            need=("parts_table", "ref_table", "aml_table", "mpn_table")):
+            need=("parts_table", "ref_table")):
     path = Path(board) / name
     if not path.exists():
         raise Bad(f"{path} does not exist. Run init-pipeline first")
@@ -106,7 +106,7 @@ def resolve(con, token):
                       (token,)).fetchone()
     if row:
         return row[0]
-    row = con.execute("select ipn from aml_table where mpn = ?",
+    row = con.execute("select ipn from parts_table where mpn = ?",
                       (token,)).fetchone()
     if row:
         return row[0]
@@ -254,39 +254,6 @@ def drop(con, args):
     con.execute("delete from ref_table where ref = ?", (args.ref,))
     con.commit()
     print(f"{args.ref}  removed from {row[0]}")
-
-
-def mpn(con, args):
-    """An approval: this manufacturer part may be built against this IPN.
-    It is kept, unlike the fetched tables beside it."""
-    part(con, args.ipn)
-    # the part number's identity exists from the moment it is named, with
-    # every field but the key empty until something fills them in
-    con.execute("insert or ignore into mpn_table (mpn) values (?)",
-                (args.mpn,))
-    have = con.execute(
-        "select rank from aml_table where ipn = ? and mpn = ?",
-        (args.ipn, args.mpn)).fetchone()
-    shown = args.rank if args.rank is not None else "default"
-    try:
-        if have:
-            con.execute("update aml_table set rank = ?, note = ?"
-                        " where ipn = ? and mpn = ?",
-                        (args.rank, args.note, args.ipn, args.mpn))
-            was = have[0] if have[0] is not None else "default"
-            print(f"{args.ipn}  {args.mpn}  rank {was} -> {shown}")
-        else:
-            con.execute("insert into aml_table values (?,?,?,?)",
-                        (args.ipn, args.mpn, args.rank, args.note))
-            print(f"{args.ipn}  {args.mpn}  rank {shown}")
-    except sqlite3.IntegrityError:
-        other = con.execute("select mpn from aml_table where ipn = ?"
-                            " and rank is null", (args.ipn,)).fetchone()
-        raise Bad(f"{args.ipn} already has a default — {other[0]}. Rank "
-                  f"this one, or rank that one first")
-    con.commit()
-
-
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
@@ -312,11 +279,12 @@ def show(con, args):
                 (ipn,))]
             if kids:
                 print(f"    children: {' '.join(kids)}")
-            for m, rank in con.execute(
-                    "select mpn, rank from aml_table"
-                    " where ipn = ? order by rank", (ipn,)):
-                print(f"    mpn: {m}  rank "
-                      f"{rank if rank is not None else 'default'}")
+            nm, mp, mf, ds = con.execute(
+                "select name, mpn, manufacturer, datasheet from "
+                "parts_table where ipn = ?", (ipn,)).fetchone()
+            print(f"    name: {nm or '—'}  mpn: {mp or '—'}  "
+                  f"manufacturer: {mf or '—'}")
+            print(f"    datasheet: {ds or '—'}")
 
 
 # ------------------------------------------------------------------- entry
@@ -359,13 +327,6 @@ def main(argv):
     r.add_argument("--none", action="store_true", help="clear the parent")
     r.set_defaults(run=reparent)
 
-    m = sub.add_parser("mpn", help="approve a manufacturer part against an IPN")
-    m.add_argument("ipn")
-    m.add_argument("mpn")
-    m.add_argument("--rank", type=int,
-                   help="blank on the one you designed against")
-    m.add_argument("--note")
-    m.set_defaults(run=mpn)
 
     d = sub.add_parser("drop", help="remove one instance")
     d.add_argument("ref")
@@ -381,7 +342,7 @@ def main(argv):
         if getattr(args, "ipn", None):
             # n0.3: a name or an approved MPN serves anywhere an IPN does
             args.ipn = resolve(con, args.ipn)
-        if args.verb in ("place", "set", "mpn") and not IPN.match(args.ipn):
+        if args.verb in ("place", "set") and not IPN.match(args.ipn):
             raise Bad(f"'{args.ipn}' names no part")
         args.run(con, args)
     finally:
