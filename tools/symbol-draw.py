@@ -54,7 +54,7 @@ def connect(board):
     con.execute("PRAGMA foreign_keys = ON")   # off by default, per connection
     have = {r[0] for r in con.execute(
         "select name from sqlite_master where type = 'table'")}
-    if not {"parts_table", "ref_table", "aml_table", "mpn_table"} <= have:
+    if not {"parts_table", "ref_table"} <= have:
         raise Bad(f"{path} is missing a table. Run init-pipeline")
     return con
 
@@ -79,16 +79,14 @@ def prefix_of(con, ipn):
 
 
 def mpn_of(con, ipn):
-    row = con.execute("select mpn from aml_table where ipn = ? "
-                      "order by rank is not null, rank", (ipn,)).fetchone()
-    return row[0] if row else ""
+    row = con.execute("select mpn from parts_table where ipn = ?",
+                      (ipn,)).fetchone()
+    return (row[0] if row else None) or ""
 
 
 def datasheet_of(con, ipn):
-    row = con.execute(
-        "select m.datasheet from aml_table a "
-        "left join mpn_table m on m.mpn = a.mpn where a.ipn = ? "
-        "order by a.rank is not null, a.rank", (ipn,)).fetchone()
+    row = con.execute("select datasheet from parts_table where ipn = ?",
+                      (ipn,)).fetchone()
     return (row[0] if row else None) or ""
 
 
