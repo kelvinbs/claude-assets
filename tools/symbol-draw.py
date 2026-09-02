@@ -316,12 +316,14 @@ def build_symbol(spec):
 
 # ------------------------------------------------------------- the two resorts
 
-def try_copy(board, ipn, hint, extra, pins=None):
+def try_copy(board, ipn, hint, extra, pins=None, take=None):
     """`copy-kicad-part`, run as a command. Returns the library id it wrote,
     or None. `pins` is the datasheet pinout; the copy renames by number
     from it and refuses a count mismatch."""
     argv = [sys.executable, str(HERE / "copy-kicad-part.py"), str(board),
             hint, "--ipn", ipn]
+    if take:
+        argv += ["--take", take]
     handle = None
     if pins:
         import tempfile, os as _os
@@ -343,13 +345,13 @@ def try_copy(board, ipn, hint, extra, pins=None):
     # choice belongs to the running session (its doc, Show choose take).
     # This automatic resort then has no answer: report and move on.
     if "rerun with --take" in run.stdout:
-        return None
+        return None, run.stdout
     # copy-kicad-part prints `<name>  <library:id>` or `<name>  null`
     first = (run.stdout.strip().splitlines() or ["x null"])[0]
     tokens = first.split()
     if len(tokens) < 2 or tokens[1] == "null":
-        return None
-    return tokens[1]
+        return None, run.stdout
+    return tokens[1], run.stdout
 
 
 def try_read(board, ipn, extra):
@@ -383,8 +385,32 @@ def one(con, board, ipn, nickname, library, args):
     # still runs, held to the guidelines alone.
     pins = try_read(board, ipn, args.datasheets)
 
-    written = None if args.draw else try_copy(board, label, hint, args.lib,
-                                              pins)
+    take = getattr(args, "source_lib", None)
+    if take:
+        lib_part, _, sym_part = take.partition(":")
+        if not sym_part:
+            raise Bad("--from is LIB:NAME")
+        extra = list(args.lib or [])
+        letter = "s"
+        donor = Path(lib_part)
+        if donor.suffix == ".kicad_sym":
+            if not donor.exists():
+                raise Bad(f"--from: {donor} is not on disk")
+            extra.append(str(donor.parent))
+            take = f"{donor.stem}:{sym_part}"
+            letter = "v"
+        written, out = try_copy(board, label, hint, extra, pins, take)
+        if not written:
+            raise Bad(f"{ipn}: --from refused - "
+                      + out.strip().replace("\n", "; "))
+        write_fields(con, ipn, written, letter, source)
+        push_symbol_fields(con, board, ipn, written)
+        print(f"{ipn}  {written}  {letter}  copied from {take}"
+              + (f", pinout known, {len(pins)} pins" if pins else ""))
+        return True
+
+    written, _ = (None, "") if args.draw else try_copy(board, label, hint,
+                                                       args.lib, pins)
     if written:
         write_fields(con, ipn, written, "s", source)
         push_symbol_fields(con, board, ipn, written)
@@ -424,6 +450,9 @@ def main(argv):
                     help="replace a symbol the library already holds")
     ap.add_argument("--draw", action="store_true",
                     help="skip the copy resort - draw from the pinout")
+    ap.add_argument("--from", dest="source_lib", metavar="LIB:NAME",
+                    help="copy this donor - a stock nickname, or a "
+                         ".kicad_sym path, colon, the symbol name")
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
     ap.add_argument("--datasheets", help="the directory of datasheets")
@@ -434,6 +463,9 @@ def main(argv):
         raise Bad(f"{board} is not a directory")
     if bool(args.ipn) == bool(args.all):
         raise Bad("name one IPN, or --all")
+    if args.all and args.source_lib:
+        raise Bad("--all with --from, which names one symbol and so "
+                  "names one part")
     if args.ipn and not IPN.match(args.ipn):
         raise Bad(f"'{args.ipn}' is not an IPN")
 
