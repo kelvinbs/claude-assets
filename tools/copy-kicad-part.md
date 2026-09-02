@@ -31,27 +31,20 @@ and `symbol-draw` owns the record.
 
 Drawing a symbol is the last resort. This is asked first.
 
-## Six steps
+## Show, choose, take
 
-| # | Step | Model |
+No second session runs here — the LLM performing the stage is the one
+already running (section 1.3 of the tool document). Two calls:
+
+| Call | Does | Model |
 |---|---|---|
-| 1 | Take the hint | no |
-| 2 | Build or load the index, through `lib-index` | no |
-| 3 | Emit search queries per part — synonyms, family, class fallbacks, generic names | yes |
-| 4 | Run every query over the index; union the hits with the base shortlist, per-query cap, union cap | no |
-| 5 | Pick: an agent with read access to the index and the libraries chooses each part's symbol — or nulls | yes |
-| 6 | Copy it into `lib/`, rename the pins, park `unused` pins as NC, set `origin`, print the library id | no |
+| without `--take` | builds or loads the index through `lib-index`, scores the hint, prints the shortlist — library, symbol, pin count, description, pins — and stops | no |
+| with `--take LIBRARY:SYMBOL` | copies the named symbol, renames every pin by number from `--pinout`, runs the gates, prints the library id | no |
 
-Two model calls per run — steps 3 and 5. The pick is not confined to step
-4's leads: it carries `Read`, `Grep` and `Glob` over the symbols directory
-and the index — both inside this skill's declared Reads — follows
-`extends` parents itself, and may name any symbol in the libraries. Its
-rules are an engineer's: pins mappable → take it and rename; band,
-package, maker never disqualify; exact > family > generic, generics
-acceptable; spare pins parked `unused`; missing pins never invented.
-Validation runs at the source: the named symbol must exist in the named
-library, and every rename or unused entry must hit a real pin of the
-flattened symbol — a failure stops the run and names the pin.
+The judgment — which symbol — happens between the two calls, in the
+running session, in the open. The gates hold either way: the pin count
+must match, a named pin must exist, and the choice may be any symbol in
+the libraries, not only the shortlist.
 
 ## What counts as the part
 

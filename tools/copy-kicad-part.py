@@ -45,73 +45,11 @@ STOCK_CANDIDATES = [
     "C:/Program Files/KiCad/share/kicad/symbols",
 ]
 
-PROMPT = """You are choosing KiCad schematic symbols the way an engineer
-would. For each part below, pick the symbol to copy for it.
-
-Each part is a heading `== <name>: <hint>`, then leads - candidate lines
-`library:symbol`, pin count, description, pins as number:name. Leads are
-hints, not the menu: you may pick ANY symbol in the libraries.
-
-{sections}
-
-Sources you may read (read-only):
-- The index: {index} - every symbol, its description and pins
-- The libraries: {stock} - one .kicad_sym per library. A symbol with
-  `(extends "PARENT")` takes its pins from PARENT in the same file - read
-  the parent when a lead shows 0 pins.
-
-Guidelines:
-- A similar part's symbol is this part's symbol when its pins can be
-  mapped to the part's pins. Rename covers different pin names AND
-  different pin functions - that is what rename is for.
-- Frequency band, package, and maker never disqualify - they belong to
-  the footprint.
-- exact > family > generic. A generic symbol (Device:R, Device:Antenna,
-  Connector:Conn_Coaxial, an RF gain block with bias) is a valid answer
-  at fit "generic".
-- A BOM row that carries a schematic page IS on the schematic. Null for
-  no-schematic-presence only when the part truly never appears (a bare
-  board, a bench host).
-- The symbol carries the part's pin count - no spares, none missing,
-  none invented. A heading that names a pin count binds.
-- Renames take the datasheet's printed names. Where a heading carries the
-  pinout, the script renames every pin by number itself - name nothing.
-- Null when no symbol's pins genuinely do the part's jobs, after
-  actually looking - a wrong symbol is worse than none. Never rename an
-  unrelated device into shape.
-- Never take a candidate whose drawing cannot show the part's pins - a
-  body drawn for 3 pins wearing 17, pins piled on one point, pins past
-  the package edge. The drawing must read like the part.
-
-Write ONE json object to {out} - keys the part names, values:
-  {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
-    "unused": ["7", "8"], "fit": "exact, family or generic",
-    "why": one short line}}
-Null is {{"library": "", "why": ...}}. `rename` carries only pins whose
-names change; `unused` only spare pins. Nothing but the json object in
-the file. Verify a symbol you name outside the leads by reading its pins
-in the library file first."""
 
 
 class Bad(SystemExit):
     def __init__(self, message):
         super().__init__(f"copy-kicad-part: {message}")
-
-
-def usage_of(run):
-    """Tokens a `claude -p --output-format json` call spent - n9_1.33.
-    The envelope is on stdout; the answer travels by file, so stdout is
-    free to carry it. 0 when the envelope is absent or unreadable."""
-    try:
-        envelope = json.loads(run.stdout)
-        usage = envelope.get("usage") or {}
-        return int(usage.get("input_tokens", 0)) \
-            + int(usage.get("output_tokens", 0))
-    except (json.JSONDecodeError, TypeError, ValueError, AttributeError):
-        return 0
-
-
-TOKENS = {"spent": 0}
 
 
 def heartbeat(label):
@@ -230,58 +168,6 @@ def as_lines(rows):
     return "\n".join(out)
 
 
-# ---------------------------------------------------- 3a, the query expansion
-
-PROMPT_QUERIES = """For each part below, write search queries that would find
-its schematic symbol in the KiCad libraries.
-
-Each part is one line: `== <name>: <hint>`.
-
-{sections}
-
-Per part, 3 to 8 short queries: the part number and its family root, close
-pin-compatible parts, the device class in KiCad's own vocabulary (op-amp,
-LNA, MMIC amplifier, SPDT switch, accelerometer, GNSS module, TCXO, VCO,
-coaxial connector, test point, resistor, antenna...), and - when a generic
-library symbol could stand in - the generic name (R, C, L, Antenna,
-Conn_Coaxial, TestPoint, Jumper). Queries are search text, not sentences.
-
-Write ONE json object to {out} - keys the part names, values arrays of query
-strings. Nothing else. Do not read any file."""
-
-
-def ask_queries(parts, root):
-    """Model call A: per-part search queries. On any failure the run falls
-    back to the base shortlist alone - retrieval still works, just narrower."""
-    sections = "\n".join(f"== {p['name']}: {p['hint']}" for p in parts)
-    handle, path = tempfile.mkstemp(suffix=".json")
-    os.close(handle)
-    out = Path(path)
-    out.unlink()
-    prompt = PROMPT_QUERIES.format(sections=sections, out=out)
-    beat = heartbeat(f"{len(parts)} part(s) - expanding queries")
-    try:
-        run = subprocess.run(
-            ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-             "--allowedTools", "Write", "--output-format", "json"],
-            cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
-        TOKENS["spent"] += usage_of(run)
-        if not out.exists():
-            return {}
-        try:
-            got = json.load(open(out))
-        except json.JSONDecodeError:
-            return {}
-    finally:
-        beat.set()
-        if out.exists():
-            out.unlink()
-    if not isinstance(got, dict):
-        return {}
-    return {k: [q for q in v if isinstance(q, str) and q.strip()]
-            for k, v in got.items() if isinstance(v, list)}
-
-
 def retrieve(rows, hint, queries):
     """The base shortlist plus each query's best rows, deduplicated, capped."""
     seen = {}
@@ -318,52 +204,6 @@ def faults(spec, rows):
         if not str(value).strip():
             bad.append(f"rename gives pin {key} no name")
     return bad
-
-
-def ask(parts, lists, root, board):
-    """One model call for every part in the run. `parts` is the batch,
-    `lists` its leads by name. Returns the JSON object, keyed by name."""
-    sections = "\n\n".join(
-        f"== {p['name']}: {p['hint']}"
-        + (f" ({len(p['pinout'])} pins: "
-           + " ".join(f"{n}:{name}" for n, name, *_ in p["pinout"]) + ")"
-           if p.get("pinout") else
-           (f" ({p['pins']} pins)" if p.get("pins") else "")) + "\n"
-        + (as_lines(lists[p["name"]]) or "    (no leads scored - search the index)")
-        for p in parts)
-    handle, path = tempfile.mkstemp(suffix=".json")
-    os.close(handle)
-    out = Path(path)
-    out.unlink()
-    prompt = PROMPT.format(sections=sections, out=out,
-                           index=Path(board) / "lib" / "kicad-lib-index.json",
-                           stock=find_stock())
-    beat = heartbeat(f"{len(parts)} part(s) - asking")
-    try:
-        run = subprocess.run(
-            ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-             "--allowedTools", "Write,Read,Grep,Glob",
-             "--output-format", "json"],
-            cwd=root, capture_output=True, text=True, timeout=TIMEOUT)
-        TOKENS["spent"] += usage_of(run)
-        if not out.exists():
-            tail = (run.stdout or run.stderr).strip().splitlines()[-3:]
-            raise Bad("nothing written. " + " / ".join(tail))
-        try:
-            specs = json.load(open(out))
-        except json.JSONDecodeError as exc:
-            raise Bad(f"not JSON - {exc}")
-    finally:
-        beat.set()
-        if out.exists():
-            out.unlink()
-    if not isinstance(specs, dict):
-        raise Bad("the answer is not an object keyed by part name")
-    return specs
-
-
-# ------------------------------------------------------------ 5, the writing
-
 def find_stock():
     for candidate in [os.environ.get("KICAD_SYMBOL_DIR")] + STOCK_CANDIDATES:
         if candidate and Path(candidate).is_dir():
@@ -594,6 +434,10 @@ def main(argv):
     ap.add_argument("--pins", type=int,
                     help="the part's pin count - a copy with any other "
                          "count is refused")
+    ap.add_argument("--take",
+                    help="LIBRARY:SYMBOL - the choice, made in-session. "
+                         "Without it the shortlist is printed and the run "
+                         "stops")
     ap.add_argument("--pinout",
                     help="JSON file of [[number, name, type, side], ...] - "
                          "the datasheet's pinout. Sets the count, and the "
@@ -631,11 +475,27 @@ def main(argv):
             root = folder
             break
 
-    queries = ask_queries(parts, root)
-    lists = {p["name"]: retrieve(rows, p["hint"], queries.get(p["name"], []))
+    lists = {p["name"]: retrieve(rows, p["hint"], [])
              for p in parts}
 
-    specs = ask(parts, lists, root, board)
+    # No second session (1.3: the LLM performing the stage is the one
+    # running it). Without --take, the shortlist is printed and the run
+    # stops; the running LLM chooses and reruns with --take.
+    if not args.take:
+        for p in parts:
+            print(f"== {p['name']}: {p['hint']}")
+            print(as_lines(lists[p["name"]]) or "    (nothing scored)")
+        print("choose, then rerun with --take LIBRARY:SYMBOL")
+        return 0
+    if len(parts) != 1:
+        raise Bad("--take decides one part - run one at a time")
+    lib_name, _, sym_name = args.take.partition(":")
+    if not sym_name:
+        raise Bad("--take is LIBRARY:SYMBOL")
+    specs = {parts[0]["name"]: {"library": lib_name, "symbol": sym_name,
+                                "rename": {}, "unused": [],
+                                "fit": "taken",
+                                "why": "chosen in-session"}}
 
     misses = 0
     for p in parts:
@@ -669,8 +529,6 @@ def main(argv):
               + (f"  {len(parked)} pin(s) unused" if parked else ""))
         print(f"    from {spec['library']}:{spec['symbol']}")
         print(f"    {spec.get('why', '')}")
-    print(f"kpi  parts {len(parts)}  tokens {TOKENS['spent']}  "
-          f"tokens/part {TOKENS['spent'] // max(len(parts), 1)}")
     return 0
 
 

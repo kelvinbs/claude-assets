@@ -341,6 +341,11 @@ def try_copy(board, ipn, hint, extra, pins=None):
             print(f"    {line}")
     if run.returncode != 0:
         raise Bad((run.stderr or run.stdout).strip())
+    # Without --take, copy-kicad-part prints a shortlist and stops - the
+    # choice belongs to the running session (its doc, Show choose take).
+    # This automatic resort then has no answer: report and move on.
+    if "rerun with --take" in run.stdout:
+        return None
     # copy-kicad-part prints `<name>  <library:id>` or `<name>  null`
     first = (run.stdout.strip().splitlines() or ["x null"])[0]
     tokens = first.split()
