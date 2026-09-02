@@ -76,12 +76,6 @@ Guidelines:
   none invented. A heading that names a pin count binds.
 - Renames take the datasheet's printed names. Where a heading carries the
   pinout, the script renames every pin by number itself - name nothing.
-- The delivered symbol shows every pin on the body, each on its own
-  point, none hidden. When the source drawing stacks pins, hides them,
-  or runs them off the package, lay the pins out yourself: give
-  "layout" - every pin's position. Left side runs down, right runs up,
-  supplies top, grounds bottom; the body may need to be bigger, so
-  "body" may give its corners. Grid is 2.54.
 - Null when no symbol's pins genuinely do the part's jobs, after
   actually looking - a wrong symbol is worse than none. Never rename an
   unrelated device into shape.
@@ -89,11 +83,7 @@ Guidelines:
 Write ONE json object to {out} - keys the part names, values:
   {{"library": ..., "symbol": ..., "rename": {{"3": "VCC"}},
     "unused": ["7", "8"], "fit": "exact, family or generic",
-    "why": one short line,
-    "layout": {{"1": [x, y, angle]}} - optional, every pin when given;
-    angle 0 points right (left side), 180 left (right side), 270 down
-    (top side), 90 up (bottom side); x, y in mm on the 2.54 grid,
-    "body": [x1, y1, x2, y2] - optional, with layout}}
+    "why": one short line}}
 Null is {{"library": "", "why": ...}}. `rename` carries only pins whose
 names change; `unused` only spare pins. Nothing but the json object in
 the file. Verify a symbol you name outside the leads by reading its pins
@@ -532,117 +522,6 @@ def show_pins(block):
         out.append(block[i:j])
         out.append(pin)
         i = k
-
-
-def spans_of(block, opener):
-    """Balanced spans of every block starting with `opener`."""
-    spans, i = [], 0
-    while True:
-        j = block.find(opener, i)
-        if j < 0:
-            return spans
-        depth, k, in_str = 0, j, False
-        while k < len(block):
-            c = block[k]
-            if in_str:
-                if c == "\\":
-                    k += 1
-                elif c == '"':
-                    in_str = False
-            elif c == '"':
-                in_str = True
-            elif c == "(":
-                depth += 1
-            elif c == ")":
-                depth -= 1
-                if depth == 0:
-                    k += 1
-                    break
-            k += 1
-        spans.append((j, k))
-        i = k
-
-
-PIN_AT = re.compile(r"(\(pin [a-z_]+ line\n\s*\(at )(-?[\d.]+) (-?[\d.]+) (\d+)\)")
-def apply_layout(block, layout, body):
-    """The model's own pin positions, applied. Deterministic: the LLM
-    judged the layout (n9_1.43), this only writes it."""
-    if body:
-        x1, y1, x2, y2 = [float(v) for v in body]
-        block = re.sub(
-            r"\(rectangle\n(\s*)\(start [^)]*\)\n(\s*)\(end [^)]*\)",
-            f"(rectangle\n\\1(start {x1:g} {y1:g})\n\\2(end {x2:g} {y2:g})",
-            block, count=1)
-    for number, place in layout.items():
-        x, y, angle = [float(v) for v in place[:3]]
-        pat = re.compile(
-            r"(\(pin [a-z_]+ line\n\s*\(at )(-?[\d.]+) (-?[\d.]+) (\d+)"
-            r"(\)(?:.|\n)*?\(number \"" + re.escape(str(number)) + r"\")")
-        hit = None
-        for m in re.finditer(r"\(pin [a-z_]+ line\n(\s*)\(at (-?[\d.]+) "
-                             r"(-?[\d.]+) (\d+)\)", block):
-            span = block[m.start():]
-            depth = 0; k = 0; in_str = False
-            while k < len(span):
-                c = span[k]
-                if in_str:
-                    if c == "\\": k += 1
-                    elif c == '"': in_str = False
-                elif c == '"': in_str = True
-                elif c == "(": depth += 1
-                elif c == ")":
-                    depth -= 1
-                    if depth == 0: k += 1; break
-                k += 1
-            pin = span[:k]
-            num = re.search(r'\(number "([^"]*)"', pin)
-            if num and num.group(1) == str(number):
-                new = pin.replace(m.group(0),
-                                  f"(pin {pin.split()[1]} line\n{m.group(1)}"
-                                  f"(at {x:g} {y:g} {int(angle)})", 1)
-                block = block[:m.start()] + new + block[m.start() + k:]
-                hit = True
-                break
-        if not hit:
-            raise Bad(f"layout names pin {number}, not in the symbol")
-    return block
-
-
-def illegible(block):
-    """The dumb check - stacked, hidden, or off-body pins, named. The
-    script verifies, never repairs (n9_1.43)."""
-    bad = []
-    pts = {}
-    xs, ys = [], []
-    for m in re.finditer(r"\((?:start|end|center|xy) (-?[\d.]+) (-?[\d.]+)",
-                         block):
-        xs.append(float(m.group(1))); ys.append(float(m.group(2)))
-    pins = []
-    for m in re.finditer(r"\(pin [a-z_]+ line\n\s*\(at (-?[\d.]+) "
-                         r"(-?[\d.]+) (\d+)\)\n\s*\(length ([\d.]+)\)"
-                         r"((?:.|\n)*?)\(number \"([^\"]*)\"", block):
-        x, y, ang, ln, mid, num = (float(m.group(1)), float(m.group(2)),
-                                   int(m.group(3)), float(m.group(4)),
-                                   m.group(5), m.group(6))
-        pins.append((num, x, y, ang, ln))
-        if "(hide yes)" in mid.split("(name")[0]:
-            bad.append(f"pin {num} hidden")
-        pts.setdefault((x, y), []).append(num)
-    for point, names in pts.items():
-        if len(names) > 1:
-            bad.append(f"pins stacked at {point}: {' '.join(names)}")
-    if xs and ys and pins:
-        import math
-        lo_x, hi_x = min(xs) - 0.13, max(xs) + 0.13
-        lo_y, hi_y = min(ys) - 0.13, max(ys) + 0.13
-        for num, x, y, ang, ln in pins:
-            bx = x + ln * {0: 1, 180: -1}.get(ang, 0)
-            by = y + ln * {90: 1, 270: -1}.get(ang, 0)
-            if not (lo_x <= bx <= hi_x and lo_y <= by <= hi_y):
-                bad.append(f"pin {num} off the body")
-    return bad
-
-
 def write(library, name, block):
     block = show_pins(block)
     """Add to the library, or replace what is there under this name. Every
@@ -690,13 +569,6 @@ def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
     block = block.replace(f'"{spec["symbol"]}_', f'"{name}_')
     block = rename_pins(block, spec.get("rename"))
     block = rename_pins(block, {n: "NC" for n in (spec.get("unused") or [])})
-    if spec.get("layout"):
-        block = apply_layout(block, spec["layout"], spec.get("body"))
-    problems = illegible(show_pins(block) if False else block)
-    problems = [p for p in problems if not p.startswith("pin") or
-                "hidden" not in p] if False else problems
-    if problems:
-        raise Bad(f"{name}: illegible symbol - " + "; ".join(problems[:6]))
     block = set_property(block, "Value", name)
     block = set_property(block, "Footprint", "")
     block = set_property(block, "origin",
