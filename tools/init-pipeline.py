@@ -55,6 +55,9 @@ SCHEMA = {
             "source        TEXT",
             "note          TEXT",
             "name          TEXT",
+            "mpn           TEXT",
+            "manufacturer  TEXT",
+            "datasheet     TEXT",
         ),
         "ref_table": (
             "uuid          TEXT PRIMARY KEY NOT NULL",
@@ -65,36 +68,6 @@ SCHEMA = {
             "page          TEXT",
             "room          TEXT",
             "unit          INTEGER",
-        ),
-        # the manufacturer part itself. Kept, and never fetched away
-        "mpn_table": (
-            "mpn           TEXT PRIMARY KEY NOT NULL",
-            "manufacturer  TEXT",
-            "datasheet     TEXT",
-        ),
-        "aml_table": (
-            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
-            " ON DELETE RESTRICT",
-            "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
-            " ON DELETE RESTRICT",
-            "rank          INTEGER",
-            "note          TEXT",
-            "PRIMARY KEY (ipn, mpn)",
-        ),
-        # what a fetch found. Discarded and fetched again
-        "offer_table": (
-            "mpn           TEXT NOT NULL REFERENCES mpn_table(mpn)"
-            " ON DELETE CASCADE",
-            "distributor   TEXT NOT NULL",
-            "break_qty     INTEGER NOT NULL",
-            "sku           TEXT",
-            "currency      TEXT",
-            "price         REAL",
-            "stock         INTEGER",
-            "moq           INTEGER",
-            "lead_days     INTEGER",
-            "fetched_at    TEXT",
-            "PRIMARY KEY (mpn, distributor, break_qty)",
         ),
     },
 }
@@ -115,11 +88,6 @@ INDEXES = {
         ("parts_one_name",
          "create unique index if not exists parts_one_name on "
          "parts_table(name) where name is not null"),
-    ),
-    "aml_table": (
-        ("aml_one_default",
-         "create unique index if not exists aml_one_default on aml_table(ipn)"
-         " where rank is null"),
     ),
 }
 
