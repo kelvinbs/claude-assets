@@ -35,7 +35,7 @@
 - The structure — enforced and immutable:
   - The stages — T4.1
   - The nine skills — T5.1
-  - The six tables with their keys — sections 2.3, 2.4 and 2.9
+  - The three tables with their keys — sections 2.3 and 2.9
   - The relations — T2.9
 - The tool is stateless.
 - The User may add a field to any table at runtime. All other schema change
@@ -60,7 +60,7 @@
 ### 2.1 — The key
 
 - The design keys to an **IPN** — an internal part number.
-- An MPN hangs off an IPN; several MPNs may satisfy one.
+- The MPN is a column on the part — a prototype buys one part one way.
 - Parameters flow database to design: a field is edited in the database and
   pushed.
 
@@ -70,8 +70,8 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `aml_table`, `mpn_table`, `offer_table` |
-| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` — blank-rank MPN, else description — `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table` |
+| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` — the MPN, else description — `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
 - `board.db` is master. Part fields push to the library symbol; instance
@@ -87,7 +87,7 @@
 |---|---|---|
 | 1 | Has a symbol | `symbol is null` |
 | 2 | Has a footprint | `footprint is null` |
-| 3 | Has a part number | A row in `aml_table` |
+| 3 | Has a part number | `mpn is not null` |
 | 4 | Quantity | `count(*) from ref_table group by ipn` |
 | 5 | The assembly | Rows whose `parent` is this IPN |
 
@@ -104,6 +104,9 @@
 | 5 | `source` | TEXT | | Yes |
 | 6 | `note` | TEXT | | Yes |
 | 7 | `name` | TEXT | Unique | Yes |
+| 8 | `mpn` | TEXT | | Yes |
+| 9 | `manufacturer` | TEXT | | Yes |
+| 10 | `datasheet` | TEXT | | Yes |
 
 **T2.4 — `ref_table`**
 
@@ -128,37 +131,9 @@
 
 ### 2.4 — The sourcing tables
 
-**T2.6 — `aml_table`**
-
-| # | Column | Type | Key | Null |
-|---|---|---|---|---|
-| 1 | `ipn` | TEXT | Key | |
-| 2 | `mpn` | TEXT | Key | |
-| 3 | `rank` | INTEGER | Unique index over `ipn` where `rank is null` | Yes |
-| 4 | `note` | TEXT | | Yes |
-
-**T2.7 — `mpn_table`**
-
-| # | Column | Type | Key | Null |
-|---|---|---|---|---|
-| 1 | `mpn` | TEXT | Key | |
-| 2 | `manufacturer` | TEXT | | Yes |
-| 3 | `datasheet` | TEXT | | Yes |
-
-**T2.8 — `offer_table`**
-
-| # | Column | Type | Key | Null |
-|---|---|---|---|---|
-| 1 | `mpn` | TEXT | Key | |
-| 2 | `distributor` | TEXT | Key | |
-| 3 | `break_qty` | INTEGER | Key | |
-| 4 | `sku` | TEXT | | Yes |
-| 5 | `currency` | TEXT | | Yes |
-| 6 | `price` | REAL | | Yes |
-| 7 | `stock` | INTEGER | | Yes |
-| 8 | `moq` | INTEGER | | Yes |
-| 9 | `lead_days` | INTEGER | | Yes |
-| 10 | `fetched_at` | TEXT | | Yes |
+- Removed, 2026-09-02 (n0.4). Sourcing lives on the part — `mpn`,
+  `manufacturer`, `datasheet` in T2.3. This is a prototype's parts
+  list, not an enterprise parts manager.
 
 ### 2.5 — The relations
 
@@ -168,9 +143,6 @@
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
-| 3 | `aml_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 4 | `aml_table.mpn` | `mpn_table.mpn` | Many-to-one | Restrict |
-| 5 | `offer_table.mpn` | `mpn_table.mpn` | Many-to-one | Cascade |
 
 - All are declared foreign keys.
 - Every skill sets `PRAGMA foreign_keys = ON`.
@@ -184,7 +156,7 @@
   - Form
   - Fit
   - Function
-- Any other change is a second MPN in `aml_table`.
+- Any other change is an edit of the part's `mpn`.
 
 **T2.10 — The IPN classes**
 
@@ -221,12 +193,12 @@
 | # | Field | Lives on | Record column |
 |---|---|---|---|
 | 1 | `Reference` | the instance | `ref_table.ref` |
-| 2 | `Value` | the library symbol | `aml_table.mpn` blank rank, else `parts_table.description` |
+| 2 | `Value` | the library symbol | `parts_table.mpn`, else `parts_table.description` |
 | 3 | `Footprint` | the library symbol | `parts_table.footprint` |
 | 4 | `Description` | the library symbol | `parts_table.description` |
-| 5 | `Datasheet` | the library symbol | `mpn_table.datasheet`, blank-rank MPN |
-| 6 | `Manufacturer` | the library symbol | `mpn_table.manufacturer`, blank-rank MPN |
-| 7 | `MPN` | the library symbol | `aml_table.mpn`, blank rank |
+| 5 | `Datasheet` | the library symbol | `parts_table.datasheet` |
+| 6 | `Manufacturer` | the library symbol | `parts_table.manufacturer` |
+| 7 | `MPN` | the library symbol | `parts_table.mpn` |
 | 8 | `note` | the library symbol | `parts_table.note` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 
@@ -283,18 +255,17 @@
 
 | # | Asset | Owner |
 |---|---|---|
-| 1 | `board.db` — `parts_table`, `ref_table`, `aml_table`, `mpn_table` | Hand |
-| 2 | `board.db` — `offer_table` | Fetched. Discardable |
-| 3 | `lib/*.kicad_sym` | Hand for graphics; the tool writes the fields |
-| 4 | `lib/*.pretty` | Hand |
-| 5 | `lib/3d/` | Hand |
-| 6 | `datasheets/` | Hand |
-| 7 | `*.kicad_pro` | Generated once |
-| 8 | `*.kicad_sch` | Updated by the tool, wired by the User |
-| 9 | `*.kicad_pcb` | Updated by the tool, routed by the User |
-| 10 | Board setup — stackup, fabricator rules, DRC rules | Hand |
-| 11 | `out/` — RF-simulation file | Generated |
-| 12 | `lib/kicad-lib-index.json` | Generated |
+| 1 | `board.db` | Hand |
+| 2 | `lib/*.kicad_sym` | Hand for graphics; the tool writes the fields |
+| 3 | `lib/*.pretty` | Hand |
+| 4 | `lib/3d/` | Hand |
+| 5 | `datasheets/` | Hand |
+| 6 | `*.kicad_pro` | Generated once |
+| 7 | `*.kicad_sch` | Updated by the tool, wired by the User |
+| 8 | `*.kicad_pcb` | Updated by the tool, routed by the User |
+| 9 | Board setup — stackup, fabricator rules, DRC rules | Hand |
+| 10 | `out/` — RF-simulation file | Generated |
+| 11 | `lib/kicad-lib-index.json` | Generated |
 
 ### 3.3 — No dependencies — clone and work
 
@@ -342,7 +313,7 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its six tables |
+| 1 | `board.db` and its three tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
 
 - The project folder names the project — its name is stored at first
@@ -400,15 +371,15 @@ One skill, one run — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.6, T2.7, T2.8, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/` |
+| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
-| 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table`, `aml_table` |
-| 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table`, `mpn_table` |
+| 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table` |
+| 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 
 ### 5.3 — Layout
 
