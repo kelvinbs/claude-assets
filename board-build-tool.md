@@ -76,7 +76,7 @@
 
 - `board.db` is master. Part fields push to the library symbol; instance
   data pushes to the sheet; pull reads library fields back into the
-  record. Push and pull are explicit and User-run.
+  record.
 - The schematic returns an instance the User placed on it — its existence
   and its `Reference`, nothing else. The tool deletes on neither side.
 - Instances take library fields in KiCad — Update Symbols from Library.
@@ -261,8 +261,8 @@
 | 4 | `lib/3d/` | Hand |
 | 5 | `datasheets/` | Hand |
 | 6 | `*.kicad_pro` | Generated once |
-| 7 | `*.kicad_sch` | Updated by the tool, wired by the User |
-| 8 | `*.kicad_pcb` | Updated by the tool, routed by the User |
+| 7 | `*.kicad_sch` | Updated by the tool, which does not wire |
+| 8 | `*.kicad_pcb` | Updated by the tool, which does not route |
 | 9 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 10 | `out/` — RF-simulation file | Generated |
 | 11 | `lib/kicad-lib-index.json` | Generated |
@@ -287,7 +287,7 @@
 
 **T4.1 — The stages**
 
-| # | Stage | Skills | User then |
+| # | Stage | Skills | Outside the tool |
 |---|---|---|---|
 | 1 | `init-pipeline` | `init-pipeline` | — |
 | 2 | Update parts | `table-write` | — |
@@ -369,7 +369,7 @@ One skill, one run — T4.2.
 |---|---|---|---|---|
 | 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
-| 3 | `lib-index` | Index the KiCad symbol libraries | The User's `.kicad_sym` files | `lib/kicad-lib-index.json` |
+| 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
