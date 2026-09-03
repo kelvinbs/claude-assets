@@ -9,13 +9,21 @@ else.
 | `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
 
 ```
-python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
+python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch [warm|cold]]
 ```
 
-`--scorch` empties the project folder before the database is made. Every
-file in it is made by the pipeline, so a full init deletes all of them and
-starts from nothing. `.gitkeep` is left, so the directory survives a clone.
-Without the flag nothing is removed.
+`--scorch` empties the project folder before the database is made, then
+every file in it is made by the pipeline. `.gitkeep` is left, so the
+directory survives a clone. Without the flag nothing is removed.
+
+**T1 — Scorch states**
+
+| State | Survives | Burns |
+|---|---|---|
+| `warm` | `datasheets/`, `parts/` | the record, the project, the library, the sheets |
+| `cold` | `datasheets/` | the above and `parts/` — every part file is read again |
+
+`warm` is the default. `cold` on the word only.
 
 `<board-dir>` is the design folder — `<project>/design/` (T3.1). It must
 be named `design`; anything else is refused. `board.db` is written there,
