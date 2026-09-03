@@ -319,6 +319,81 @@ def set_property(block, name, value):
             + block[len(head):])
 
 
+PIN_RE = re.compile(r'\n(\t+)\(pin\b.*?\n\1\)', re.S)
+SIDE_ANGLE = {"L": 0, "R": 180, "B": 90, "T": 270}
+
+
+def pin_entries(block):
+    """Every pin block: (span, number, x, y, angle)."""
+    out = []
+    for m in PIN_RE.finditer(block):
+        t = m.group(0)
+        num = re.search(r'\(number "([^"]*)"', t)
+        at = re.search(r'\(at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)', t)
+        out.append((m.span(), num.group(1) if num else "",
+                    float(at.group(1)), float(at.group(2)),
+                    float(at.group(3))))
+    return out
+
+
+def pin_sexp(number, pname, etype, x, y, angle, depth):
+    pad = "\t" * depth
+    eff = f"{pad}\t\t(effects\n{pad}\t\t\t(font\n{pad}\t\t\t\t(size 1.27 1.27)\n{pad}\t\t\t)\n{pad}\t\t)\n"
+    return (f"\n{pad}(pin {etype} line\n"
+            f"{pad}\t(at {x:g} {y:g} {angle:g})\n"
+            f"{pad}\t(length 2.54)\n"
+            f"{pad}\t(name \"{pname}\"\n{eff}{pad}\t)\n"
+            f"{pad}\t(number \"{number}\"\n{eff}{pad}\t)\n"
+            f"{pad})")
+
+
+def apply_pinout(block, pinout, name):
+    """Pins renumbered, renamed, added and deleted to match the pinout -
+    copy-kicad-part.md. Deterministic; the model only chose the symbol."""
+    want = {str(n): (str(pname), etype, side)
+            for n, pname, etype, side in pinout}
+    entries = pin_entries(block)
+    have = [e[1] for e in entries]
+    # Renumber: same count, different sets - donor pins in sorted order
+    # take the pinout's numbers in sorted order.
+    if len(have) == len(want) and set(have) != set(want):
+        order = sorted(set(have), key=lambda v: (len(v), v))
+        target = sorted(want, key=lambda v: (len(v), v))
+        for old, new in zip(order, target):
+            block = re.sub(r'\(number "%s"' % re.escape(old),
+                           '(number "@@%s"' % new, block, count=1)
+        block = block.replace('(number "@@', '(number "')
+        entries = pin_entries(block)
+        have = [e[1] for e in entries]
+    # Delete extras, highest span first.
+    for (a, b), num, *_ in sorted(entries, key=lambda e: -e[0][0]):
+        if num not in want:
+            block = block[:a] + block[b:]
+    entries = pin_entries(block)
+    have = {e[1] for e in entries}
+    # Add the missing, stacked under that side's lowest pin.
+    missing = [n for n in want if n not in have]
+    if missing:
+        m = list(PIN_RE.finditer(block))
+        if not m:
+            raise Bad(f"{name}: donor has no pins to anchor an added pin")
+        depth = len(m[-1].group(1))
+        insert_at = m[-1].span()[1]
+        added = ""
+        for n in missing:
+            pname, etype, side = want[n]
+            angle = SIDE_ANGLE.get(side, 0)
+            same = [(x, y) for _, _, x, y, a2 in pin_entries(block + added)
+                    if a2 == angle]
+            if same:
+                x = same[0][0]; y = min(p[1] for p in same) - 2.54
+            else:
+                x, y = (-7.62 if angle == 0 else 7.62), 0.0
+            added += pin_sexp(n, pname, etype, x, y, angle, depth)
+        block = block[:insert_at] + added + block[insert_at:]
+    return block
+
+
 def rename_pins(block, rename):
     """Give a pin the name the datasheet prints. The symbol is the part; only
     the label differs, and the label is what a person reads on the sheet."""
@@ -389,18 +464,11 @@ def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
     block = flatten(block, src, spec["symbol"])
     numbers = set(re.findall(r'\(number "([^"]*)"', block))
     if pinout:
-        pins = len(pinout)
-    if pins and len(numbers) != pins:
-        raise Bad(f"{name}: {spec['library']}:{spec['symbol']} has "
-                  f"{len(numbers)} pins, the part has {pins}")
-    if pinout:
-        # The datasheet names the pins - copy-kicad-part.md. The rename
-        # is the script's, by number, deterministic; the model only
-        # chose the symbol (n9_1.31).
-        missing = [str(n) for n, *_ in pinout if str(n) not in numbers]
-        if missing:
-            raise Bad(f"{name}: {spec['library']}:{spec['symbol']} has no "
-                      f"pin(s) {', '.join(missing)}")
+        # The pinout is applied whole - pins renumbered, renamed, added
+        # and deleted to match it (editprop008). Pin modification is copy
+        # work, the same class of edit as renaming the symbol.
+        block = apply_pinout(block, pinout, name)
+        numbers = set(re.findall(r'\(number "([^"]*)"', block))
         spec = dict(spec)
         spec["rename"] = {str(n): pname for n, pname, *_ in pinout}
         spec["unused"] = []

@@ -124,7 +124,7 @@ about which part a symbol is; it reports the symbol and applies the answer.
 
 `--rename OLD NEW` renames a part in one pass: `parts_table.name`, the
 library symbol when it carries the old name, every sheet `lib_id`, and
-the pinout file's name tail. A deliberate act with mechanical
+the part file's name tail. A deliberate act with mechanical
 propagation — nothing rots (n0.3).
 
 ## The report

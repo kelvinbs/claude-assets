@@ -19,7 +19,7 @@ leaves them. `kicad-update` reads a blank page the same way.
 
 ## Gather before picking
 
-The pinout comes from `design/pinouts/<IPN>-<name>.json` when present;
+The pinout comes from the part file `design/parts/<IPN>-<name>.json` when present;
 else `datasheet-read` reads the recorded datasheet and writes it. The
 pick runs with the pinout, and `copy-kicad-part` applies it to the
 donor. A part with no readable pinout is
