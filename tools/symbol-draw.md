@@ -19,9 +19,10 @@ leaves them. `kicad-update` reads a blank page the same way.
 
 ## Gather before picking
 
-The pinout is read first — `datasheet-read`, the recorded datasheet. The
-pick then runs knowing the part's pin count, and `copy-kicad-part`
-refuses a symbol with any other count. A part with no readable pinout is
+The pinout comes from `design/pinouts/<IPN>-<name>.json` when present;
+else `datasheet-read` reads the recorded datasheet and writes it. The
+pick runs with the pinout, and `copy-kicad-part` applies it to the
+donor. A part with no readable pinout is
 picked on the guidelines alone. The pins in hand serve the draw when the
 pick returns null — one read either way.
 

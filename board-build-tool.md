@@ -247,7 +247,8 @@
 | 5 | `design/sym-lib-table`, `design/fp-lib-table` | library resolution, committed |
 | 6 | `design/lib/` | symbols, footprints, `3d/` models |
 | 7 | `design/datasheets/` | manufacturer datasheets |
-| 8 | `design/out/` | generated exports |
+| 8 | `design/pinouts/` | per-part pinout files, `<IPN>-<name>.json` |
+| 9 | `design/out/` | generated exports |
 
 ### 3.2 — Assets
 

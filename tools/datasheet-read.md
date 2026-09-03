@@ -11,7 +11,8 @@ python3 tools/board-build/tools/datasheet-read.py <board-dir> <ipn> [options]
 python3 tools/board-build/tools/datasheet-read.py <board-dir> --all [options]
 ```
 
-Each read reports the tokens it spent (n9_1.33). It writes no file of its own. `symbol-draw` calls it and draws what comes
+Each read reports the tokens it spent (n9_1.33). It writes the part's pinout file when the part has none —
+`design/pinouts/<IPN>-<name>.json`. `symbol-draw` calls it and draws what comes
 back; run alone it prints the pins. The pins belong in the symbol, and a
 second copy of them beside the symbol is a second thing to keep true.
 
@@ -81,8 +82,8 @@ what to produce. The file is read back, checked, and deleted.
 
 ## Re-running
 
-Nothing is cached. `symbol-draw` skips a part that already has a symbol, so
-a datasheet is read once per symbol drawn and not again.
+The pinout file is the cache: present, it is read; absent, the datasheet
+is read and the file written. Delete the file to force a fresh read.
 
 ## What it refuses
 
