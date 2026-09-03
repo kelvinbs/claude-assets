@@ -7,6 +7,10 @@ the datasheet does not state is left absent, never guessed.
 The part file is the cache. A key present is not re-read. The PDF is
 opened only for a key absent. Delete the key to force a read.
 
+`pins` holds every pin the package has, 1 to N, none missing, none
+repeated, an exposed pad numbered after the last. The count is the
+datasheet's pin count. A `pins` that fails this is not written.
+
 **T1 — Part file keys**
 
 | # | Key | Holds | Stage |
