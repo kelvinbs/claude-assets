@@ -366,6 +366,9 @@ def try_read(board, ipn, extra):
     for line in run.stdout.strip().splitlines():
         if line.startswith("{"):
             answer = json.loads(line)
+            # The read's cost is the stage's cost - forward it (n3.15).
+            print(f"    read tokens {answer.get('tokens', 0)} "
+                  f"tier {answer.get('tier', 0)}")
             return answer.get("pins")
     return None
 
