@@ -5,8 +5,8 @@
     symbol-draw.py <board-dir> --all [--redraw] [--lib DIR ...]
 
 Drawing is the last resort. For each part it runs `copy-kicad-part` first,
-and only when that returns null does it run `datasheet-read` and draw the
-pins that come back. Either way `parts_table` is told where the symbol is.
+and only when that returns null does it draw the part file's pins
+(datasheet-read.md T1). Either way `parts_table` is told where the symbol is.
 
 Both are run as commands. Nothing is imported from another tool.
 
@@ -354,23 +354,17 @@ def try_copy(board, ipn, hint, extra, pins=None, take=None):
     return tokens[1], run.stdout
 
 
-def try_read(board, ipn, extra):
-    """`datasheet-read --json`, run as a command. Returns the pins, or None."""
-    argv = [sys.executable, str(HERE / "datasheet-read.py"), str(board), ipn,
-            "--json"]
-    if extra:
-        argv += ["--datasheets", extra]
-    run = subprocess.run(argv, capture_output=True, text=True)
-    if run.returncode != 0:
+def try_read(board, ipn, pname):
+    """The part file, `design/parts/<IPN>-<name>.json` (datasheet-read.md
+    T1). Returns its `pins`, or None when the part has no file. Nothing
+    is read from a datasheet here - that is the running session's work."""
+    part = Path(board) / "parts" / f"{ipn}-{pname or ipn}.json"
+    if not part.is_file():
+        print("    no part file")
         return None
-    for line in run.stdout.strip().splitlines():
-        if line.startswith("{"):
-            answer = json.loads(line)
-            # The read's cost is the stage's cost - forward it (n3.15).
-            print(f"    read tokens {answer.get('tokens', 0)} "
-                  f"tier {answer.get('tier', 0)}")
-            return answer.get("pins")
-    return None
+    pins = json.load(open(part)).get("pins")
+    print(f"    part file  {len(pins or [])} pins")
+    return pins
 
 
 def one(con, board, ipn, nickname, library, args):
@@ -386,7 +380,7 @@ def one(con, board, ipn, nickname, library, args):
     # Gather before picking - n9_1.29. The pinout is read first; the pick
     # runs knowing the part's pin count. No pinout, no count - the pick
     # still runs, held to the guidelines alone.
-    pins = try_read(board, ipn, args.datasheets)
+    pins = try_read(board, ipn, pname)
 
     take = getattr(args, "source_lib", None)
     if take:

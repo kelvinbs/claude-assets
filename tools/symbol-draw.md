@@ -5,7 +5,7 @@ it is. The second tool of process 2.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`<br>`copy-kicad-part`, `datasheet-read` — run as commands | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
+| `board.db` — `parts_table`, `ref_table`<br>`copy-kicad-part` — run as a command<br>`parts/<IPN>-<name>.json` | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
 python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
@@ -20,7 +20,8 @@ leaves them. `kicad-update` reads a blank page the same way.
 ## Gather before picking
 
 The pinout comes from the part file `design/parts/<IPN>-<name>.json` when present;
-else `datasheet-read` reads the recorded datasheet and writes it. The
+else the part has no pinout — the running session fills the file per
+`datasheet-read.md` before the stage is rerun. The
 pick runs with the pinout, and `copy-kicad-part` applies it to the
 donor. A part with no readable pinout is
 picked on the guidelines alone. The pins in hand serve the draw when the
@@ -41,7 +42,7 @@ Drawing a symbol is the last thing tried, not the first.
 | | |
 |---|---|
 | 1 | `copy-kicad-part` is run. It finds the symbol, copies it into `lib/` and renames its pins, and returns what it wrote |
-| 2 | nothing holds it — `datasheet-read` is called and what it returns is drawn |
+| 2 | nothing holds it — the part file's pins are drawn; no part file, the part is a miss |
 
 The library named by `--from` is a stock KiCad library if one of that
 nickname is in the KiCad symbol directory, otherwise a path to a
@@ -137,4 +138,4 @@ kicad-cli sym export svg --output /tmp/sym <board-dir>/lib/<nickname>.kicad_sym
 
 Every symbol plots, or the library does not parse. It does not check a pin
 number against the datasheet — nothing downstream does. That check is reading
-the datasheet, and it is `datasheet-read`'s prompt that carries it.
+the datasheet — `datasheet-read.md`.

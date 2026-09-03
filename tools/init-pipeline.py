@@ -9,7 +9,7 @@ project root (T3.1); at first init the name is the root's — the parent of
 `design/` (T2.13) — and thereafter the database is master: the name is
 read, never derived. Project filenames take the project name.
 
-    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch]
+    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch [warm|cold]]
 
 It adds what is missing and leaves what is there — a table, or a column
 the schema names that an existing table lacks (added at the end, T2.4
@@ -150,11 +150,15 @@ def init_file(path, tables):
     return made_file, report
 
 
-def scorch(board):
-    """Empty the board directory. Every file in it is made by a tool."""
+KEEP = {"warm": {"datasheets", "parts"}, "cold": {"datasheets"}}
+
+
+def scorch(board, state):
+    """Empty the board directory but for what the state keeps - T1 of
+    init-pipeline.md. Every other file in it is made by a tool."""
     removed = 0
     for child in sorted(board.iterdir()):
-        if child.name == ".gitkeep":
+        if child.name == ".gitkeep" or child.name in KEEP[state]:
             continue
         if child.is_dir():
             shutil.rmtree(child)
@@ -302,15 +306,20 @@ def make_table(board, project):
 
 def main(argv):
     args = argv[1:]
-    burn = "--scorch" in args
-    args = [a for a in args if a != "--scorch"]
+    burn = None
+    if "--scorch" in args:
+        i = args.index("--scorch")
+        burn = "warm"
+        if i + 1 < len(args) and args[i + 1] in KEEP:
+            burn = args.pop(i + 1)
+        args.pop(i)
     if len(args) != 1:
-        raise Bad("usage: init-pipeline.py <board-dir> [--scorch]")
+        raise Bad("usage: init-pipeline.py <board-dir> [--scorch [warm|cold]]")
     board = Path(args[0])
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
     if burn:
-        scorch(board)
+        scorch(board, burn)
 
     for name, tables in SCHEMA.items():
         path = board / name
