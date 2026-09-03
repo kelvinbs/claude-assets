@@ -816,6 +816,12 @@ def main(argv):
                     if run.returncode != 0:
                         raise Bad(f"could not normalize {path}")
                 renamed_lib = True
+            part = board / "parts" / f"{ipn}-{old}.json"
+            if part.exists():
+                target = board / "parts" / f"{ipn}-{new}.json"
+                written.append((part, part.read_text()))
+                target.write_text(part.read_text())
+                part.unlink()
             con.commit()
             print(f"renamed  {old} -> {new}"
                   + ("  (library and sheets)" if renamed_lib
@@ -825,6 +831,10 @@ def main(argv):
             # connection; the files roll back here (n3.12).
             for path, text in written:
                 path.write_text(text)
+                twin = path.parent / path.name.replace(f"-{old}.json",
+                                                       f"-{new}.json")
+                if twin != path and twin.exists():
+                    twin.unlink()
             raise
         finally:
             con.close()

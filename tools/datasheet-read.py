@@ -509,10 +509,28 @@ def read_rendered(ipn, description, mpn, datasheet, root, quiet=False):
             "tokens": spent, "tier": 2}
 
 
+def part_file(con, board, ipn):
+    """`design/parts/<IPN>-<name>.json` - the facts mined from the
+    datasheet (n3.13). The name tail is for eyes; the IPN is the key."""
+    row = con.execute("select name from parts_table where ipn = ?",
+                      (ipn,)).fetchone()
+    tail = f"-{row[0]}" if row and row[0] else ""
+    return Path(board) / "parts" / f"{ipn}{tail}.json"
+
+
 def pinout(con, board, ipn, datasheet=None, folder=None):
     """The pins of one part, and the datasheet they came from, or None.
     This is what `symbol-draw` calls."""
     ipn, description = part_row(con, ipn)
+    # The part file is the cache - datasheet-read.md. Present, it is read;
+    # absent, the datasheet is read and the file written (n3.13).
+    part = part_file(con, board, ipn)
+    if part.exists():
+        held = json.loads(part.read_text())
+        pins = held.get("pins") if isinstance(held, dict) else held
+        if pins:
+            return {"pins": pins, "datasheet": "", "tokens": 0,
+                    "tier": 0, "cached": str(part)}
     mpn, recorded = designed_mpn(con, ipn)
     path, stored = resolve_sheet(con, board, ipn, mpn, recorded,
                                  datasheet, folder)
@@ -520,6 +538,8 @@ def pinout(con, board, ipn, datasheet=None, folder=None):
     if spec is None:
         return None
     spec["datasheet"] = stored
+    part.parent.mkdir(exist_ok=True)
+    part.write_text(json.dumps({"pins": spec["pins"]}, indent=1))
     return spec
 
 
