@@ -38,8 +38,8 @@
   - The three tables with their keys — sections 2.3 and 2.9
   - The relations — T2.9
 - The tool is stateless.
-- The User may add a field to any table at runtime. All other schema change
-  is on the User's request only.
+- A field may be added to any table at runtime. Other schema change is a
+  change to this document.
 - No code or skill outside T5.1. Authoring scripts at runtime is
   prohibited.
 - ERC and DRC: the tool does not run the checks, but may set up the
@@ -301,9 +301,6 @@
 - Both Update library stages — symbols, footprints, 3D: `copy-kicad-part`
   is primary. Borrow, not build.
 - On miss it returns `null` — the stage reports and stops.
-- Secondary — only on the User's word:
-  - User assist — manual
-  - `symbol-draw`, `footprint-draw` — automatic
 
 ### 4.2 — init-pipeline
 
@@ -337,7 +334,6 @@ One skill, one run — T4.2.
 - Push rewrites library-symbol fields from the record; pull reads them
   back into it. Instance fields are not touched on re-entry — the User
   pulls them in KiCad, Update Symbols from Library.
-- Removal is the User's, on the sheet first and then in the record.
 
 ### 4.4 — The RF-simulation file
 
