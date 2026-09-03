@@ -247,7 +247,7 @@
 | 5 | `design/sym-lib-table`, `design/fp-lib-table` | library resolution, committed |
 | 6 | `design/lib/` | symbols, footprints, `3d/` models |
 | 7 | `design/datasheets/` | manufacturer datasheets |
-| 8 | `design/parts/` | part files - facts mined from the datasheet: `pins`; `package` at stage 5. `<IPN>-<name>.json` |
+| 8 | `design/parts/` | part files, `<IPN>-<name>.json` — datasheet facts and copy provenance: `pins`, `units`, `symbol_donor`, `pages` at stage 3; `package`, `package_dims`, `footprint_donor` at stage 5. Keys per `datasheet-read.md` T1 |
 | 9 | `design/out/` | generated exports |
 
 ### 3.2 — Assets

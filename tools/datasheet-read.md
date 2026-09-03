@@ -12,7 +12,7 @@ python3 tools/board-build/tools/datasheet-read.py <board-dir> --all [options]
 ```
 
 Each read reports the tokens it spent (n9_1.33). It writes the part file when the part has none —
-`design/parts/<IPN>-<name>.json`: `pins` now, `package` at stage 5. `symbol-draw` calls it and draws what comes
+`design/parts/<IPN>-<name>.json` — the part file, its keys in T1. `symbol-draw` calls it and draws what comes
 back; run alone it prints the pins. The pins belong in the symbol, and a
 second copy of them beside the symbol is a second thing to keep true.
 
@@ -76,6 +76,29 @@ A pin is `[number, name, type, side]`. `side` is `L`, `R`, `T` or `B`.
 `tri_state`, `passive`, `free`, `unspecified`, `power_in`, `power_out`,
 `open_collector`, `open_emitter`, `no_connect`. `~{NAME}` gives an overbar.
 An exposed pad is a pin, numbered after the last numbered pin.
+
+## The part file
+
+One file per part, `design/parts/<IPN>-<name>.json`. It holds what the
+record does not: facts mined from the datasheet, and where a copy came
+from. Nothing in it duplicates a `parts_table` column — the symbol and
+footprint names live there. Keys add; the format never migrates; a key
+absent is a fact not yet established, never a guess.
+
+**T1 — Part file keys**
+
+| # | Key | Holds | Stage |
+|---|---|---|---|
+| 1 | `pins` | `[[number, name, type, side], ...]`, as above | 3 |
+| 2 | `units` | pin numbers per unit, `{"1": [..], "2": [..]}`. Multi-unit parts only | 3 |
+| 3 | `symbol_donor` | `<library>:<symbol>` the symbol was copied from. `null` when drawn | 3 |
+| 4 | `package` | the datasheet's package code | 5 |
+| 5 | `package_dims` | body length, width, height, pitch, pad count, exposed-pad size — mm | 5 |
+| 6 | `footprint_donor` | `<library>:<footprint>` the footprint was copied from. `null` when drawn | 5 |
+| 7 | `pages` | datasheet page numbers each fact came from, `{"pins": [..], "package": [..]}` | 3, 5 |
+
+A read writes `pins` and `pages.pins` and leaves every other key as it
+found it.
 
 The reader is given a scratch file to write, because that is how it is told
 what to produce. The file is read back, checked, and deleted.
