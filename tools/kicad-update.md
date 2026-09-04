@@ -18,12 +18,12 @@ python3 tools/board-build/tools/kicad-update.py <board-dir> --pull
 | Verb | Direction | Does |
 |---|---|---|
 | place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--push` | record to library | rewrites every library symbol's fields from the record — T2.11. Graphics untouched |
+| `--push` | record to library and sheets | rewrites every library symbol's fields, and every placed instance's, from the record — T2.11. Graphics and positions untouched |
 | `--pull` | library to record | reads library fields back onto the part: `Description`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` and `Value` are reported on mismatch, never written — `Value` is the part's MPN, else the description |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
 then `--pull`. Claude's is `table-write`, then `--push`. Instances take
-changed fields in KiCad — Update Symbols from Library.
+changed fields on the next `--push`.
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
 the parts on the page so there is something to wire.

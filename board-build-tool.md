@@ -79,7 +79,7 @@
   record.
 - The schematic returns an instance the User placed on it — its existence
   and its `Reference`, nothing else. The tool deletes on neither side.
-- Instances take library fields in KiCad — Update Symbols from Library.
+- Instances take the record's fields on push, as the library symbol does.
 - Table names end in `_table`; keys carry the bare word.
 **T2.2 — Progress queries**
 
@@ -332,9 +332,9 @@ One skill, one run — T4.2.
 - Each run reports what it left untouched.
 - A symbol the User placed on a sheet enters `ref_table` under its own
   uuid, with its `Reference`. No other field returns from a sheet.
-- Push rewrites library-symbol fields from the record; pull reads them
-  back into it. Instance fields are not touched on re-entry — the User
-  pulls them in KiCad, Update Symbols from Library.
+- Push rewrites library-symbol and instance fields from the record; pull
+  reads library fields back into it. Place leaves a placed instance's
+  fields alone; push refreshes them.
 
 ### 4.4 — The RF-simulation file
 

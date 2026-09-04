@@ -519,6 +519,51 @@ def push_fields(con, library, nickname, only=None):
     return changed
 
 
+INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
+                   ("Description", "description"), ("Datasheet", "datasheet"),
+                   ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
+                   ("note", "note"))
+
+
+def push_instances(con, board, project, root_src):
+    """Record to sheets: T2.11's fields onto every placed instance the
+    record knows (n4.3). Positions, wiring and graphics untouched. Returns
+    {sheet file: instances rewritten}."""
+    rows = {r["uuid"]: r for r in instances(con)}
+    placed = read_pages(board, project, root_src)
+    by_file = {}
+    for u, (fname, page, sym) in placed.items():
+        if u in rows:
+            by_file.setdefault(fname, set()).add(u)
+    changed = {}
+    for fname, wanted in sorted(by_file.items()):
+        path = board / fname
+        before = src = path.read_text()
+        out, last, count = [], 0, 0
+        for start, end in symbol_blocks(src):
+            block = src[start:end]
+            u = read_symbol(block)["uuid"]
+            if u not in wanted:
+                continue
+            new = block
+            for field, key in INSTANCE_FIELDS:
+                new = set_property(new, field, rows[u][key])
+            if new != block:
+                out.append(src[last:start]); out.append(new); last = end
+                count += 1
+        if count:
+            out.append(src[last:])
+            path.write_text("".join(out))
+            run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                                  str(path)], capture_output=True, text=True)
+            if run.returncode != 0:
+                path.write_text(before)
+                raise Bad(f"kicad-cli could not normalize {path}: "
+                          + (run.stderr or run.stdout).strip())
+            changed[fname] = count
+    return changed
+
+
 def pull_fields(con, library, nickname):
     """Library to record: Description, Footprint, note to `parts_table`;
     Manufacturer, Datasheet to the blank-rank MPN. MPN and Value are
@@ -864,6 +909,14 @@ def main(argv):
                 changed = push_fields(con, library, project)
                 print(f"push  {len(changed)} symbol(s) updated"
                       + (": " + " ".join(changed) if changed else ""))
+                root_path = board / f"{project}.kicad_sch"
+                if not root_path.exists():
+                    raise Bad(f"{root_path} does not exist. Run "
+                              "init-pipeline first")
+                sheets = push_instances(con, board, project,
+                                        root_path.read_text())
+                print(f"push  {sum(sheets.values())} instance(s) updated on "
+                      f"{len(sheets)} sheet(s)")
             else:
                 applied, reported = pull_fields(con, library, project)
                 print(f"pull  {len(applied)} field(s) into the record")
