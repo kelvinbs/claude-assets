@@ -126,10 +126,11 @@ def instances(con):
     that has no part number yet. The IPN is on the row either way, in its
     own field, and that is what the record keys on."""
     rows = []
-    for uuid_, ipn, ref, page, room, unit, symbol, footprint, description \
-            in con.execute(
+    for uuid_, ipn, ref, page, room, unit, symbol, footprint, description, \
+            datasheet, manufacturer, mpn, note in con.execute(
             "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, "
-            "       p.symbol, p.footprint, p.description "
+            "       p.symbol, p.footprint, p.description, p.datasheet, "
+            "       p.manufacturer, p.mpn, p.note "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "order by r.ipn, r.ref, r.unit"):
         rows.append({
@@ -138,6 +139,9 @@ def instances(con):
             "unit": unit or 1,
             "symbol": symbol, "footprint": footprint or "",
             "value": value_of(con, ipn, description),
+            "description": description or "", "datasheet": datasheet or "",
+            "manufacturer": manufacturer or "", "mpn": mpn or "",
+            "note": note or "",
         })
     return rows
 
@@ -186,6 +190,14 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right):
                         hide=not first)
         + property_sexp("Footprint", row["footprint"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
+        + property_sexp("Datasheet", row["datasheet"], f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
+        + property_sexp("Description", row["description"], f"{x:.2f}",
+                        f"{y:.2f}", hide=True)
+        + property_sexp("Manufacturer", row["manufacturer"], f"{x:.2f}",
+                        f"{y:.2f}", hide=True)
+        + property_sexp("MPN", row["mpn"], f"{x:.2f}", f"{y:.2f}", hide=True)
+        + property_sexp("note", row["note"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + "\t\t(instances\n"
         f"\t\t\t(project \"{project}\"\n"

@@ -347,6 +347,51 @@ def pin_sexp(number, pname, etype, x, y, angle, depth):
             f"{pad})")
 
 
+def relayout(block, want):
+    """Strip the donor's sub-symbols and draw one body sized to the pinout,
+    every pin on its side. Layout and sizes are symbol-draw's."""
+    import importlib.util
+    spec_ = importlib.util.spec_from_file_location("symbol_draw",
+                                                   HERE / "symbol-draw.py")
+    sd = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(sd)
+
+    def key(v):
+        return (0, int(v)) if v.isdigit() else (1, v)
+    spec = {"pins": [[n, *want[n]] for n in sorted(want, key=key)]}
+    half_w, half_h, sides, top = sd.body_size(spec)
+    m = re.search(r'\n(\t+)\(symbol "', block)
+    depth = len(m.group(1)) if m else 2
+    pad = "\t" * depth
+    body = re.sub(r'\n' + pad + r'\(symbol "[^"]*"\n.*?\n' + pad + r'\)',
+                  "", block, flags=re.S)
+    name = re.match(r'\s*\(symbol "([^"]+)"', body).group(1)
+    G, L = sd.GRID, sd.PIN_LEN
+    pins = ""
+    for i, (n, pname, etype, _) in enumerate(sides["L"]):
+        pins += pin_sexp(n, pname, etype, -half_w - L,
+                         sd.snap(half_h - top - i * G), 0, depth + 1)
+    for i, (n, pname, etype, _) in enumerate(reversed(sides["R"])):
+        pins += pin_sexp(n, pname, etype, half_w + L,
+                         sd.snap(half_h - top - i * G), 180, depth + 1)
+    for i, (n, pname, etype, _) in enumerate(sides["T"]):
+        pins += pin_sexp(n, pname, etype, sd.snap(-half_w + 2 * G + i * 2 * G),
+                         half_h + L, 270, depth + 1)
+    for i, (n, pname, etype, _) in enumerate(sides["B"]):
+        pins += pin_sexp(n, pname, etype, sd.snap(-half_w + 2 * G + i * 2 * G),
+                         -half_h - L, 90, depth + 1)
+    q = pad + "\t"
+    rect = (f"\n{q}(rectangle\n{q}\t(start {-half_w:g} {half_h:g})\n"
+            f"{q}\t(end {half_w:g} {-half_h:g})\n"
+            f"{q}\t(stroke\n{q}\t\t(width 0.254)\n{q}\t\t(type default)\n{q}\t)\n"
+            f"{q}\t(fill\n{q}\t\t(type background)\n{q}\t)\n{q})")
+    subs = (f"\n{pad}(symbol \"{name}_0_1\"{rect}\n{pad})"
+            f"\n{pad}(symbol \"{name}_1_1\"{pins}\n{pad})")
+    body = body.rstrip()
+    assert body.endswith(")")
+    return body[:-1].rstrip() + subs + "\n" + "\t" * (depth - 1) + ")"
+
+
 def apply_pinout(block, pinout, name):
     """Pins renumbered, renamed, added and deleted to match the pinout -
     copy-kicad-part.md. Deterministic; the model only chose the symbol."""
@@ -371,26 +416,11 @@ def apply_pinout(block, pinout, name):
             block = block[:a] + block[b:]
     entries = pin_entries(block)
     have = {e[1] for e in entries}
-    # Add the missing, stacked under that side's lowest pin.
-    missing = [n for n in want if n not in have]
-    if missing:
-        m = list(PIN_RE.finditer(block))
-        if not m:
-            raise Bad(f"{name}: donor has no pins to anchor an added pin")
-        depth = len(m[-1].group(1))
-        insert_at = m[-1].span()[1]
-        added = ""
-        for n in missing:
-            pname, etype, side = want[n]
-            angle = SIDE_ANGLE.get(side, 0)
-            same = [(x, y) for _, _, x, y, a2 in pin_entries(block + added)
-                    if a2 == angle]
-            if same:
-                x = same[0][0]; y = min(p[1] for p in same) - 2.54
-            else:
-                x, y = (-7.62 if angle == 0 else 7.62), 0.0
-            added += pin_sexp(n, pname, etype, x, y, angle, depth)
-        block = block[:insert_at] + added + block[insert_at:]
+    # Add the missing: the body is re-laid to hold every pin, each on its
+    # part-file side - symbol-draw's layout, so an added pin lands where a
+    # drawn one would. A stacked pin is not a symbol (n2.39).
+    if [n for n in want if n not in have]:
+        block = relayout(block, want)
     return block
 
 
