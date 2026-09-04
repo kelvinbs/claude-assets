@@ -11,7 +11,6 @@ prints what it wrote, or `null`.
 ```
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
-python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --footprint <name> [--take LIBRARY:FOOTPRINT]
 ```
 
 `--pins N` gives the part's pin count — a scoring preference.
@@ -72,15 +71,16 @@ No part file, nothing written there.
 
 ## Footprints
 
-`--footprint <name>` runs show, choose, take on the footprint rows of the
-index. The part file's `package` and its pin count score the shortlist —
-library, footprint, pad count, description. No `package` in the part
-file, null. `--take LIBRARY:FOOTPRINT` copies the `.kicad_mod` into
-`lib/<nickname>.pretty/` under the part's name, copies its 3D model into
-`lib/3d/`, rewrites the model path to `${KIPRJMOD}/lib/3d/<file>` (section
-3.3), and prints `<nickname>:<name>`. Nothing in the footprint is
-modified. A footprint that names no model is copied without one, and says
-so.
+Package in, footprint out. No script runs here; the session performing
+the stage does this, per part. For each part with a `package` in its part
+file, look at the installed `.pretty` libraries — the index's footprint
+rows — and choose the footprint that is that package: same body, same pad
+count and pitch, whatever the name. Copy it into
+`lib/<nickname>.pretty/<name>.kicad_mod`, renamed inside. Copy its 3D
+model, when it names one, into `lib/3d/`, the path rewritten to
+`${KIPRJMOD}/lib/3d/`. Nothing else in the footprint changes. Write
+`footprint_donor` into the part file. No footprint is that package: leave
+the part, say so.
 
 ## What comes back is checked
 
