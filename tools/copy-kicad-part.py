@@ -23,7 +23,6 @@ import argparse
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -92,127 +91,6 @@ def library_of(board, nickname=None):
     if len(found) == 1:
         return found[0].stem, found[0]
     raise Bad(f"no project library in {board}/lib. Run init-pipeline first")
-
-
-# ------------------------------------------------------------ the part file
-
-def part_file(board, name):
-    """`parts/<IPN>-<name>.json`, found by the name (datasheet-read.md T1)."""
-    found = sorted((Path(board) / "parts").glob(f"*-{name}.json"))
-    return found[0] if len(found) == 1 else None
-
-
-def part_file_set(board, name, key, value):
-    """A key onto the part file, when the part has one. Nothing else in it
-    is touched."""
-    path = part_file(board, name)
-    if path is None:
-        return False
-    held = json.load(open(path))
-    held[key] = value
-    path.write_text(json.dumps(held, indent=1))
-    return True
-
-
-# ------------------------------------------------------------ the footprints
-
-MODEL_DIRS = [
-    "/Applications/KiCad/KiCad.app/Contents/SharedSupport/3dmodels",
-    "/usr/share/kicad/3dmodels",
-    "/usr/local/share/kicad/3dmodels",
-    "C:/Program Files/KiCad/share/kicad/3dmodels",
-]
-
-
-def index_footprints(board, extra):
-    """The footprint rows of the index, and the `.pretty` folders they came
-    from. `lib-index` builds it, run as a command."""
-    argv = [sys.executable, str(HERE / "lib-index.py"), str(board)]
-    for folder in extra or []:
-        argv += ["--lib", folder]
-    run = subprocess.run(argv, capture_output=True, text=True)
-    if run.returncode != 0:
-        raise Bad((run.stderr or run.stdout).strip())
-    held = json.load(open(Path(board) / "lib" / "kicad-lib-index.json"))
-    return held.get("footprints") or [], held.get("footprint_libraries") or []
-
-
-def footprint_score(row, package, dims, pins):
-    """The part file's `package` and `package_dims` against the footprint's
-    name, description and tags; its pin count against the pad count - an
-    exposed pad is often several paste pads. Parsing, no judgment."""
-    keys = [k for k in re.split(r"[^a-z0-9.]+", package.lower()) if k]
-    dims = dims or {}
-    if dims.get("length") and dims.get("width"):
-        keys.append(f"{dims['length']:g}x{dims['width']:g}mm")
-    if dims.get("pitch"):
-        keys.append(f"p{dims['pitch']:g}mm")
-    name = row["footprint"].lower()
-    text = (row["description"] + " " + row["tags"]).lower()
-    score = 0
-    for k in keys:
-        if k in name:
-            score += 3
-        elif k in text:
-            score += 1
-    if pins:
-        pads = row["pad_count"]
-        if pads == pins:
-            score += 5
-        elif abs(pads - pins) == 1 or pins < pads <= pins + 6:
-            score += 3
-    return score
-
-
-def footprint_shortlist(rows, package, dims, pins, limit=25):
-    scored = sorted(((footprint_score(r, package, dims, pins), r)
-                     for r in rows), key=lambda t: -t[0])
-    return [r for s, r in scored[:limit] if s > 0]
-
-
-def model_source(model):
-    """`${KICAD*_3DMODEL_DIR}/lib.3dshapes/file` resolved against the
-    installed model folders. None when no file is there."""
-    if not model:
-        return None
-    tail = re.sub(r"^\$\{[^}]+\}/", "", model)
-    for folder in [os.environ.get("KICAD_3DMODEL_DIR")] + MODEL_DIRS:
-        if folder and (Path(folder) / tail).is_file():
-            return Path(folder) / tail
-    return None
-
-
-def copy_footprint(board, nickname, lib_name, fp_name, name, fp_libs, row):
-    """The `.kicad_mod` into `lib/<nickname>.pretty/<name>.kicad_mod`, its
-    model into `lib/3d/`, the model path rewritten per section 3.3. Nothing
-    in the footprint is modified beyond its name and that path."""
-    src = None
-    for folder in fp_libs:
-        folder = Path(folder)
-        if folder.name == f"{lib_name}.pretty":
-            src = folder / f"{fp_name}.kicad_mod"
-    if src is None or not src.is_file():
-        raise Bad(f"{lib_name}:{fp_name} is not in the footprint libraries")
-    text = src.read_text(errors="replace")
-    text = re.sub(r'\(footprint "[^"]*"', f'(footprint "{name}"', text, count=1)
-    model_note = "no model named"
-    source = model_source(row.get("model", ""))
-    if row.get("model") and source is None:
-        model_note = f"model not installed: {row['model']}"
-        text = re.sub(r'\n\s*\(model "[^"]*"[\s\S]*?\n\t\)', "", text, count=1)
-    elif source is not None:
-        three_d = Path(board) / "lib" / "3d"
-        three_d.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, three_d / source.name)
-        text = re.sub(r'\(model "[^"]*"',
-                      f'(model "${{KIPRJMOD}}/lib/3d/{source.name}"', text,
-                      count=1)
-        model_note = f"model lib/3d/{source.name}"
-    pretty = Path(board) / "lib" / f"{nickname}.pretty"
-    if not pretty.is_dir():
-        raise Bad(f"no {pretty}. Run init-pipeline first")
-    (pretty / f"{name}.kicad_mod").write_text(text)
-    return f"{nickname}:{name}", model_note
 
 
 # -------------------------------------------------------------- 2, the index
@@ -642,49 +520,6 @@ def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
 
 # ------------------------------------------------------------------------ run
 
-def footprint_main(board, nickname, args):
-    """Show, choose, take on the footprint rows - copy-kicad-part.md,
-    Footprints."""
-    name = args.footprint
-    path = part_file(board, name)
-    if path is None:
-        raise Bad(f"{name}: no part file under parts/")
-    held = json.load(open(path))
-    package = held.get("package")
-    dims = held.get("package_dims") or {}
-    pins = len(held.get("pins") or [])
-    if not package:
-        print(f"{name}  null")
-        print("    no package in the part file")
-        return 0
-    started = time.monotonic()
-    rows, fp_libs = index_footprints(board, args.lib)
-    if not args.take:
-        print(f"== {name}: {package}, {pins} pins")
-        for r in footprint_shortlist(rows, package, dims, pins):
-            print(f"    {r['library']}:{r['footprint']}  {r['pad_count']} pads"
-                  f"  {r['description'][:70]}")
-        print("choose, then rerun with --take LIBRARY:FOOTPRINT")
-        return 0
-    lib_name, _, fp_name = args.take.partition(":")
-    if not fp_name:
-        raise Bad("--take is LIBRARY:FOOTPRINT")
-    row = next((r for r in rows if r["library"] == lib_name
-                and r["footprint"] == fp_name), None)
-    if row is None:
-        print(f"{name}  null")
-        print(f"    {args.take} is not in the index")
-        return 0
-    lib_id, model_note = copy_footprint(board, nickname, lib_name, fp_name,
-                                        name, fp_libs, row)
-    part_file_set(board, name, "footprint_donor", f"{lib_name}:{fp_name}")
-    print(f"{name}  {lib_id}  (taken)  {model_note}")
-    print(f"    from {lib_name}:{fp_name}")
-    print(f"kpi parts 1 tokens 0 tokens/part 0 "
-          f"elapsed {time.monotonic() - started:.1f}s")
-    return 0
-
-
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
@@ -711,18 +546,12 @@ def main(argv):
                          'run, one ask')
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
-    ap.add_argument("--footprint", metavar="NAME",
-                    help="show, or with --take copy, a footprint for the "
-                         "part of this name - by its part file's package")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
     nickname, library = library_of(board, args.nickname)
-
-    if args.footprint:
-        return footprint_main(board, nickname, args)
 
     if args.batch:
         parts = json.load(open(args.batch))
@@ -799,8 +628,6 @@ def main(argv):
               + (f"  {len(parked)} pin(s) unused" if parked else ""))
         print(f"    from {spec['library']}:{spec['symbol']}")
         print(f"    {spec.get('why', '')}")
-        part_file_set(board, name, "symbol_donor",
-                      f"{spec['library']}:{spec['symbol']}")
     return 0
 
 
