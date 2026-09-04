@@ -53,7 +53,7 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
 FIELDS = ("description", "note", "name", "mpn", "manufacturer",
-          "datasheet")
+          "datasheet", "footprint")
 
 
 class Bad(SystemExit):

@@ -54,6 +54,9 @@ along it is — see T2.3.
 
 Changes fields on a part that exists. Prints what each field was and what it
 became, so a change is legible in the terminal as well as in the database.
+`--footprint` takes the project footprint, `<nickname>:<name>`, written by
+the session at Update library — footprints, 3D (`copy-kicad-part.md`,
+Footprints).
 
 ## place
 
