@@ -46,6 +46,60 @@ class Bad(SystemExit):
         super().__init__(f"lib-index: {message}")
 
 
+FP_STOCK_CANDIDATES = [
+    "/Applications/KiCad/KiCad.app/Contents/SharedSupport/footprints",
+    "/usr/share/kicad/footprints",
+    "/usr/local/share/kicad/footprints",
+    "C:/Program Files/KiCad/share/kicad/footprints",
+]
+PAD = re.compile(r'^\s*\(pad ', re.M)
+
+
+def fp_stock_folder():
+    for candidate in ([os.environ.get("KICAD_FOOTPRINT_DIR")]
+                      + FP_STOCK_CANDIDATES):
+        if candidate and Path(candidate).is_dir():
+            return Path(candidate)
+    raise Bad("KiCad footprint directory not found. Set KICAD_FOOTPRINT_DIR")
+
+
+def fp_folders(extra):
+    out = [fp_stock_folder()]
+    for name in extra or []:
+        folder = Path(name)
+        if not folder.is_dir():
+            raise Bad(f"{folder} is not a directory")
+        out.append(folder)
+    return out
+
+
+def pretty_folders(extra):
+    out = []
+    for folder in fp_folders(extra):
+        out.extend(sorted(p for p in folder.glob("*.pretty") if p.is_dir()))
+    return out
+
+
+def read_pretty(folder):
+    """One row per footprint: library, footprint, pad count, description,
+    tags, model path. Parsing only."""
+    rows = []
+    for path in sorted(folder.glob("*.kicad_mod")):
+        src = path.read_text(errors="replace")
+        descr = re.search(r'\(descr "([^"]*)"', src)
+        tags = re.search(r'\(tags "([^"]*)"', src)
+        model = re.search(r'\(model "([^"]*)"', src)
+        rows.append({
+            "library": folder.name[:-len(".pretty")],
+            "footprint": path.stem,
+            "pad_count": len(PAD.findall(src)),
+            "description": descr.group(1) if descr else "",
+            "tags": tags.group(1) if tags else "",
+            "model": model.group(1) if model else "",
+        })
+    return rows
+
+
 def stock_folder():
     for candidate in [os.environ.get("KICAD_SYMBOL_DIR")] + STOCK_CANDIDATES:
         if candidate and Path(candidate).is_dir():
@@ -113,24 +167,32 @@ def library_files(extra):
     return out
 
 
-def build(board, extra=None, force=False):
-    """The index, built if it is missing or out of date. Returns its rows."""
+def build(board, extra=None, force=False, fp_extra=None):
+    """The index, built if it is missing or out of date. Returns its
+    symbol rows and its footprint rows."""
     paths = library_files(extra)
     if not paths:
         raise Bad("no .kicad_sym files found")
+    pretties = pretty_folders(fp_extra)
     out = index_path(board)
-    if not force and not stale(out, paths):
-        return json.load(open(out))["symbols"]
+    if not force and not stale(out, paths + pretties):
+        held = json.load(open(out))
+        if "footprints" in held:
+            return held["symbols"], held["footprints"]
 
     rows = []
     for path in paths:
         rows.extend(read_library(path))
+    fps = []
+    for folder in pretties:
+        fps.extend(read_pretty(folder))
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w") as f:
         json.dump({"built": time.strftime("%Y-%m-%dT%H:%M:%S"),
                    "libraries": [str(p) for p in paths],
-                   "symbols": rows}, f)
-    return rows
+                   "footprint_libraries": [str(p) for p in pretties],
+                   "symbols": rows, "footprints": fps}, f)
+    return rows, fps
 
 
 def main(argv):
@@ -138,6 +200,8 @@ def main(argv):
     ap.add_argument("board", help="the KiCad project directory")
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
+    ap.add_argument("--footprints", action="append",
+                    help="another directory of .pretty libraries. Repeatable")
     ap.add_argument("--force", action="store_true",
                     help="rebuild an index that is already current")
     args = ap.parse_args(argv[1:])
@@ -147,9 +211,11 @@ def main(argv):
         raise Bad(f"{board} is not a directory")
 
     started = time.monotonic()
-    rows = build(board, args.lib, args.force)
+    rows, fps = build(board, args.lib, args.force, args.footprints)
     libraries = len({r["library"] for r in rows})
+    pretties = len({r["library"] for r in fps})
     print(f"{index_path(board)}  {len(rows)} symbols, {libraries} libraries, "
+          f"{len(fps)} footprints, {pretties} footprint libraries, "
           f"{time.monotonic() - started:.1f}s")
     return 0
 

@@ -275,6 +275,46 @@ def make_library(board, project):
     return path, True
 
 
+def fp_uri_of(project):
+    return f"${{KIPRJMOD}}/lib/{project}.pretty"
+
+
+def fp_entry(project):
+    return (f'\t(lib (name "{project}")(type "KiCad")'
+            f'(uri "{fp_uri_of(project)}")(options "")'
+            f'(descr "Footprints owned by this project"))\n')
+
+
+def make_pretty(board, project):
+    path = board / "lib" / f"{project}.pretty"
+    if path.is_dir():
+        return path, False
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".gitkeep").touch()
+    return path, True
+
+
+def make_fp_table(board, project):
+    """fp-lib-table, the footprint twin of sym-lib-table: one entry, the
+    project's, `${KIPRJMOD}/lib/<project>.pretty` (section 3.3)."""
+    path = board / "fp-lib-table"
+    if not path.exists():
+        path.write_text("(fp_lib_table\n\t(version 7)\n"
+                        + fp_entry(project) + ")\n")
+        return path, True
+    src = path.read_text()
+    for line in src.splitlines():
+        if re.search(r'\(name "%s"\)' % re.escape(project), line):
+            uri = re.search(r'\(uri "([^"]*)"\)', line)
+            if not uri or uri.group(1) != fp_uri_of(project):
+                raise Bad(f"{path}: '{project}' already points at "
+                          f"{uri.group(1) if uri else 'nothing'}")
+            return path, False
+    end = src.rstrip().rfind(")")
+    path.write_text(src[:end] + fp_entry(project) + src[end:])
+    return path, True
+
+
 def make_table(board, project):
     """The table is shared with every other library the project points at, so
     it is edited in place rather than rewritten."""
@@ -350,7 +390,9 @@ def main(argv):
                        make_sheet(board, project),
                        make_board(board, project),
                        make_library(board, project),
-                       make_table(board, project)):
+                       make_pretty(board, project),
+                       make_table(board, project),
+                       make_fp_table(board, project)):
         print(f"{path}  {'written' if made else 'already there'}")
     return 0
 
