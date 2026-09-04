@@ -1,15 +1,17 @@
 # copy-kicad-part
 
-Copy a KiCad symbol into the project library. Give it a part number or a
-description; it writes the symbol and prints what it wrote, or `null`.
+Copy a KiCad symbol, or a footprint with its 3D model, into the project
+library. Give it a part number or a description; it writes the copy and
+prints what it wrote, or `null`.
 
 | Reads | Writes |
 |---|---|
-| `lib/kicad-lib-index.json`<br>the KiCad libraries | `lib/<nickname>.kicad_sym` |
+| `lib/kicad-lib-index.json`<br>the KiCad libraries<br>`parts/<IPN>-<name>.json` | `lib/<nickname>.kicad_sym`<br>`lib/<nickname>.pretty/`<br>`lib/3d/`<br>`parts/<IPN>-<name>.json` — `symbol_donor`, `footprint_donor` |
 
 ```
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
 python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
+python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --footprint <name> [--take LIBRARY:FOOTPRINT]
 ```
 
 `--pins N` gives the part's pin count — a scoring preference.
@@ -62,9 +64,23 @@ enclosure, a host the board plugs into — is null.
 The symbol, under the name given, into `lib/<nickname>.kicad_sym`. Its
 `Value` is that name, its `Footprint` is emptied — the package belongs to
 `footprint-draw` — and an `origin` property names the library and symbol it
-came from.
+came from. On a take the part file `parts/<IPN>-<name>.json`, found by
+the name, gains `symbol_donor` — or `footprint_donor` — naming the same.
+No part file, nothing written there.
 
 `init-pipeline` must have made the library first.
+
+## Footprints
+
+`--footprint <name>` runs show, choose, take on the footprint rows of the
+index. The part file's `package` and its pin count score the shortlist —
+library, footprint, pad count, description. No `package` in the part
+file, null. `--take LIBRARY:FOOTPRINT` copies the `.kicad_mod` into
+`lib/<nickname>.pretty/` under the part's name, copies its 3D model into
+`lib/3d/`, rewrites the model path to `${KIPRJMOD}/lib/3d/<file>` (section
+3.3), and prints `<nickname>:<name>`. Nothing in the footprint is
+modified. A footprint that names no model is copied without one, and says
+so.
 
 ## What comes back is checked
 

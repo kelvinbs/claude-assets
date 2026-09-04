@@ -6,7 +6,7 @@ else.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`sym-lib-table` |
+| `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`lib/<project>.pretty/`<br>`sym-lib-table`<br>`fp-lib-table` |
 
 ```
 python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch [warm|cold]]
@@ -82,10 +82,12 @@ The project root names the project: at first init the parent of `design/`
 gives the name, stored in `project_table`, master thereafter — the tools
 read it, never derive it again. The name changes only by editing the
 table. It writes the project file,
-the root sheet, the empty board, the empty symbol library, and the `sym-lib-table` entry
-that resolves it — section 3.2 satisfied: the table sits in the project
-directory, its one path is `${KIPRJMOD}/lib/...`, and the nickname is the
-project's, so a fresh clone opens with nothing missing.
+the root sheet, the empty board, the empty symbol library, the empty
+footprint library `lib/<project>.pretty/`, and the `sym-lib-table` and
+`fp-lib-table` entries that resolve them — section 3.3 satisfied: each
+table sits in the project directory, its one path is `${KIPRJMOD}/lib/...`,
+and the nickname is the project's, so a fresh clone opens with nothing
+missing.
 
 A nickname already present and pointing elsewhere stops the run and is
 named. A file that is there is left exactly as it is, symbols included.

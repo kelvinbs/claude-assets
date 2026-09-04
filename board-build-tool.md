@@ -312,7 +312,7 @@ One skill, one run — T4.2.
 | # | Makes |
 |---|---|
 | 1 | `board.db` and its three tables |
-| 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/<project>.kicad_sym` |
+| 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/<project>.kicad_sym`, `lib/<project>.pretty/` |
 
 - The project folder names the project — its name is stored at first
   init (T2.13) and project filenames take it. The files live in
@@ -368,10 +368,10 @@ One skill, one run — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `lib/` |
+| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
-| 4 | `copy-kicad-part` | Find a symbol for a part in the KiCad libraries | `board.db`, KiCad libraries | `<library>:<symbol>`, or `null` |
+| 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
