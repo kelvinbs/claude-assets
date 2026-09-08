@@ -1,3 +1,8 @@
+---
+name: table-read
+description: Show the record board.db, one Markdown view per design stage.
+---
+
 # table-read
 
 Read the record. A list of views, each one supporting a step of the design

@@ -1,3 +1,8 @@
+---
+name: footprint-draw
+description: Copy or draw a footprint into lib/. Placeholder, not written.
+---
+
 # footprint-draw
 
 Copy or draw a footprint into lib/.

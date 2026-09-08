@@ -1,3 +1,8 @@
+---
+name: kicad-update
+description: Place instances on the sheets, push record fields to library and instances, pull library fields back. Stages 4 and 6.
+---
+
 # kicad-update
 
 Place instances, push record to library fields, pull library fields to
@@ -8,9 +13,9 @@ record. The skill of stages 4 and 6.
 | `board.db` — `parts_table`, `ref_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root<br>`<project>-<page>.kicad_sch` — one per page<br>`<project>.kicad_pro`, written once<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
-python3 tools/board-build/tools/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
-python3 tools/board-build/tools/kicad-update.py <board-dir> --push
-python3 tools/board-build/tools/kicad-update.py <board-dir> --pull
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --push
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
 
 ## The three verbs

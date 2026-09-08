@@ -1,3 +1,8 @@
+---
+name: datasheet-read
+description: Read pins and package out of a part's datasheet PDF into the part file design/parts/<IPN>-<name>.json.
+---
+
 # datasheet-read
 
 Look at the datasheet file named in `parts_table.datasheet`. Populate the

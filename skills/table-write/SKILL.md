@@ -1,3 +1,8 @@
+---
+name: table-write
+description: Create or modify a part in board.db: add, set, place, parent, drop, show. Stage 2.
+---
+
 # table-write
 
 Create or modify a part. The skill of Update parts.

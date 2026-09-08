@@ -74,7 +74,7 @@ def sibling(name):
     """The library reader and the class table are each written once, in the
     tool that owns them, and loaded from there."""
     spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), HERE / f"{name}.py")
+        name.replace("-", "_"), HERE.parent / name / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

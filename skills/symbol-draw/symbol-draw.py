@@ -95,7 +95,7 @@ def sibling(name):
     from pathlib import Path as _P
     here = _P(__file__).resolve().parent
     spec = importlib.util.spec_from_file_location(
-        name.replace("-", "_"), here / f"{name}.py")
+        name.replace("-", "_"), here.parent / name / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -320,7 +320,7 @@ def try_copy(board, ipn, hint, extra, pins=None, take=None):
     """`copy-kicad-part`, run as a command. Returns the library id it wrote,
     or None. `pins` is the datasheet pinout; the copy renames by number
     from it and refuses a count mismatch."""
-    argv = [sys.executable, str(HERE / "copy-kicad-part.py"), str(board),
+    argv = [sys.executable, str(HERE.parent / "copy-kicad-part" / "copy-kicad-part.py"), str(board),
             hint, "--ipn", ipn]
     if take:
         argv += ["--take", take]

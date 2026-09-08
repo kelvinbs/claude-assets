@@ -9,7 +9,7 @@ project root (T3.1); at first init the name is the root's — the parent of
 `design/` (T2.13) — and thereafter the database is master: the name is
 read, never derived. Project filenames take the project name.
 
-    python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch [warm|cold]]
+    python3 ${CLAUDE_PLUGIN_ROOT}/skills/init-pipeline/init-pipeline.py <board-dir> [--scorch [warm|cold]]
 
 It adds what is missing and leaves what is there — a table, or a column
 the schema names that an existing table lacks (added at the end, T2.4

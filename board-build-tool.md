@@ -380,5 +380,8 @@ One skill, one run — T4.2.
 
 ### 5.3 — Layout
 
+- The tool is a Claude Code plugin; `tools/board-build/` is the plugin root
+- `.claude-plugin/plugin.json` — the manifest
 - `board-build-tool.md` — the only document at the top level
-- `tools/` — one `<skill>.md` and its script, per skill
+- `skills/<skill>/` — one folder per skill: `SKILL.md` and its script
+- A script finds a sibling by `<root>/skills/<name>/<name>.py`; a document names its script by `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<name>.py`

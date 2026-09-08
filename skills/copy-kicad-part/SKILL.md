@@ -1,3 +1,8 @@
+---
+name: copy-kicad-part
+description: Find and copy a KiCad symbol, or a footprint with its 3D model, into the project library. Stages 3 and 5.
+---
+
 # copy-kicad-part
 
 Copy a KiCad symbol, or a footprint with its 3D model, into the project
@@ -9,8 +14,8 @@ prints what it wrote, or `null`.
 | `lib/kicad-lib-index.json`<br>the KiCad libraries<br>`parts/<IPN>-<name>.json` | `lib/<nickname>.kicad_sym`<br>`lib/<nickname>.pretty/`<br>`lib/3d/`<br>`parts/<IPN>-<name>.json` — `symbol_donor`, `footprint_donor` |
 
 ```
-python3 tools/board-build/tools/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
-python3 tools/board-build/tools/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/copy-kicad-part/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/copy-kicad-part/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
 ```
 
 `--pins N` gives the part's pin count — a scoring preference.

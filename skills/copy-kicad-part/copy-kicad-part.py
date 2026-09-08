@@ -98,7 +98,7 @@ def library_of(board, nickname=None):
 def index(board, extra):
     """`lib-index` builds it when it is missing or out of date. It is run as
     a command; nothing of it is imported."""
-    argv = [sys.executable, str(HERE / "lib-index.py"), str(board)]
+    argv = [sys.executable, str(HERE.parent / "lib-index" / "lib-index.py"), str(board)]
     for folder in extra or []:
         argv += ["--lib", folder]
     run = subprocess.run(argv, capture_output=True, text=True)
@@ -352,7 +352,7 @@ def relayout(block, want):
     every pin on its side. Layout and sizes are symbol-draw's."""
     import importlib.util
     spec_ = importlib.util.spec_from_file_location("symbol_draw",
-                                                   HERE / "symbol-draw.py")
+                                                   HERE.parent / "symbol-draw" / "symbol-draw.py")
     sd = importlib.util.module_from_spec(spec_)
     spec_.loader.exec_module(sd)
 

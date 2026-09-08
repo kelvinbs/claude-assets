@@ -1,3 +1,8 @@
+---
+name: symbol-draw
+description: Copy or draw a schematic symbol into lib/<project>.kicad_sym, fields from the record. Stage 3.
+---
+
 # symbol-draw
 
 Copy or draw a symbol into the project library, and tell `parts_table` where
@@ -8,8 +13,8 @@ it is. The second tool of process 2.
 | `board.db` — `parts_table`, `ref_table`<br>`copy-kicad-part` — run as a command<br>`parts/<IPN>-<name>.json` | `lib/<nickname>.kicad_sym`<br>`sym-lib-table`<br>`board.db` — `parts_table.symbol`, `parts_table.source` |
 
 ```
-python3 tools/board-build/tools/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
-python3 tools/board-build/tools/symbol-draw.py <board-dir> --all
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/symbol-draw/symbol-draw.py <board-dir> <ipn> [--from LIB:NAME]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/symbol-draw/symbol-draw.py <board-dir> --all
 ```
 
 `--all` is every part whose `symbol` is null **and** whose instances put it

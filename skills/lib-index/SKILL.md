@@ -1,3 +1,8 @@
+---
+name: lib-index
+description: Index the installed KiCad symbol and footprint libraries into lib/kicad-lib-index.json.
+---
+
 # lib-index
 
 Index the KiCad symbol and footprint libraries. No model runs here; it is parsing.
@@ -7,7 +12,7 @@ Index the KiCad symbol and footprint libraries. No model runs here; it is parsin
 | the User's `.kicad_sym` files and `.pretty` folders | `<board-dir>/lib/kicad-lib-index.json` |
 
 ```
-python3 tools/board-build/tools/lib-index.py <board-dir> [--lib DIR ...] [--footprints DIR ...] [--force]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/lib-index/lib-index.py <board-dir> [--lib DIR ...] [--footprints DIR ...] [--force]
 ```
 
 One row per symbol: the library, the symbol, its reference prefix, its pin

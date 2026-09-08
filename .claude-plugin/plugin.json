@@ -1,0 +1,11 @@
+{
+  "name": "board-build",
+  "version": "1.0.0",
+  "description": "Claude-assisted hardware design in KiCad: record, library, schematic, PCB, in stages. Nine skills.",
+  "keywords": [
+    "kicad",
+    "hardware",
+    "pcb",
+    "schematic"
+  ]
+}

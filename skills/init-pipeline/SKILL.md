@@ -1,3 +1,8 @@
+---
+name: init-pipeline
+description: Create the blank record and KiCad project in a project folder. Stage 1. Also --scorch warm|cold to rebuild.
+---
+
 # init-pipeline
 
 Create the blank framework and the KiCad project — T4.2 of
@@ -9,7 +14,7 @@ else.
 | `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`lib/<project>.pretty/`<br>`sym-lib-table`<br>`fp-lib-table` |
 
 ```
-python3 tools/board-build/tools/init-pipeline.py <board-dir> [--scorch [warm|cold]]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/init-pipeline/init-pipeline.py <board-dir> [--scorch [warm|cold]]
 ```
 
 `--scorch` empties the project folder before the database is made, then
@@ -34,7 +39,7 @@ beside the design files.
 Three tables in one file, and their columns are T2.3, T2.4 and
 T2.13 of
 `board-build-tool.md`.
-`tools/init-pipeline.py` holds them in executable form and is the only
+`init-pipeline.py` holds them in executable form and is the only
 place they are written as DDL. A column added to those tables is added
 there in the same commit.
 
