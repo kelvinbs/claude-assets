@@ -35,7 +35,7 @@
 - The structure — enforced and immutable:
   - The stages — T4.1
   - The nine skills — T5.1
-  - The three tables with their keys — sections 2.3 and 2.9
+  - The four tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
 - The tool is stateless.
 - A field may be added to any table at runtime. Other schema change is a
@@ -70,7 +70,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value` — the MPN, else description — `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
@@ -129,11 +129,35 @@
 | 3 | `h` | Drawn here, against the datasheet |
 | 4 | `-` | Absent |
 
-### 2.4 — The sourcing tables
+### 2.4 — The price survey
 
-- Removed, 2026-09-02 (n0.4). Sourcing lives on the part — `mpn`,
-  `manufacturer`, `datasheet` in T2.3. This is a prototype's parts
-  list, not an enterprise parts manager.
+- The sourcing tables were removed 2026-09-02 (n0.4). Vendor identity lives
+  on the part — `mpn`, `manufacturer`, `datasheet` in T2.3.
+- What a part costs is not one number. A vendor quotes a ladder, and the
+  build size decides which rung applies. `price_table` holds the ladder, so
+  the survey is taken once and any build size reads off it.
+
+**T2.6 — `price_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `ipn` | TEXT | Key | |
+| 2 | `vendor` | TEXT | Key | |
+| 3 | `vendor_pn` | TEXT | | Yes |
+| 4 | `packaging` | TEXT | Key | |
+| 5 | `break_qty` | INTEGER | Key | |
+| 6 | `unit_price` | REAL | | Yes |
+| 7 | `stock` | INTEGER | | Yes |
+| 8 | `checked` | TEXT | | Yes |
+
+- One row per vendor break. The key is the part, the vendor, the packaging
+  and the break, so a re-survey overwrites the rung it re-quotes and leaves
+  the rest.
+- `packaging` separates the ladders a vendor quotes side by side — cut tape,
+  reel, strip, bulk. Empty when the vendor quotes one.
+- `checked` dates the survey. A price with no date is not a price.
+- Quantity per board is not stored. It is `ref_table` count, and units are
+  that count times the number of boards.
 
 ### 2.5 — The relations
 
@@ -143,6 +167,7 @@
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
+| 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 
 - All are declared foreign keys.
 - Every skill sets `PRAGMA foreign_keys = ON`.
@@ -375,7 +400,7 @@ One skill, one run — T4.2.
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
 | 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
-| 8 | `table-write` | Create or modify part | Record row | `board.db` — `parts_table`, `ref_table` |
+| 8 | `table-write` | Create or modify part; record a vendor price survey | Record row, vendor quote | `board.db` — `parts_table`, `ref_table`, `price_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 
 ### 5.3 — Layout

@@ -12,6 +12,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
     table-write.py <board-dir> parent <ref> --under <ref> | --none
     table-write.py <board-dir> drop   <ref>
+    table-write.py <board-dir> price  <ipn> --vendor V --break QTY:PRICE ...
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -254,6 +255,38 @@ def drop(con, args):
     con.execute("delete from ref_table where ref = ?", (args.ref,))
     con.commit()
     print(f"{args.ref}  removed from {row[0]}")
+def price(con, args):
+    """Record a vendor's price survey: one row per break. Upsert, so a
+    re-survey overwrites the tier it re-quotes and leaves the rest."""
+    part(con, args.ipn)
+    breaks = []
+    for token in args.brk:
+        if ":" not in token:
+            raise Bad(f"--break wants QTY:PRICE, got '{token}'")
+        q, _, v = token.partition(":")
+        try:
+            breaks.append((int(q.replace(",", "")), float(v)))
+        except ValueError:
+            raise Bad(f"--break wants QTY:PRICE, got '{token}'")
+    if not breaks:
+        raise Bad("no --break given")
+    pkg = args.packaging or ""
+    for qty, unit in sorted(breaks):
+        con.execute(
+            "insert into price_table (ipn, vendor, vendor_pn, packaging,"
+            " break_qty, unit_price, stock, checked) values (?,?,?,?,?,?,?,?)"
+            " on conflict(ipn, vendor, packaging, break_qty) do update set"
+            " vendor_pn = excluded.vendor_pn,"
+            " unit_price = excluded.unit_price,"
+            " stock = excluded.stock,"
+            " checked = excluded.checked",
+            (args.ipn, args.vendor, args.vendor_pn, pkg, qty, unit,
+             args.stock, args.checked))
+    con.commit()
+    print(f"{args.ipn}  {args.vendor}"
+          f"{' ' + pkg if pkg else ''}: {len(breaks)} breaks recorded")
+
+
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
@@ -285,6 +318,14 @@ def show(con, args):
             print(f"    name: {nm or '—'}  mpn: {mp or '—'}  "
                   f"manufacturer: {mf or '—'}")
             print(f"    datasheet: {ds or '—'}")
+            for vend, vpn, pkg, q, up, st, ck in con.execute(
+                    "select vendor, vendor_pn, packaging, break_qty,"
+                    " unit_price, stock, checked from price_table"
+                    " where ipn = ? order by vendor, packaging, break_qty",
+                    (ipn,)):
+                print(f"    price: {vend} {vpn or '—'} {pkg or '—'} "
+                      f"{q}+ {up} stock {st if st is not None else '—'}"
+                      f" {ck or '—'}")
 
 
 # ------------------------------------------------------------------- entry
@@ -332,6 +373,17 @@ def main(argv):
     d.add_argument("ref")
     d.set_defaults(run=drop)
 
+    v = sub.add_parser("price", help="record a vendor price survey")
+    v.add_argument("ipn")
+    v.add_argument("--vendor", required=True)
+    v.add_argument("--vendor-pn", dest="vendor_pn")
+    v.add_argument("--packaging", help="cut tape, reel, strip, bulk")
+    v.add_argument("--stock", type=int)
+    v.add_argument("--checked", help="date the survey was taken")
+    v.add_argument("--break", dest="brk", action="append", default=[],
+                   metavar="QTY:PRICE", help="one vendor break. Repeatable")
+    v.set_defaults(run=price)
+
     w = sub.add_parser("show", help="print parts and their instances")
     w.add_argument("ipn", nargs="?")
     w.set_defaults(run=show)
@@ -342,7 +394,8 @@ def main(argv):
         if getattr(args, "ipn", None):
             # n0.3: a name or an approved MPN serves anywhere an IPN does
             args.ipn = resolve(con, args.ipn)
-        if args.verb in ("place", "set") and not IPN.match(args.ipn):
+        if args.verb in ("place", "set", "price") \
+                and not IPN.match(args.ipn):
             raise Bad(f"'{args.ipn}' names no part")
         args.run(con, args)
     finally:

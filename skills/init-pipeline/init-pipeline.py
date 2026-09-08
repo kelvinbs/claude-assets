@@ -69,6 +69,20 @@ SCHEMA = {
             "room          TEXT",
             "unit          INTEGER",
         ),
+        # T2.6 — the price survey. One row per vendor break, so a build of
+        # any size reads off it and the survey is done once
+        "price_table": (
+            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
+            " ON DELETE RESTRICT",
+            "vendor        TEXT NOT NULL",
+            "vendor_pn     TEXT",
+            "packaging     TEXT NOT NULL DEFAULT ''",
+            "break_qty     INTEGER NOT NULL",
+            "unit_price    REAL",
+            "stock         INTEGER",
+            "checked       TEXT",
+            "PRIMARY KEY (ipn, vendor, packaging, break_qty)",
+        ),
     },
 }
 

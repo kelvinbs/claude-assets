@@ -31,7 +31,7 @@ person reads.
 | 4 | Capture the schematic, page by page | `page_view` |
 | 5 | Draw or copy the footprints | `library_view` |
 | 6 | Lay out the board | `ready_view` |
-| 7 | Order | `sourcing_view` |
+| 7 | Order | `sourcing_view`, `price_view`, `cost_view` |
 
 Footprint work is free to happen at any point between steps 2 and 6. Step 6
 is the gate: `ready_view` names what is still missing.
@@ -49,6 +49,8 @@ together, at any point.
 | `library_view` | IPN | ipn, description, symbol, footprint, source | What is drawn and what is not |
 | `sourcing_view` | IPN | name, ipn, description, mpn, manufacturer, datasheet | What is bought |
 | `ready_view` | IPN | ipn, description, missing | What blocks layout |
+| `price_view` | vendor break | name, ipn, vendor, vendor_pn, packaging, break_qty, unit_price, stock, checked | What a part costs at every quantity |
+| `cost_view` | IPN | ipn, name, per_board, units, unit_price, vendor | What a build of `<N>` boards costs |
 
 ## 3 — The SQL
 
@@ -60,3 +62,8 @@ together, at any point.
 | `library_view` | `select name, ipn, description, symbol, footprint, source from parts_table order by symbol is not null, footprint is not null, ipn;` |
 | `sourcing_view` | `select p.name, p.ipn, p.description, p.mpn, p.manufacturer, p.datasheet from parts_table p where p.mpn is not null order by p.ipn;` |
 | `ready_view` | `select p.name, p.ipn, p.description, trim(case when p.mpn is null then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |
+| `price_view` | `select p.name, p.ipn, x.vendor, x.vendor_pn, x.packaging, x.break_qty, x.unit_price, x.stock, x.checked from price_table x join parts_table p using (ipn) order by p.ipn, x.vendor, x.packaging, x.break_qty;` |
+| `cost_view` | `with u as (select p.ipn, p.name, count(r.uuid) as per_board, count(r.uuid) * <N> as units from parts_table p left join ref_table r using (ipn) group by p.ipn) select u.ipn, u.name, u.per_board, u.units, (select x.unit_price from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as unit_price, (select x.vendor from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as vendor from u order by u.ipn;` |
+
+`cost_view` takes a build size: replace `<N>` with the number of boards.
+It reads the highest break at or below the units required.
