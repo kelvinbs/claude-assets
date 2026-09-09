@@ -28,6 +28,7 @@ The sheet writing is `build-sch.py` of proto1.
 import argparse
 import importlib.util
 import json
+import math
 import re
 import sqlite3
 import subprocess
@@ -620,26 +621,98 @@ def pull_fields(con, library, nickname):
 
 # ---------------------------------------------------------------- the placing
 
-def flow(rows, blocks, project, path_uuid, width, start_y):
-    """Lay parts left to right, wrapping at the page edge. The sort of T2.12
-    puts a group's members next to each other, so they read in order."""
-    margin = 5 * GRID
-    gap = 5 * GRID
-    cur_x, cur_y, row_h = margin, start_y, 0.0
-    page_h, body = start_y, ""
+MARGIN = 5 * GRID
+GAP = 5 * GRID
 
-    for row in sorted(rows, key=order_of):
-        half_w, half_h = extent(blocks[row["symbol"]])
-        bottom, right = edges(blocks[row["symbol"]])
-        clear = half_h + GRID
-        if cur_x + 2 * half_w > width - margin and cur_x > margin:
-            cur_x, cur_y, row_h = margin, snap(cur_y + row_h + gap), 0.0
-        x = snap(cur_x + half_w)
-        y = snap(cur_y + clear + half_h)
-        cur_x = snap(x + half_w + gap)
-        row_h = max(row_h, 2 * (clear + half_h))
-        page_h = max(page_h, y + clear + half_h + margin)
-        body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
+
+def size_of(row, blocks):
+    """The space one symbol needs, its own drawing plus the clearance that
+    keeps a neighbour's pins off it."""
+    half_w, half_h = extent(blocks[row["symbol"]])
+    return 2 * half_w, 2 * (half_h + GRID)
+
+
+def shelf(items, width):
+    """Pack items left to right, wrapping at `width`. An item is
+    (w, h, payload). Returns [(x, y, payload)], and the packed size."""
+    placed, cur_x, cur_y, row_h, used_w = [], 0.0, 0.0, 0.0, 0.0
+    for w, h, payload in items:
+        if cur_x + w > width and cur_x > 0:
+            cur_x, cur_y, row_h = 0.0, snap(cur_y + row_h + GAP), 0.0
+        placed.append((cur_x, cur_y, payload))
+        cur_x = snap(cur_x + w + GAP)
+        row_h = max(row_h, h)
+        used_w = max(used_w, cur_x - GAP)
+    return placed, used_w, cur_y + row_h
+
+
+def square_width(items):
+    """A box wide enough to come out roughly square: the square root of the
+    area its contents take, never narrower than its widest item."""
+    if not items:
+        return GRID
+    area = sum((w + GAP) * (h + GAP) for w, h, _ in items)
+    return max(max(w for w, _, _ in items), math.sqrt(area))
+
+
+def boxes_of(rows, blocks):
+    """A box is a parent and everything under it, else a room, else the part
+    on its own. A child that is itself a parent packs first and enters its
+    parent's box as one item, so nesting needs no special case."""
+    by_ref = {}
+    for row in rows:
+        by_ref.setdefault(row["ref"], []).append(row)
+    parent_of = {ref: (rs[0].get("parent") or "") for ref, rs in by_ref.items()}
+    kids = {}
+    for ref, par in parent_of.items():
+        if par and par in by_ref:
+            kids.setdefault(par, []).append(ref)
+
+    def pack(ref):
+        """(width, height, [(dx, dy, row)]) for this reference and its
+        descendants, laid out inside a box of its own."""
+        items = []
+        for row in sorted(by_ref[ref], key=lambda r: r.get("unit") or 1):
+            w, h = size_of(row, blocks)
+            items.append((w, h, ("part", row)))
+        for kid in sorted(kids.get(ref, []), key=number_of):
+            kw, kh, inner = pack(kid)
+            items.append((kw, kh, ("box", inner)))
+        placed, w, h = shelf(items, square_width(items))
+        flat = []
+        for x, y, (kind, payload) in placed:
+            if kind == "part":
+                flat.append((x, y, payload))
+            else:
+                flat.extend((x + dx, y + dy, r) for dx, dy, r in payload)
+        return w, h, flat
+
+    tops = [ref for ref, par in parent_of.items()
+            if not par or par not in by_ref]
+    out = []
+    for ref in sorted(tops, key=lambda r: order_of(by_ref[r][0])):
+        out.append(pack(ref))
+    return out
+
+
+def flow(rows, blocks, project, path_uuid, width, start_y):
+    """Lay the sheet as boxes, not as text. A box is a parent and everything
+    under it, packed roughly square and sized by its contents. Boxes then
+    pack the page, largest first, and a box never splits across a wrap."""
+    boxes = boxes_of(rows, blocks)
+    boxes.sort(key=lambda b: -(b[0] * b[1]))
+    items = [(w, h, flat) for w, h, flat in boxes]
+    placed, _, used_h = shelf(items, max(width - 2 * MARGIN, GRID))
+
+    body, page_h = "", start_y
+    for bx, by, flat in placed:
+        for dx, dy, row in flat:
+            half_w, half_h = extent(blocks[row["symbol"]])
+            bottom, right = edges(blocks[row["symbol"]])
+            x = snap(MARGIN + bx + dx + half_w)
+            y = snap(start_y + by + dy + half_h + GRID)
+            page_h = max(page_h, y + half_h + GRID + MARGIN)
+            body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
     return body, page_h
 
 
