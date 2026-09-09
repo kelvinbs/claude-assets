@@ -142,7 +142,15 @@ def instances(con):
             "description": description or "", "datasheet": datasheet or "",
             "manufacturer": manufacturer or "", "mpn": mpn or "",
             "note": note or "",
+            "parent": "", "room_field": (room or "").strip(),
         })
+    # T2.11: `parent` reaches the sheet as the parent instance's reference,
+    # not its uuid. A reference is what an engineer reads on a page
+    ref_of_uuid = {r["uuid"]: r["ref"] for r in rows}
+    parent_of = dict(con.execute(
+        "select uuid, parent from ref_table where parent is not null"))
+    for r in rows:
+        r["parent"] = ref_of_uuid.get(parent_of.get(r["uuid"]), "")
     return rows
 
 
@@ -199,6 +207,10 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right):
         + property_sexp("MPN", row["mpn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("note", row["note"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
+        + property_sexp("parent", row["parent"], f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
+        + property_sexp("room", row["room_field"], f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
         + "\t\t(instances\n"
         f"\t\t\t(project \"{project}\"\n"
         f"\t\t\t\t(path \"{path_uuid}\"\n"
@@ -522,7 +534,8 @@ def push_fields(con, library, nickname, only=None):
 INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
                    ("Description", "description"), ("Datasheet", "datasheet"),
                    ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
-                   ("note", "note"))
+                   ("note", "note"), ("parent", "parent"),
+                   ("room", "room_field"))
 
 
 def push_instances(con, board, project, root_src):

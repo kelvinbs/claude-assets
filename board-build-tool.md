@@ -226,7 +226,12 @@
 | 7 | `MPN` | the library symbol | `parts_table.mpn` |
 | 8 | `note` | the library symbol | `parts_table.note` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
+| 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref` |
+| 11 | `room` | the instance | `ref_table.room` |
 
+- `parent` and `room` are per-instance and never reach the library
+  symbol. They say what a part serves and which sub-circuit it sits in, so
+  an engineer reads the organisation off the page.
 - `Value` shows the part the board was designed against — what a person
   reads on a sheet. The IPN is the key and travels in its own field.
 
