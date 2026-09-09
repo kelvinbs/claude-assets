@@ -678,6 +678,13 @@ def boxes_of(rows, blocks):
     for row in rows:
         by_ref.setdefault(row["ref"], []).append(row)
     parent_of = {ref: (rs[0].get("parent") or "") for ref, rs in by_ref.items()}
+    # A parent that draws nothing - a functional block, whose part carries no
+    # symbol - never reaches this function as a row. It is still a box: it
+    # holds no drawing of its own and its children pack inside it.
+    for par in list(parent_of.values()):
+        if par and par not in by_ref:
+            by_ref.setdefault(par, [])
+            parent_of.setdefault(par, "")
     kids = {}
     for ref, par in parent_of.items():
         if par and par in by_ref:
@@ -705,9 +712,17 @@ def boxes_of(rows, blocks):
 
     tops = [ref for ref, par in parent_of.items()
             if not par or par not in by_ref]
+
+    def rank(ref):
+        rs = by_ref[ref] or [by_ref[k][0] for k in kids.get(ref, [])
+                             if by_ref.get(k)]
+        return order_of(rs[0]) if rs else (1, "", ref, 0, 0, 0)
+
     out = []
-    for ref in sorted(tops, key=lambda r: order_of(by_ref[r][0])):
-        out.append(pack(ref))
+    for ref in sorted(tops, key=rank):
+        w, h, flat = pack(ref)
+        if flat:
+            out.append((w, h, flat))
     return out
 
 
