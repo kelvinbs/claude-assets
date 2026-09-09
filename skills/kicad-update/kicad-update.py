@@ -633,30 +633,40 @@ def size_of(row, blocks):
     return 2 * half_w, 2 * (half_h + GRID)
 
 
-def shelf(items, width, gap=GAP):
-    """Pack items left to right, wrapping at `width`. An item is
-    (w, h, payload). Returns [(x, y, payload)], and the packed size."""
+def shelf(items, limit, gap=GAP, down=False):
+    """Pack items along one axis, wrapping at `limit`. An item is
+    (w, h, payload). With `down` the axes swap: items stack downward and a
+    new column starts at the limit. Returns [(x, y, payload)] and the
+    packed size, both in page axes either way."""
+    if down:
+        items = [(h, w, payload) for w, h, payload in items]
     placed, cur_x, cur_y, row_h, used_w = [], 0.0, 0.0, 0.0, 0.0
     for w, h, payload in items:
-        if cur_x + w > width and cur_x > 0:
+        if cur_x + w > limit and cur_x > 0:
             cur_x, cur_y, row_h = 0.0, snap(cur_y + row_h + gap), 0.0
         placed.append((cur_x, cur_y, payload))
         cur_x = snap(cur_x + w + gap)
         row_h = max(row_h, h)
         used_w = max(used_w, cur_x - gap)
+    if down:
+        return ([(y, x, payload) for x, y, payload in placed],
+                cur_y + row_h, used_w)
     return placed, used_w, cur_y + row_h
 
 
 ASPECT = 3.0            # a box comes out this many times wider than tall
 
 
-def box_width(items):
-    """A box wide enough to come out ASPECT times wider than tall: the area
-    its contents take, shaped to that ratio, never narrower than its widest
-    item."""
+def box_extent(items, down=False):
+    """The limit that makes a box come out ASPECT times wider than tall: the
+    area its contents take, shaped to that ratio. Packing down the limit is
+    a height, so the ratio inverts. Never smaller than the largest item on
+    the axis being wrapped."""
     if not items:
         return GRID
     area = sum((w + GAP) * (h + GAP) for w, h, _ in items)
+    if down:
+        return max(max(h for _, h, _ in items), math.sqrt(area / ASPECT))
     return max(max(w for w, _, _ in items), math.sqrt(area * ASPECT))
 
 
@@ -683,7 +693,8 @@ def boxes_of(rows, blocks):
         for kid in sorted(kids.get(ref, []), key=number_of):
             kw, kh, inner = pack(kid)
             items.append((kw, kh, ("box", inner)))
-        placed, w, h = shelf(items, box_width(items))
+        placed, w, h = shelf(items, box_extent(items, down=True),
+                             down=True)
         flat = []
         for x, y, (kind, payload) in placed:
             if kind == "part":
@@ -719,15 +730,15 @@ def outline_sexp(drawn):
     )
 
 
-def flow(rows, blocks, project, path_uuid, width, start_y):
+def flow(rows, blocks, project, path_uuid, width, start_y, height=None):
     """Lay the sheet as boxes, not as text. A box is a parent and everything
     under it, packed roughly square and sized by its contents. Boxes then
     pack the page, largest first, and a box never splits across a wrap."""
     boxes = boxes_of(rows, blocks)
     boxes.sort(key=lambda b: -(b[0] * b[1]))
     items = [(w, h, flat) for w, h, flat in boxes]
-    placed, _, used_h = shelf(items, max(width - 2 * MARGIN, GRID),
-                              gap=BOX_GAP)
+    room = (height or width) - start_y - MARGIN
+    placed, _, used_h = shelf(items, max(room, GRID), gap=BOX_GAP, down=True)
 
     body, page_h = "", start_y
     for bx, by, flat in placed:
@@ -752,7 +763,7 @@ def fit_paper(lay, fixed):
     sizes = [fixed] if fixed else PAPER_ORDER
     for name in sizes:
         width, height = PAPERS[name]
-        drawn, used = lay(width)
+        drawn, used = lay(width, height)
         if used <= height or name == sizes[-1]:
             return name, drawn
     raise Bad("no sheet size fits")
@@ -826,8 +837,9 @@ def write_page(board, project, root, page, rows, blocks, fixed):
     lib_symbols = "".join(indent_block(blocks[k], 1).rstrip() + "\n"
                           for k in sorted(needed))
 
-    def lay(width):
-        return flow(rows, blocks, project, path_uuid, width, 5 * GRID)
+    def lay(width, height=None):
+        return flow(rows, blocks, project, path_uuid, width, 5 * GRID,
+                    height)
 
     paper, body = fit_paper(lay, fixed)
     path.write_text(new_sheet(project, uid(project, "file", page), paper,
@@ -843,7 +855,7 @@ def write_root(board, project, root, pages, fixed):
     already = set(re.findall(r'\(property "Sheetname" "([^"]*)"', src or ""))
     fresh = [p for p in pages if p not in already]
 
-    def lay(width, start=5 * GRID, only=pages):
+    def lay(width, height=None, start=5 * GRID, only=pages):
         body, y = "", start
         for n, page in enumerate(only, start=2):
             body += sheet_sexp(project, root, page,
