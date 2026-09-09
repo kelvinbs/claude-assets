@@ -284,9 +284,15 @@ def pin_spans(block):
 def body_box(block):
     """The body rectangle of a symbol block, as (x1, y1, x2, y2) and the
     span it occupies. None when the symbol has no rectangle."""
-    m = re.search(r"\(rectangle\s*\n\s*\(start (-?[\d.]+) (-?[\d.]+)\)"
-                  r"\s*\n\s*\(end (-?[\d.]+) (-?[\d.]+)\)", block)
-    if m:
+    # A symbol can carry several rectangles - a connector shell and its
+    # detail. The body is the largest of them.
+    found = list(re.finditer(r"\(rectangle\s*\n\s*\(start (-?[\d.]+) (-?[\d.]+)\)"
+                             r"\s*\n\s*\(end (-?[\d.]+) (-?[\d.]+)\)", block))
+    if found:
+        def area(m):
+            x0, y0, x1, y1 = (float(g) for g in m.groups())
+            return abs(x1 - x0) * abs(y1 - y0)
+        m = max(found, key=area)
         return [float(g) for g in m.groups()], m
     # A symbol drawn as polylines and arcs - an amplifier triangle, say -
     # carries no rectangle. Its body is then the extent of what is drawn,
@@ -300,16 +306,11 @@ def body_box(block):
     return [min(xs), max(ys), max(xs), min(ys)], None
 
 
-def edge_of(x, y, box):
-    """Which side of the body a pin enters by."""
-    x1, y1, x2, y2 = box
-    left, right = min(x1, x2), max(x1, x2)
-    bottom, top = min(y1, y2), max(y1, y2)
-    if x <= left:
-        return "L"
-    if x >= right:
-        return "R"
-    return "T" if y >= top else "B"
+def edge_of(rot):
+    """Which side of the body a pin enters by. The rotation says it exactly:
+    a donor draws pins outside its own rectangle often enough that comparing
+    coordinates to the body gets it wrong."""
+    return {0: "L", 180: "R", 270: "T", 90: "B"}.get(int(rot) % 360, "L")
 
 
 def tidy_pins(block, pins):
@@ -391,7 +392,7 @@ def tidy_pins(block, pins):
     # perfectly good gates a pile-up.
     taken = {}
     for p in sorted(live, key=lambda q: (q["unit"], q["x"], q["y"])):
-        p["edge"] = edge_of(p["x"], p["y"], corners)
+        p["edge"] = edge_of(p["rot"])
         seen = taken.setdefault(p["unit"], set())
         while (p["x"], p["y"]) in seen:
             if p["edge"] in ("L", "R"):
@@ -401,10 +402,10 @@ def tidy_pins(block, pins):
         seen.add((p["x"], p["y"]))
 
     # Once the no-connects are off an edge, the donor's rectangle is wider
-    # than anything left needs. Narrow it to what the live pins ask for.
-    # The left edge holds still; the right edge and the pins on it come in
-    # together, and the top and bottom re-space from the left at the
-    # donor's pitch.
+    # than anything left needs, or narrower than its own pins reach. Size it
+    # to what the live pins ask for. The left edge holds still; the right
+    # edge and the pins on it move together; the top and bottom re-space
+    # from the left at the donor's pitch.
     if rect is not None and live:
         on = {e: [q for q in live if q.get("edge") == e]
               for e in ("L", "R", "T", "B")}
@@ -415,17 +416,18 @@ def tidy_pins(block, pins):
         want = max(across * 2 * GRID + 4 * GRID,
                    names * text + 2 * OFFSET + GRID, 4 * GRID)
         want = rise(want)
-        if want < right - left:
-            shift = (right - left) - want
-            for q in on["R"]:
-                q["x"] = snap(q["x"] - shift)
-            for e in ("T", "B"):
-                for i, q in enumerate(sorted(on[e], key=lambda r: r["x"])):
-                    q["x"] = snap(left + 2 * GRID + i * 2 * GRID)
-            right = snap(left + want)
-            for q in read:
-                if q["num"] in dead:
-                    q["x"] = left + GRID
+        # Either way. A donor whose pins already overrun its rectangle needs
+        # the body to grow, not only to shrink.
+        shift = want - (right - left)
+        for q in on["R"]:
+            q["x"] = snap(q["x"] + shift)
+        for e in ("T", "B"):
+            for i, q in enumerate(sorted(on[e], key=lambda r: r["x"])):
+                q["x"] = snap(left + 2 * GRID + i * 2 * GRID)
+        right = snap(left + want)
+        for q in read:
+            if q["num"] in dead:
+                q["x"] = left + GRID
 
     out, last = [], 0
     for p in sorted(read, key=lambda q: q["a"]):
@@ -439,10 +441,10 @@ def tidy_pins(block, pins):
 
     if rect is None:
         return done
-    again = re.search(r"\(rectangle\s*\n\s*\(start -?[\d.]+ -?[\d.]+\)"
-                      r"\s*\n\s*\(end -?[\d.]+ -?[\d.]+\)", done)
-    if not again:
+    later = body_box(done)
+    if later is None or later[1] is None:
         return done
+    again = later[1]
     new_rect = (f"(rectangle\n\t\t\t\t(start {left} {top})"
                 f"\n\t\t\t\t(end {right} {bottom})")
     return done[:again.start()] + new_rect + done[again.end():]
