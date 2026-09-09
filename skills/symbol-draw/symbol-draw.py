@@ -376,11 +376,11 @@ def tidy_pins(block, pins):
         ys = [p["y"] for p in live if p["edge"] in ("L", "R")]
         xs = [p["x"] for p in live if p["edge"] in ("T", "B")]
         if ys:
-            bottom = min(bottom, min(ys) - GRID)
-            top = max(top, max(ys) + GRID)
+            bottom = min(ys) - GRID
+            top = max(ys) + GRID
         if xs:
-            left = min(left, min(xs) - GRID)
-            right = max(right, max(xs) + GRID)
+            left = min(xs) - GRID
+            right = max(xs) + GRID
 
     out, last = [], 0
     for p in sorted(read, key=lambda q: q["a"]):
