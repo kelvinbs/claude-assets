@@ -332,6 +332,25 @@ def tidy_pins(block, pins):
     dead = {str(p[0]) for p in (pins or [])
             if str(p[1]).strip().upper() in ("N/C", "NC", "NO_CONNECT")}
 
+    # which NAME_u_v sub-block each pin sits in
+    units = []
+    for m in re.finditer(r"\n\t\t\(symbol \"[^\"]+_(\d+)_(\d+)\"", block):
+        u0, dd = m.start() + 1, 0
+        for k in range(u0, len(block)):
+            if block[k] == "(":
+                dd += 1
+            elif block[k] == ")":
+                dd -= 1
+                if dd == 0:
+                    units.append((u0, k + 1, int(m.group(1))))
+                    break
+
+    def unit_of(pos):
+        for u0, u1, n in units:
+            if u0 <= pos < u1:
+                return n
+        return 1
+
     read = []
     for a, b in spans:
         seg = block[a:b]
@@ -341,6 +360,7 @@ def tidy_pins(block, pins):
         if not (at and num):
             return block
         read.append({"a": a, "b": b, "seg": seg, "num": num.group(1),
+                     "unit": unit_of(a),
                      "name": nm.group(1) if nm else "",
                      "x": float(at.group(1)), "y": float(at.group(2)),
                      "rot": int(at.group(3))})
@@ -359,39 +379,26 @@ def tidy_pins(block, pins):
         if p["num"] in dead:
             p["x"], p["y"], p["rot"] = left + GRID, bottom - PIN_LEN, 90
 
-    # Each edge closes up. The live pins keep the order the donor gave them
-    # and re-space at one pitch, so the holes the no-connects left disappear
-    # and nothing lands on anything.
-    for p in live:
-        p["edge"] = edge_of(p["x"], p["y"], corners)
-    edges = {e: [q for q in live if q["edge"] == e] for e in ("L", "R", "T", "B")}
-    edges["L"].sort(key=lambda q: -q["y"])
-    edges["R"].sort(key=lambda q: -q["y"])
-    edges["T"].sort(key=lambda q: q["x"])
-    edges["B"].sort(key=lambda q: q["x"])
-
-    # The body is sized to what each edge carries, not to where the donor
-    # happened to leave a pin.
-    across = max(len(edges["T"]), len(edges["B"]))
-    down = max(len(edges["L"]), len(edges["R"]))
-    half_w = rise(max(across * 2 * GRID + 2 * GRID, 4 * GRID) / 2)
-    half_h = rise(max(down * GRID + 2 * GRID, 4 * GRID) / 2)
-    left, right, bottom, top = -half_w, half_w, -half_h, half_h
-
-    for side in ("L", "R"):
-        x = left - PIN_LEN if side == "L" else right + PIN_LEN
-        rot = 0 if side == "L" else 180
-        for i, q in enumerate(edges[side]):
-            q["x"], q["y"], q["rot"] = x, snap(top - GRID - i * GRID), rot
-    for side in ("T", "B"):
-        y = top + PIN_LEN if side == "T" else bottom - PIN_LEN
-        rot = 270 if side == "T" else 90
-        for i, q in enumerate(edges[side]):
-            q["x"], q["y"], q["rot"] = snap(left + 2 * GRID + i * 2 * GRID), y, rot
-
+    # A pin moves only when it has to. Every no-connect goes to one point,
+    # and a pin that would land on another live pin steps along its own
+    # edge. Everything else stays where the donor drew it.
     for p in read:
         if p["num"] in dead:
             p["x"], p["y"], p["rot"] = left + GRID, bottom - PIN_LEN, 90
+
+    # Two pins collide only within one unit. Every gate of a quad is drawn
+    # at the same place by design, so counting across units calls four
+    # perfectly good gates a pile-up.
+    taken = {}
+    for p in sorted(live, key=lambda q: (q["unit"], q["x"], q["y"])):
+        p["edge"] = edge_of(p["x"], p["y"], corners)
+        seen = taken.setdefault(p["unit"], set())
+        while (p["x"], p["y"]) in seen:
+            if p["edge"] in ("L", "R"):
+                p["y"] = snap(p["y"] - GRID)
+            else:
+                p["x"] = snap(p["x"] + GRID)
+        seen.add((p["x"], p["y"]))
 
     out, last = [], 0
     for p in sorted(read, key=lambda q: q["a"]):
@@ -403,17 +410,8 @@ def tidy_pins(block, pins):
     out.append(block[last:])
     done = "".join(out)
 
-    if rect is None:
-        return done
-    # The pins were rewritten above, so the rectangle's offsets in the
-    # original block no longer hold. Find it again in what we have now.
-    again = re.search(r"\(rectangle\s*\n\s*\(start -?[\d.]+ -?[\d.]+\)"
-                      r"\s*\n\s*\(end -?[\d.]+ -?[\d.]+\)", done)
-    if not again:
-        return done
-    new_rect = (f"(rectangle\n\t\t\t\t(start {left} {top})"
-                f"\n\t\t\t\t(end {right} {bottom})")
-    return done[:again.start()] + new_rect + done[again.end():]
+    return done
+
 
 
 def build_symbol(spec):
