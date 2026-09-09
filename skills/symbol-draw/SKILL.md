@@ -101,14 +101,17 @@ corners, so a name reading up the body does not land on its neighbour.
 
 A copied symbol is tidied before it is written, and so is a drawn one.
 
+A pin moves only when it has to.
+
 | | |
 |---|---|
 | No-connects | every one goes to a single point below the lower left corner. A part that is mostly no-connect otherwise carries a body stretched by pins that connect to nothing |
-| Each edge | the live pins keep the order the donor gave them and close up at one pitch, so the holes the no-connects left disappear and no two pins share a point |
-| The body | sized to what each edge carries: width from the top and bottom counts, height from the left and right |
+| A collision | a pin that would land on another live pin of the same unit steps along its own edge. Every gate of a quad is drawn at the same place by design, so a collision is counted within one unit and never across the symbol |
+| Everything else | stays on the coordinate the donor gave it |
+| The body | narrowed to what the live pins ask for once the no-connects are off an edge. The left edge holds still; the right edge and the pins on it come in together; the top and bottom re-space from the left at the donor's pitch. Height is untouched |
 
 A symbol drawn as polylines rather than a rectangle — an amplifier
-triangle — is left alone. Its body is not a rectangle to resize.
+triangle — keeps its body and its pins exactly as the donor drew them.
 
 ## The stage's primary pass
 

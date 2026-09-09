@@ -400,6 +400,33 @@ def tidy_pins(block, pins):
                 p["x"] = snap(p["x"] + GRID)
         seen.add((p["x"], p["y"]))
 
+    # Once the no-connects are off an edge, the donor's rectangle is wider
+    # than anything left needs. Narrow it to what the live pins ask for.
+    # The left edge holds still; the right edge and the pins on it come in
+    # together, and the top and bottom re-space from the left at the
+    # donor's pitch.
+    if rect is not None and live:
+        on = {e: [q for q in live if q.get("edge") == e]
+              for e in ("L", "R", "T", "B")}
+        text = 0.9 * FONT
+        names = (max([len(q["name"]) for q in on["L"]] or [0])
+                 + max([len(q["name"]) for q in on["R"]] or [0]))
+        across = max(len(on["T"]), len(on["B"]))
+        want = max(across * 2 * GRID + 4 * GRID,
+                   names * text + 2 * OFFSET + GRID, 4 * GRID)
+        want = rise(want)
+        if want < right - left:
+            shift = (right - left) - want
+            for q in on["R"]:
+                q["x"] = snap(q["x"] - shift)
+            for e in ("T", "B"):
+                for i, q in enumerate(sorted(on[e], key=lambda r: r["x"])):
+                    q["x"] = snap(left + 2 * GRID + i * 2 * GRID)
+            right = snap(left + want)
+            for q in read:
+                if q["num"] in dead:
+                    q["x"] = left + GRID
+
     out, last = [], 0
     for p in sorted(read, key=lambda q: q["a"]):
         seg = re.sub(r"\(at -?[\d.]+ -?[\d.]+ \d+\)",
@@ -410,7 +437,15 @@ def tidy_pins(block, pins):
     out.append(block[last:])
     done = "".join(out)
 
-    return done
+    if rect is None:
+        return done
+    again = re.search(r"\(rectangle\s*\n\s*\(start -?[\d.]+ -?[\d.]+\)"
+                      r"\s*\n\s*\(end -?[\d.]+ -?[\d.]+\)", done)
+    if not again:
+        return done
+    new_rect = (f"(rectangle\n\t\t\t\t(start {left} {top})"
+                f"\n\t\t\t\t(end {right} {bottom})")
+    return done[:again.start()] + new_rect + done[again.end():]
 
 
 
