@@ -61,13 +61,13 @@ T2.12, in its order.
 |---|---|
 | `page` | selects the file |
 | `room` | a block of the sheet. Rooms run in name order |
-| family | what is left, grouped by the class letter of the IPN |
+| `parent` | a parent and its children, together |
 
-A new room or a new family starts a new row on the sheet, so the groups read
+A new room or a new parent starts a new row on the sheet, so the groups read
 as groups. Within a group parts run by reference number, left to right,
 wrapping at the page edge.
 
-Order between rooms and families is arbitrary and subject to re-entry: once
+Order between rooms is arbitrary and subject to re-entry: once
 a part is on the page it does not move, so the order is only ever the order
 new parts arrive in.
 

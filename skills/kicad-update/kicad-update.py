@@ -154,16 +154,23 @@ def instances(con):
     return rows
 
 
+def number_of(ref):
+    m = re.match(r"^([A-Za-z]+)(\d+)$", ref or "")
+    return int(m.group(2)) if m else 0
+
+
 def order_of(row):
-    """T2.12, ranks 2 and 3. Rooms come first, in name order. What is left
-    groups by family — the class letter of the IPN — and runs by reference
-    inside it."""
-    ref = re.match(r"^([A-Za-z]+)(\d+)$", row["ref"])
-    number = int(ref.group(2)) if ref else 0
+    """T2.12, ranks 2 and 3. Rooms come first, in name order. A child sorts
+    under its parent, so a parent and the parts that serve it stay together.
+    What has neither runs by reference."""
+    number = number_of(row["ref"])
     unit = row.get("unit") or 1
+    parent = row.get("parent") or ""
     if row["room"]:
-        return (0, row["room"], "", number, unit)
-    return (1, "", IPN.match(row["ipn"]).group(1), number, unit)
+        return (0, row["room"], parent, number_of(parent), number, unit)
+    if parent:
+        return (1, "", parent, number_of(parent), number, unit)
+    return (1, "", row["ref"], number, number, unit)
 
 
 # ------------------------------------------------------------------ the symbol

@@ -243,12 +243,10 @@
 |---|---|---|---|---|
 | 1 | 1 | `page` | Selects the file | — |
 | 2 | 2 | `room` | Block of the sheet | Region of the board |
-| 3 | 3 | Family | Groups instances whose `room` is blank | Groups instances whose `room` is blank |
+| 3 | 3 | `parent` | Groups a parent with its children | Groups a parent with its children |
 
-- A family whose instances carry two pages is placed on both.
-- Order of rooms and families within a page is arbitrary — subject to
-  re-entry, section 4.3.
-- Order within a family is defined in the skill documents.
+- Order of rooms within a page is arbitrary — subject to re-entry,
+  section 4.3.
 
 ### 2.9 — The project name
 
