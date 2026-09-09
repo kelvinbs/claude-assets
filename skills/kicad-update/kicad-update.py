@@ -646,7 +646,7 @@ def shelf(items, width):
     return placed, used_w, cur_y + row_h
 
 
-ASPECT = 2.0            # a box comes out this many times wider than tall
+ASPECT = 3.0            # a box comes out this many times wider than tall
 
 
 def box_width(items):
