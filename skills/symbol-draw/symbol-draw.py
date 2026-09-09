@@ -359,39 +359,28 @@ def tidy_pins(block, pins):
         if p["num"] in dead:
             p["x"], p["y"], p["rot"] = left + GRID, bottom - PIN_LEN, 90
 
-    # Each edge closes up. The live pins keep the order the donor gave them
-    # and re-space at one pitch, so the holes the no-connects left disappear
-    # and nothing lands on anything.
-    for p in live:
+    # pins sharing a coordinate step apart along their own edge
+    taken = set()
+    for p in sorted(live, key=lambda q: (q["x"], q["y"])):
         p["edge"] = edge_of(p["x"], p["y"], corners)
-    edges = {e: [q for q in live if q["edge"] == e] for e in ("L", "R", "T", "B")}
-    edges["L"].sort(key=lambda q: -q["y"])
-    edges["R"].sort(key=lambda q: -q["y"])
-    edges["T"].sort(key=lambda q: q["x"])
-    edges["B"].sort(key=lambda q: q["x"])
+        step = GRID if p["edge"] in ("L", "R") else GRID
+        while (p["x"], p["y"]) in taken:
+            if p["edge"] in ("L", "R"):
+                p["y"] = snap(p["y"] - step)
+            else:
+                p["x"] = snap(p["x"] + step)
+        taken.add((p["x"], p["y"]))
 
-    # The body is sized to what each edge carries, not to where the donor
-    # happened to leave a pin.
-    across = max(len(edges["T"]), len(edges["B"]))
-    down = max(len(edges["L"]), len(edges["R"]))
-    half_w = rise(max(across * 2 * GRID + 2 * GRID, 4 * GRID) / 2)
-    half_h = rise(max(down * GRID + 2 * GRID, 4 * GRID) / 2)
-    left, right, bottom, top = -half_w, half_w, -half_h, half_h
-
-    for side in ("L", "R"):
-        x = left - PIN_LEN if side == "L" else right + PIN_LEN
-        rot = 0 if side == "L" else 180
-        for i, q in enumerate(edges[side]):
-            q["x"], q["y"], q["rot"] = x, snap(top - GRID - i * GRID), rot
-    for side in ("T", "B"):
-        y = top + PIN_LEN if side == "T" else bottom - PIN_LEN
-        rot = 270 if side == "T" else 90
-        for i, q in enumerate(edges[side]):
-            q["x"], q["y"], q["rot"] = snap(left + 2 * GRID + i * 2 * GRID), y, rot
-
-    for p in read:
-        if p["num"] in dead:
-            p["x"], p["y"], p["rot"] = left + GRID, bottom - PIN_LEN, 90
+    # the body holds what is left
+    if live:
+        ys = [p["y"] for p in live if p["edge"] in ("L", "R")]
+        xs = [p["x"] for p in live if p["edge"] in ("T", "B")]
+        if ys:
+            bottom = min(ys) - GRID
+            top = max(ys) + GRID
+        if xs:
+            left = min(xs) - GRID
+            right = max(xs) + GRID
 
     out, last = [], 0
     for p in sorted(read, key=lambda q: q["a"]):

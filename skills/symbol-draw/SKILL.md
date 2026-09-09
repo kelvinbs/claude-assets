@@ -97,19 +97,6 @@ drawing; top and bottom run left to right at twice the pitch, clear of the
 corners, so a name reading up the body does not land on its neighbour.
 
 
-## Tidying what lands
-
-A copied symbol is tidied before it is written, and so is a drawn one.
-
-| | |
-|---|---|
-| No-connects | every one goes to a single point below the lower left corner. A part that is mostly no-connect otherwise carries a body stretched by pins that connect to nothing |
-| Each edge | the live pins keep the order the donor gave them and close up at one pitch, so the holes the no-connects left disappear and no two pins share a point |
-| The body | sized to what each edge carries: width from the top and bottom counts, height from the left and right |
-
-A symbol drawn as polylines rather than a rectangle — an amplifier
-triangle — is left alone. Its body is not a rectangle to resize.
-
 ## The stage's primary pass
 
 `--copy-only` is the Update-library stage's first pass, per T4.1: the
