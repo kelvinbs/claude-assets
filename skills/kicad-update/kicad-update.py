@@ -621,19 +621,14 @@ def pull_fields(con, library, nickname):
 # ---------------------------------------------------------------- the placing
 
 def flow(rows, blocks, project, path_uuid, width, start_y):
-    """Lay parts left to right, wrapping at the page edge. A new room or a
-    new family starts on a new row, so the groups of T2.12 read as groups."""
+    """Lay parts left to right, wrapping at the page edge. The sort of T2.12
+    puts a group's members next to each other, so they read in order."""
     margin = 5 * GRID
     gap = 5 * GRID
     cur_x, cur_y, row_h = margin, start_y, 0.0
-    page_h, body, group = start_y, "", None
+    page_h, body = start_y, ""
 
     for row in sorted(rows, key=order_of):
-        key = order_of(row)[:3]
-        if group is not None and key != group:
-            cur_x, cur_y, row_h = margin, snap(cur_y + row_h + gap), 0.0
-        group = key
-
         half_w, half_h = extent(blocks[row["symbol"]])
         bottom, right = edges(blocks[row["symbol"]])
         clear = half_h + GRID

@@ -63,9 +63,8 @@ T2.12, in its order.
 | `room` | a block of the sheet. Rooms run in name order |
 | `parent` | a parent and its children, together |
 
-A new room or a new parent starts a new row on the sheet, so the groups read
-as groups. Within a group parts run by reference number, left to right,
-wrapping at the page edge.
+Parts run left to right and wrap at the page edge. The sort puts a group's
+members next to each other, so they read in order.
 
 Order between rooms is arbitrary and subject to re-entry: once
 a part is on the page it does not move, so the order is only ever the order
