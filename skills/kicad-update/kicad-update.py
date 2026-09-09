@@ -740,7 +740,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y, height=None):
     room = (height or width) - start_y - MARGIN
     placed, _, used_h = shelf(items, max(room, GRID), gap=BOX_GAP, down=True)
 
-    body, page_h = "", start_y
+    body, page_h, page_w = "", start_y, MARGIN
     for bx, by, flat in placed:
         drawn, refs = [], set()
         for dx, dy, row in flat:
@@ -749,12 +749,13 @@ def flow(rows, blocks, project, path_uuid, width, start_y, height=None):
             x = snap(MARGIN + bx + dx + half_w)
             y = snap(start_y + by + dy + half_h + GRID)
             page_h = max(page_h, y + half_h + GRID + MARGIN)
+            page_w = max(page_w, x + half_w + GRID + MARGIN)
             body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
             body += outline_sexp(drawn)
-    return body, page_h
+    return body, page_h, page_w
 
 
 def fit_paper(lay, fixed):
@@ -763,8 +764,8 @@ def fit_paper(lay, fixed):
     sizes = [fixed] if fixed else PAPER_ORDER
     for name in sizes:
         width, height = PAPERS[name]
-        drawn, used = lay(width, height)
-        if used <= height or name == sizes[-1]:
+        drawn, tall, wide = lay(width, height)
+        if (tall <= height and wide <= width) or name == sizes[-1]:
             return name, drawn
     raise Bad("no sheet size fits")
 
@@ -829,8 +830,8 @@ def write_page(board, project, root, page, rows, blocks, fixed):
             return name, 0, len(rows)
         paper = paper_of(src)
         width, height = PAPERS.get(paper, PAPERS["A"])
-        body, _ = flow(fresh, blocks, project, path_uuid, width,
-                       snap(lowest_used(src) + 10 * GRID), height)
+        body, _, _ = flow(fresh, blocks, project, path_uuid, width,
+                          snap(lowest_used(src) + 10 * GRID), height)
         path.write_text(merge_sheet(src, blocks, needed, body))
         return name, len(fresh), len(rows) - len(fresh)
 
@@ -862,7 +863,7 @@ def write_root(board, project, root, pages, fixed):
                                f"{project}-{slug(page)}.kicad_sch",
                                n, 5 * GRID, y, 25 * GRID, 10 * GRID)
             y = snap(y + 14 * GRID)
-        return body, y + 5 * GRID
+        return body, y + 5 * GRID, 35 * GRID
 
     paths = "".join(
         f"\t\t(path \"/{root}/{uid(project, 'sheet', page)}\"\n"
