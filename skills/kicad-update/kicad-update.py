@@ -828,9 +828,9 @@ def write_page(board, project, root, page, rows, blocks, fixed):
         if not fresh:
             return name, 0, len(rows)
         paper = paper_of(src)
-        width = PAPERS.get(paper, PAPERS["A"])[0]
+        width, height = PAPERS.get(paper, PAPERS["A"])
         body, _ = flow(fresh, blocks, project, path_uuid, width,
-                       snap(lowest_used(src) + 10 * GRID))
+                       snap(lowest_used(src) + 10 * GRID), height)
         path.write_text(merge_sheet(src, blocks, needed, body))
         return name, len(fresh), len(rows) - len(fresh)
 
