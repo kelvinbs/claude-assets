@@ -646,13 +646,17 @@ def shelf(items, width):
     return placed, used_w, cur_y + row_h
 
 
-def square_width(items):
-    """A box wide enough to come out roughly square: the square root of the
-    area its contents take, never narrower than its widest item."""
+ASPECT = 2.0            # a box comes out this many times wider than tall
+
+
+def box_width(items):
+    """A box wide enough to come out ASPECT times wider than tall: the area
+    its contents take, shaped to that ratio, never narrower than its widest
+    item."""
     if not items:
         return GRID
     area = sum((w + GAP) * (h + GAP) for w, h, _ in items)
-    return max(max(w for w, _, _ in items), math.sqrt(area))
+    return max(max(w for w, _, _ in items), math.sqrt(area * ASPECT))
 
 
 def boxes_of(rows, blocks):
@@ -678,7 +682,7 @@ def boxes_of(rows, blocks):
         for kid in sorted(kids.get(ref, []), key=number_of):
             kw, kh, inner = pack(kid)
             items.append((kw, kh, ("box", inner)))
-        placed, w, h = shelf(items, square_width(items))
+        placed, w, h = shelf(items, box_width(items))
         flat = []
         for x, y, (kind, payload) in placed:
             if kind == "part":
@@ -695,6 +699,25 @@ def boxes_of(rows, blocks):
     return out
 
 
+def outline_sexp(drawn):
+    """A thin rectangle round a box, so a parent and what serves it read as
+    one thing on the page."""
+    pad = 1.5 * GRID
+    x0 = min(x - hw for x, _, hw, _ in drawn) - pad
+    x1 = max(x + hw for x, _, hw, _ in drawn) + pad
+    y0 = min(y - hh for _, y, _, hh in drawn) - pad
+    y1 = max(y + hh for _, y, _, hh in drawn) + pad
+    return (
+        "\t(rectangle\n"
+        f"\t\t(start {x0:.2f} {y0:.2f})\n"
+        f"\t\t(end {x1:.2f} {y1:.2f})\n"
+        "\t\t(stroke\n\t\t\t(width 0.1)\n\t\t\t(type solid)\n\t\t)\n"
+        "\t\t(fill\n\t\t\t(type none)\n\t\t)\n"
+        f"\t\t(uuid \"{uuid.uuid4()}\")\n"
+        "\t)\n"
+    )
+
+
 def flow(rows, blocks, project, path_uuid, width, start_y):
     """Lay the sheet as boxes, not as text. A box is a parent and everything
     under it, packed roughly square and sized by its contents. Boxes then
@@ -706,6 +729,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
 
     body, page_h = "", start_y
     for bx, by, flat in placed:
+        drawn, refs = [], set()
         for dx, dy, row in flat:
             half_w, half_h = extent(blocks[row["symbol"]])
             bottom, right = edges(blocks[row["symbol"]])
@@ -713,6 +737,10 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
             y = snap(start_y + by + dy + half_h + GRID)
             page_h = max(page_h, y + half_h + GRID + MARGIN)
             body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
+            drawn.append((x, y, half_w, half_h))
+            refs.add(row["ref"])
+        if len(refs) > 1:
+            body += outline_sexp(drawn)
     return body, page_h
 
 
