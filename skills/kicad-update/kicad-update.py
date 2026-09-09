@@ -621,7 +621,7 @@ def pull_fields(con, library, nickname):
 
 # ---------------------------------------------------------------- the placing
 
-MARGIN = 5 * GRID
+MARGIN = 10 * GRID      # clear of the sheet frame, which sits ~10 mm in
 GAP = 5 * GRID          # between parts inside a box
 BOX_GAP = 12 * GRID     # between boxes on the page
 
