@@ -622,7 +622,8 @@ def pull_fields(con, library, nickname):
 # ---------------------------------------------------------------- the placing
 
 MARGIN = 5 * GRID
-GAP = 5 * GRID
+GAP = 5 * GRID          # between parts inside a box
+BOX_GAP = 12 * GRID     # between boxes on the page
 
 
 def size_of(row, blocks):
@@ -632,17 +633,17 @@ def size_of(row, blocks):
     return 2 * half_w, 2 * (half_h + GRID)
 
 
-def shelf(items, width):
+def shelf(items, width, gap=GAP):
     """Pack items left to right, wrapping at `width`. An item is
     (w, h, payload). Returns [(x, y, payload)], and the packed size."""
     placed, cur_x, cur_y, row_h, used_w = [], 0.0, 0.0, 0.0, 0.0
     for w, h, payload in items:
         if cur_x + w > width and cur_x > 0:
-            cur_x, cur_y, row_h = 0.0, snap(cur_y + row_h + GAP), 0.0
+            cur_x, cur_y, row_h = 0.0, snap(cur_y + row_h + gap), 0.0
         placed.append((cur_x, cur_y, payload))
-        cur_x = snap(cur_x + w + GAP)
+        cur_x = snap(cur_x + w + gap)
         row_h = max(row_h, h)
-        used_w = max(used_w, cur_x - GAP)
+        used_w = max(used_w, cur_x - gap)
     return placed, used_w, cur_y + row_h
 
 
@@ -725,7 +726,8 @@ def flow(rows, blocks, project, path_uuid, width, start_y):
     boxes = boxes_of(rows, blocks)
     boxes.sort(key=lambda b: -(b[0] * b[1]))
     items = [(w, h, flat) for w, h, flat in boxes]
-    placed, _, used_h = shelf(items, max(width - 2 * MARGIN, GRID))
+    placed, _, used_h = shelf(items, max(width - 2 * MARGIN, GRID),
+                              gap=BOX_GAP)
 
     body, page_h = "", start_y
     for bx, by, flat in placed:
