@@ -265,6 +265,146 @@ def body_size(spec):
     return rise(w / 2), rise(h / 2), sides, top
 
 
+def pin_spans(block):
+    """Every pin sub-block of a symbol block, as (start, end) pairs."""
+    spans = []
+    for m in re.finditer(r"\n\t\t\t\(pin ", block):
+        a, depth = m.start() + 1, 0
+        for k in range(a, len(block)):
+            if block[k] == "(":
+                depth += 1
+            elif block[k] == ")":
+                depth -= 1
+                if depth == 0:
+                    spans.append((a, k + 1))
+                    break
+    return spans
+
+
+def body_box(block):
+    """The body rectangle of a symbol block, as (x1, y1, x2, y2) and the
+    span it occupies. None when the symbol has no rectangle."""
+    m = re.search(r"\(rectangle\s*\n\s*\(start (-?[\d.]+) (-?[\d.]+)\)"
+                  r"\s*\n\s*\(end (-?[\d.]+) (-?[\d.]+)\)", block)
+    if m:
+        return [float(g) for g in m.groups()], m
+    # A symbol drawn as polylines and arcs - an amplifier triangle, say -
+    # carries no rectangle. Its body is then the extent of what is drawn,
+    # and there is nothing to resize afterwards.
+    pts = [(float(x), float(y))
+           for x, y in re.findall(r"\(xy (-?[\d.]+) (-?[\d.]+)\)", block)]
+    if not pts:
+        return None
+    xs = [x for x, _ in pts]
+    ys = [y for _, y in pts]
+    return [min(xs), max(ys), max(xs), min(ys)], None
+
+
+def edge_of(x, y, box):
+    """Which side of the body a pin enters by."""
+    x1, y1, x2, y2 = box
+    left, right = min(x1, x2), max(x1, x2)
+    bottom, top = min(y1, y2), max(y1, y2)
+    if x <= left:
+        return "L"
+    if x >= right:
+        return "R"
+    return "T" if y >= top else "B"
+
+
+def tidy_pins(block, pins):
+    """Two faults a donor carries into a copy, fixed on the way in.
+
+    A part whose pins are mostly no-connect gets a body stretched by pins
+    that carry nothing, so every no-connect goes to one point below the
+    lower left corner. A donor that stacked pins hands three signals one
+    coordinate once they are renamed, so pins sharing a point are stepped
+    apart along the edge they enter by. The body is then sized to what is
+    left."""
+    box = body_box(block)
+    if box is None:
+        return block
+    corners, rect = box
+    spans = pin_spans(block)
+    if not spans:
+        return block
+
+    dead = {str(p[0]) for p in (pins or [])
+            if str(p[1]).strip().upper() in ("N/C", "NC", "NO_CONNECT")}
+
+    read = []
+    for a, b in spans:
+        seg = block[a:b]
+        at = re.search(r"\(at (-?[\d.]+) (-?[\d.]+) (\d+)\)", seg)
+        num = re.search(r'\(number "([^"]*)"', seg)
+        nm = re.search(r'\(name "([^"]*)"', seg)
+        if not (at and num):
+            return block
+        read.append({"a": a, "b": b, "seg": seg, "num": num.group(1),
+                     "name": nm.group(1) if nm else "",
+                     "x": float(at.group(1)), "y": float(at.group(2)),
+                     "rot": int(at.group(3))})
+
+    for p in read:
+        if not dead and p["name"].strip().upper() in ("N/C", "NC"):
+            dead.add(p["num"])
+
+    live = [p for p in read if p["num"] not in dead]
+    x1, y1, x2, y2 = corners
+    left, right = min(x1, x2), max(x1, x2)
+    bottom, top = min(y1, y2), max(y1, y2)
+
+    # every no-connect on one point, below the lower left corner
+    for p in read:
+        if p["num"] in dead:
+            p["x"], p["y"], p["rot"] = left + GRID, bottom - PIN_LEN, 90
+
+    # pins sharing a coordinate step apart along their own edge
+    taken = set()
+    for p in sorted(live, key=lambda q: (q["x"], q["y"])):
+        p["edge"] = edge_of(p["x"], p["y"], corners)
+        step = GRID if p["edge"] in ("L", "R") else GRID
+        while (p["x"], p["y"]) in taken:
+            if p["edge"] in ("L", "R"):
+                p["y"] = snap(p["y"] - step)
+            else:
+                p["x"] = snap(p["x"] + step)
+        taken.add((p["x"], p["y"]))
+
+    # the body holds what is left
+    if live:
+        ys = [p["y"] for p in live if p["edge"] in ("L", "R")]
+        xs = [p["x"] for p in live if p["edge"] in ("T", "B")]
+        if ys:
+            bottom = min(bottom, min(ys) - GRID)
+            top = max(top, max(ys) + GRID)
+        if xs:
+            left = min(left, min(xs) - GRID)
+            right = max(right, max(xs) + GRID)
+
+    out, last = [], 0
+    for p in sorted(read, key=lambda q: q["a"]):
+        seg = re.sub(r"\(at -?[\d.]+ -?[\d.]+ \d+\)",
+                     f"(at {p['x']} {p['y']} {p['rot']})", p["seg"], count=1)
+        out.append(block[last:p["a"]])
+        out.append(seg)
+        last = p["b"]
+    out.append(block[last:])
+    done = "".join(out)
+
+    if rect is None:
+        return done
+    # The pins were rewritten above, so the rectangle's offsets in the
+    # original block no longer hold. Find it again in what we have now.
+    again = re.search(r"\(rectangle\s*\n\s*\(start -?[\d.]+ -?[\d.]+\)"
+                      r"\s*\n\s*\(end -?[\d.]+ -?[\d.]+\)", done)
+    if not again:
+        return done
+    new_rect = (f"(rectangle\n\t\t\t\t(start {left} {top})"
+                f"\n\t\t\t\t(end {right} {bottom})")
+    return done[:again.start()] + new_rect + done[again.end():]
+
+
 def build_symbol(spec):
     """Lay the pins out so the symbol reads like the package drawing: the
     left side runs down in the order given, the right side runs up, and the
@@ -367,6 +507,33 @@ def try_read(board, ipn, pname):
     return pins
 
 
+def tidy_in_library(library, name, pins):
+    """Tidy a symbol already written into the project library. Returns True
+    when the block changed."""
+    src = library.read_text()
+    needle = f'(symbol "{name}"'
+    start = src.find(needle)
+    if start < 0:
+        return False
+    depth = 0
+    for i in range(start, len(src)):
+        if src[i] == "(":
+            depth += 1
+        elif src[i] == ")":
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    else:
+        return False
+    block = src[start:end]
+    fixed = tidy_pins(block, pins)
+    if fixed == block:
+        return False
+    library.write_text(src[:start] + fixed + src[end:])
+    return True
+
+
 def one(con, board, ipn, nickname, library, args):
     ipn, description, symbol, source, pname = part_row(con, ipn)
     label = pname or ipn
@@ -400,6 +567,7 @@ def one(con, board, ipn, nickname, library, args):
         if not written:
             raise Bad(f"{ipn}: --from refused - "
                       + out.strip().replace("\n", "; "))
+        tidy_in_library(library, written.split(":", 1)[-1], pins)
         write_fields(con, ipn, written, letter, source)
         push_symbol_fields(con, board, ipn, written)
         print(f"{ipn}  {written}  {letter}  copied from {take}"
@@ -409,6 +577,7 @@ def one(con, board, ipn, nickname, library, args):
     written, _ = (None, "") if args.draw else try_copy(board, label, hint,
                                                        args.lib, pins)
     if written:
+        tidy_in_library(library, written.split(":", 1)[-1], pins)
         write_fields(con, ipn, written, "s", source)
         push_symbol_fields(con, board, ipn, written)
         print(f"{ipn}  {written}  s  copied"
@@ -425,7 +594,7 @@ def one(con, board, ipn, nickname, library, args):
     spec = {"name": label, "reference": prefix_of(con, ipn), "pins": pins,
             "description": description or "",
             "datasheet": datasheet_of(con, ipn)}
-    merge(library, label, build_symbol(spec), True)
+    merge(library, label, tidy_pins(build_symbol(spec), pins), True)
     write_fields(con, ipn, f"{nickname}:{label}", "h", source)
     push_symbol_fields(con, board, ipn, f"{nickname}:{label}")
     print(f"{ipn}  {nickname}:{label}  h  drawn, {len(pins)} pins")
