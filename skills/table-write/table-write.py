@@ -270,21 +270,19 @@ def price(con, args):
             raise Bad(f"--break wants QTY:PRICE, got '{token}'")
     if not breaks:
         raise Bad("no --break given")
-    pkg = args.packaging or ""
     for qty, unit in sorted(breaks):
         con.execute(
-            "insert into price_table (ipn, vendor, vendor_pn, packaging,"
-            " break_qty, unit_price, stock, checked) values (?,?,?,?,?,?,?,?)"
-            " on conflict(ipn, vendor, packaging, break_qty) do update set"
-            " vendor_pn = excluded.vendor_pn,"
+            "insert into price_table (ipn, vendor, vendor_pn,"
+            " break_qty, unit_price, stock, checked) values (?,?,?,?,?,?,?)"
+            " on conflict(ipn, vendor, vendor_pn, break_qty) do update set"
             " unit_price = excluded.unit_price,"
             " stock = excluded.stock,"
             " checked = excluded.checked",
-            (args.ipn, args.vendor, args.vendor_pn, pkg, qty, unit,
+            (args.ipn, args.vendor, args.vendor_pn, qty, unit,
              args.stock, args.checked))
     con.commit()
-    print(f"{args.ipn}  {args.vendor}"
-          f"{' ' + pkg if pkg else ''}: {len(breaks)} breaks recorded")
+    print(f"{args.ipn}  {args.vendor} {args.vendor_pn}:"
+          f" {len(breaks)} breaks recorded")
 
 
 def show(con, args):
@@ -318,12 +316,12 @@ def show(con, args):
             print(f"    name: {nm or '—'}  mpn: {mp or '—'}  "
                   f"manufacturer: {mf or '—'}")
             print(f"    datasheet: {ds or '—'}")
-            for vend, vpn, pkg, q, up, st, ck in con.execute(
-                    "select vendor, vendor_pn, packaging, break_qty,"
+            for vend, vpn, q, up, st, ck in con.execute(
+                    "select vendor, vendor_pn, break_qty,"
                     " unit_price, stock, checked from price_table"
-                    " where ipn = ? order by vendor, packaging, break_qty",
+                    " where ipn = ? order by vendor, vendor_pn, break_qty",
                     (ipn,)):
-                print(f"    price: {vend} {vpn or '—'} {pkg or '—'} "
+                print(f"    price: {vend} {vpn} "
                       f"{q}+ {up} stock {st if st is not None else '—'}"
                       f" {ck or '—'}")
 
@@ -376,8 +374,7 @@ def main(argv):
     v = sub.add_parser("price", help="record a vendor price survey")
     v.add_argument("ipn")
     v.add_argument("--vendor", required=True)
-    v.add_argument("--vendor-pn", dest="vendor_pn")
-    v.add_argument("--packaging", help="cut tape, reel, strip, bulk")
+    v.add_argument("--vendor-pn", dest="vendor_pn", required=True)
     v.add_argument("--stock", type=int)
     v.add_argument("--checked", help="date the survey was taken")
     v.add_argument("--break", dest="brk", action="append", default=[],

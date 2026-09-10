@@ -144,18 +144,17 @@
 |---|---|---|---|---|
 | 1 | `ipn` | TEXT | Key | |
 | 2 | `vendor` | TEXT | Key | |
-| 3 | `vendor_pn` | TEXT | | Yes |
-| 4 | `packaging` | TEXT | Key | |
-| 5 | `break_qty` | INTEGER | Key | |
-| 6 | `unit_price` | REAL | | Yes |
-| 7 | `stock` | INTEGER | | Yes |
-| 8 | `checked` | TEXT | | Yes |
+| 3 | `vendor_pn` | TEXT | Key | |
+| 4 | `break_qty` | INTEGER | Key | |
+| 5 | `unit_price` | REAL | | Yes |
+| 6 | `stock` | INTEGER | | Yes |
+| 7 | `checked` | TEXT | | Yes |
 
-- One row per vendor break. The key is the part, the vendor, the packaging
-  and the break, so a re-survey overwrites the rung it re-quotes and leaves
-  the rest.
-- `packaging` separates the ladders a vendor quotes side by side — cut tape,
-  reel, strip, bulk. Empty when the vendor quotes one.
+- One row per vendor break. The key is the part, the vendor, the vendor
+  part number and the break, so a re-survey overwrites the rung it re-quotes
+  and leaves the rest.
+- A vendor that quotes two ladders side by side, cut tape and reel, gives
+  each its own vendor part number. That is what separates them.
 - `checked` dates the survey. A price with no date is not a price.
 - Quantity per board is not stored. It is `ref_table` count, and units are
   that count times the number of boards.

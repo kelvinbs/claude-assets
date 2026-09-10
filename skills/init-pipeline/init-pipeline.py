@@ -76,13 +76,12 @@ SCHEMA = {
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
             "vendor        TEXT NOT NULL",
-            "vendor_pn     TEXT",
-            "packaging     TEXT NOT NULL DEFAULT ''",
+            "vendor_pn     TEXT NOT NULL",
             "break_qty     INTEGER NOT NULL",
             "unit_price    REAL",
             "stock         INTEGER",
             "checked       TEXT",
-            "PRIMARY KEY (ipn, vendor, packaging, break_qty)",
+            "PRIMARY KEY (ipn, vendor, vendor_pn, break_qty)",
         ),
     },
 }
