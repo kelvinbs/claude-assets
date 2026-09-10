@@ -108,6 +108,11 @@
 | 9 | `manufacturer` | TEXT | | Yes |
 | 10 | `datasheet` | TEXT | | Yes |
 | 11 | `checked` | TEXT | | |
+| 12 | `pinout_checked` | TEXT | | |
+
+- `checked` is the User's sign-off on the part. `pinout_checked` is the
+  User's mark that the part file's pins were read against the datasheet.
+  Both default to `no`. The tool never sets either.
 
 **T2.4 — `ref_table`**
 
@@ -229,6 +234,9 @@
 | 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref` |
 | 11 | `room` | the instance | `ref_table.room` |
 | 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
+
+- `pinout_checked` stays in the record. It is not a project field and does
+  not reach the library or the sheets.
 
 - `parent` and `room` are per-instance and never reach the library
   symbol. They say what a part serves and which sub-circuit it sits in, so

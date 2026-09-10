@@ -59,6 +59,7 @@ SCHEMA = {
             "manufacturer  TEXT",
             "datasheet     TEXT",
             "checked       TEXT NOT NULL DEFAULT 'no'",
+            "pinout_checked TEXT NOT NULL DEFAULT 'no'",
         ),
         "ref_table": (
             "uuid          TEXT PRIMARY KEY NOT NULL",
