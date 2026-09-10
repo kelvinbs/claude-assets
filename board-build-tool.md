@@ -107,6 +107,7 @@
 | 8 | `mpn` | TEXT | | Yes |
 | 9 | `manufacturer` | TEXT | | Yes |
 | 10 | `datasheet` | TEXT | | Yes |
+| 11 | `checked` | TEXT | | |
 
 **T2.4 — `ref_table`**
 
@@ -228,6 +229,7 @@
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 | 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref` |
 | 11 | `room` | the instance | `ref_table.room` |
+| 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 
 - `parent` and `room` are per-instance and never reach the library
   symbol. They say what a part serves and which sub-circuit it sits in, so

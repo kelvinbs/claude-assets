@@ -128,10 +128,10 @@ def instances(con):
     own field, and that is what the record keys on."""
     rows = []
     for uuid_, ipn, ref, page, room, unit, symbol, footprint, description, \
-            datasheet, manufacturer, mpn, note in con.execute(
+            datasheet, manufacturer, mpn, note, checked in con.execute(
             "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
-            "       p.manufacturer, p.mpn, p.note "
+            "       p.manufacturer, p.mpn, p.note, p.checked "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "order by r.ipn, r.ref, r.unit"):
         rows.append({
@@ -142,7 +142,7 @@ def instances(con):
             "value": value_of(con, ipn, description),
             "description": description or "", "datasheet": datasheet or "",
             "manufacturer": manufacturer or "", "mpn": mpn or "",
-            "note": note or "",
+            "note": note or "", "checked": checked or "no",
             "parent": "", "room_field": (room or "").strip(),
         })
     # T2.11: `parent` reaches the sheet as the parent instance's reference,
@@ -218,6 +218,8 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right):
         + property_sexp("parent", row["parent"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("room", row["room_field"], f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
+        + property_sexp("checked", row["checked"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + "\t\t(instances\n"
         f"\t\t\t(project \"{project}\"\n"
@@ -440,7 +442,7 @@ def next_ref_free(con, prefix, taken):
 # ------------------------------------------------- the library fields (T2.11)
 
 FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
-          "MPN", "note", "ipn"]
+          "MPN", "note", "ipn", "checked"]
 
 PULLED = {"Description": ("parts_table", "description"),
           "Footprint": ("parts_table", "footprint"),
@@ -454,9 +456,9 @@ def field_rows(con, nickname):
     library, keyed by the symbol name."""
     out = {}
     for ipn, description, footprint, note, symbol, mpn, manufacturer, \
-            datasheet in con.execute(
+            datasheet, checked in con.execute(
             "select ipn, description, footprint, note, symbol, mpn, "
-            "manufacturer, datasheet from parts_table "
+            "manufacturer, datasheet, checked from parts_table "
             "where symbol is not null"):
         nick, _, name = symbol.partition(":")
         if nick != nickname:
@@ -468,6 +470,7 @@ def field_rows(con, nickname):
                      "Datasheet": datasheet or "",
                      "Manufacturer": manufacturer or "",
                      "MPN": mpn or "",
+                     "checked": checked or "no",
                      "note": note or ""}
     return out
 
@@ -543,7 +546,7 @@ INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
                    ("Description", "description"), ("Datasheet", "datasheet"),
                    ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
                    ("note", "note"), ("parent", "parent"),
-                   ("room", "room_field"))
+                   ("room", "room_field"), ("checked", "checked"))
 
 
 def push_instances(con, board, project, root_src):
