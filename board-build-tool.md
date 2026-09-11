@@ -71,7 +71,7 @@
 | # | File | Holds |
 |---|---|---|
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table` |
-| 2 | `lib/<project>.kicad_sym` | per IPN: `Value` — the MPN, else description — `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
+| 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
 - `board.db` is master. Part fields push to the library symbol; instance
@@ -97,18 +97,19 @@
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| 1 | `ipn` | TEXT | Key | |
-| 2 | `description` | TEXT | | Yes |
-| 3 | `symbol` | TEXT | | Yes |
-| 4 | `footprint` | TEXT | | Yes |
-| 5 | `source` | TEXT | | Yes |
-| 6 | `note` | TEXT | | Yes |
-| 7 | `name` | TEXT | Unique | Yes |
-| 8 | `mpn` | TEXT | | Yes |
-| 9 | `manufacturer` | TEXT | | Yes |
-| 10 | `datasheet` | TEXT | | Yes |
-| 11 | `checked` | TEXT | | |
-| 12 | `pinout_checked` | TEXT | | |
+| 1 | `ipn` | TEXT | Key |  |
+| 2 | `description` | TEXT |  | Yes |
+| 3 | `value` | TEXT |  | Yes |
+| 4 | `symbol` | TEXT |  | Yes |
+| 5 | `footprint` | TEXT |  | Yes |
+| 6 | `source` | TEXT |  | Yes |
+| 7 | `note` | TEXT |  | Yes |
+| 8 | `name` | TEXT | Unique | Yes |
+| 9 | `mpn` | TEXT |  | Yes |
+| 10 | `manufacturer` | TEXT |  | Yes |
+| 11 | `datasheet` | TEXT |  | Yes |
+| 12 | `checked` | TEXT |  |  |
+| 13 | `pinout_checked` | TEXT |  |  |
 
 - `checked` is the User's sign-off on the part. `pinout_checked` is the
   User's mark that the part file's pins were read against the datasheet.
@@ -223,7 +224,7 @@
 | # | Field | Lives on | Record column |
 |---|---|---|---|
 | 1 | `Reference` | the instance | `ref_table.ref` |
-| 2 | `Value` | the library symbol | `parts_table.mpn`, else `parts_table.description` |
+| 2 | `Value` | the library symbol | `parts_table.value` |
 | 3 | `Footprint` | the library symbol | `parts_table.footprint` |
 | 4 | `Description` | the library symbol | `parts_table.description` |
 | 5 | `Datasheet` | the library symbol | `parts_table.datasheet` |
@@ -241,8 +242,8 @@
 - `parent` and `room` are per-instance and never reach the library
   symbol. They say what a part serves and which sub-circuit it sits in, so
   an engineer reads the organisation off the page.
-- `Value` shows the part the board was designed against — what a person
-  reads on a sheet. The IPN is the key and travels in its own field.
+- `Value` is `parts_table.value`, what a person reads on a sheet. The IPN
+  is the key and travels in its own field.
 
 ### 2.8 — Where a thing is placed
 

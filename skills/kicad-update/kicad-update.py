@@ -112,20 +112,17 @@ def connect(board):
 
 
 def value_of(con, ipn, description):
-    """T2.11: the blank-rank MPN, else the description, else the IPN -
-    Value is what a person reads on a sheet."""
-    mpn = con.execute("select mpn from parts_table where ipn = ?",
-                      (ipn,)).fetchone()
-    return (mpn and mpn[0]) or description or ipn
+    """T2.11: parts_table.value, else the IPN."""
+    value = con.execute("select value from parts_table where ipn = ?",
+                        (ipn,)).fetchone()
+    return (value and value[0]) or ipn
 
 
 def instances(con):
     """One row per thing to draw, with everything the sheet needs on it.
 
-    `Value` shows the part number the board was designed against — the
-    blank-rank row of T2.6 — and falls back to the description for a part
-    that has no part number yet. The IPN is on the row either way, in its
-    own field, and that is what the record keys on."""
+    `Value` is parts_table.value. The IPN is on the row in its own field,
+    and that is what the record keys on."""
     rows = []
     for uuid_, ipn, ref, page, room, unit, symbol, footprint, description, \
             datasheet, manufacturer, mpn, note, checked in con.execute(
@@ -471,16 +468,16 @@ def field_rows(con, nickname):
     """One dict of T2.11 fields per part whose symbol is in this project's
     library, keyed by the symbol name."""
     out = {}
-    for ipn, description, footprint, note, symbol, mpn, manufacturer, \
-            datasheet, checked in con.execute(
-            "select ipn, description, footprint, note, symbol, mpn, "
+    for ipn, description, value, footprint, note, symbol, mpn, \
+            manufacturer, datasheet, checked in con.execute(
+            "select ipn, description, value, footprint, note, symbol, mpn, "
             "manufacturer, datasheet, checked from parts_table "
             "where symbol is not null"):
         nick, _, name = symbol.partition(":")
         if nick != nickname:
             continue
         out[name] = {"ipn": ipn,
-                     "Value": mpn or description or ipn,
+                     "Value": value or ipn,
                      "Footprint": footprint or "",
                      "Description": description or "",
                      "Datasheet": datasheet or "",

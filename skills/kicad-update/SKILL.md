@@ -75,7 +75,7 @@ new parts arrive in.
 | Field | Takes |
 |---|---|
 | `Reference` | `ref_table.ref` |
-| `Value` | the part's `mpn`, or the description when the part has no part number yet |
+| `Value` | `parts_table.value` |
 | `Footprint` | `parts_table.footprint`, hidden |
 | `ipn` | `parts_table.ipn`, hidden. The key back to the record, T2.11 |
 

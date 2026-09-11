@@ -50,6 +50,7 @@ SCHEMA = {
         "parts_table": (
             "ipn           TEXT PRIMARY KEY NOT NULL",
             "description   TEXT",
+            "value         TEXT",
             "symbol        TEXT",
             "footprint     TEXT",
             "source        TEXT",
