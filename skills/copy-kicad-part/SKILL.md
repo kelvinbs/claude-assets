@@ -30,10 +30,12 @@ is the caller's to measure.
 `<hint>` is a part number, a description, or both. `--ipn` names the copy;
 without it the copy is named after the hint.
 
-It does not read `board.db` and does not write it. `symbol-draw` calls it,
-and `symbol-draw` owns the record.
+It does not read `board.db` and does not write it. The session performing
+the stage runs it, then writes `parts_table.symbol` and `source` with
+`table-write`.
 
-Drawing a symbol is the last resort. This is asked first.
+Nothing is drawn. A symbol or footprint the libraries do not hold is
+reported as null and the part waits for the User.
 
 ## Show, choose, take
 
@@ -67,7 +69,7 @@ enclosure, a host the board plugs into — is null.
 
 The symbol, under the name given, into `lib/<nickname>.kicad_sym`. Its
 `Value` is that name, its `Footprint` is emptied — the package belongs to
-`footprint-draw` — and an `origin` property names the library and symbol it
+the footprint copy, section Footprints — and an `origin` property names the library and symbol it
 came from. On a take the part file `parts/<IPN>-<name>.json`, found by
 the name, gains `symbol_donor` — or `footprint_donor` — naming the same.
 No part file, nothing written there.

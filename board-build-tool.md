@@ -28,13 +28,13 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the stages using the nine skills — T5.1.
+- The LLM performs the stages using the seven skills — T5.1.
 
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
   - The stages — T4.1
-  - The nine skills — T5.1
+  - The seven skills — T5.1
   - The four tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
 - The tool is stateless.
@@ -329,9 +329,9 @@
 |---|---|---|---|
 | 1 | `init-pipeline` | `init-pipeline` | — |
 | 2 | Update parts | `table-write` | — |
-| 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read`<br>`symbol-draw` | — |
+| 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
-| 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`footprint-draw` | — |
+| 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read` | — |
 | 6 | Update PCB | `kicad-update` | Routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
@@ -410,8 +410,6 @@ One skill, one run — T4.2.
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 6 | `symbol-draw` | Copy or draw a symbol into `lib/`, fields written from the record | KiCad libraries, pins from `datasheet-read`, `board.db` | `lib/*.kicad_sym`<br>`parts_table` — `symbol`, `source` |
-| 7 | `footprint-draw` | Copy or draw a footprint into `lib/` | KiCad libraries, package from `datasheet-read` | `lib/*.pretty`, `lib/3d/`<br>`parts_table` — `footprint`, `source` |
 | 8 | `table-write` | Create or modify part; record a vendor price survey | Record row, vendor quote | `board.db` — `parts_table`, `ref_table`, `price_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 

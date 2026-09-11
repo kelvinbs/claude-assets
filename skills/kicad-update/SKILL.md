@@ -38,7 +38,7 @@ the parts on the page so there is something to wire.
 An instance of `ref_table` that carries a `page`, whose part carries a
 `symbol`. Everything else is reported and left:
 
-- a page and no symbol — `symbol-draw` has not reached it yet
+- a page and no symbol — `copy-kicad-part` has not reached it yet
 - no page — it belongs to no sheet, and the run says which
 
 Both are counted at the end of the run. Neither stops it.
@@ -158,7 +158,7 @@ A page that already exists keeps the size it has.
 - A project folder with no `board.db`, or one missing a table
 - An empty `project_table` — the record names the project (T2.13)
 - A `symbol` naming a library that is not this project's — section 2 does
-  not allow a sheet to point outside the repository, and `symbol-draw`
+  not allow a sheet to point outside the repository, and `copy-kicad-part`
   copies the object in before it is placed
 - A `symbol` the project library does not hold
 - Nothing to place at all

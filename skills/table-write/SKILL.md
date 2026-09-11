@@ -96,9 +96,10 @@ alone, and its source, symbol and footprint as well.
 
 ## The library fields
 
-`symbol`, `footprint` and `source` are written by `symbol-draw` and
-`footprint-draw` in the Update library stages, after the object is copied
-into `lib/` and given the project nickname. This tool leaves them alone.
+`symbol`, `footprint` and `source` are written in the Update library
+stages, after `copy-kicad-part` has copied the object into `lib/` under the
+project nickname. `set --footprint` writes the footprint. `symbol` and
+`source` have no `set` option; they are written to `board.db` directly.
 
 ## What it refuses
 
