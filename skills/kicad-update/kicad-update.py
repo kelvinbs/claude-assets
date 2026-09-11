@@ -407,6 +407,22 @@ def set_reference(block, ref):
                   block)
 
 
+def root_sheets(root_src):
+    """Sheetname -> (sheet uuid, page number), from the root's sheet symbols.
+    The uuid on the root is the one the pages must address, whatever
+    uid() would compute today - a project renamed keeps its sheets."""
+    out = {}
+    for m in re.finditer(r'\(sheet\n(.*?)\n\t\)\n', root_src or "", re.S):
+        block = m.group(1)
+        name = re.search(r'\(property "Sheetname" "([^"]*)"', block)
+        uuid_ = re.search(r'\(uuid "([0-9a-f-]{36})"\)', block)
+        page = re.search(r'\(page "(\d+)"\)', block)
+        if name and uuid_:
+            out[name.group(1)] = (uuid_.group(1),
+                                  int(page.group(1)) if page else 0)
+    return out
+
+
 def page_names(root_src):
     """Sheetfile to Sheetname, from the root's sheet symbols."""
     names = re.findall(r'\(property "Sheetname" "([^"]*)"', root_src)
@@ -835,10 +851,10 @@ def merge_sheet(src, blocks, needed, body):
     return src[:close] + body + src[close:]
 
 
-def write_page(board, project, root, page, rows, blocks, fixed):
+def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid):
     name = f"{project}-{slug(page)}.kicad_sch"
     path = Path(board) / name
-    path_uuid = f"/{root}/{uid(project, 'sheet', page)}"
+    path_uuid = f"/{root}/{sheet_uuid}"
     needed = {r["symbol"] for r in rows}
 
     if path.exists():
@@ -871,12 +887,16 @@ def write_root(board, project, root, pages, fixed):
     A page already on it keeps its symbol; a new page is added below."""
     path = Path(board) / f"{project}.kicad_sch"
     src = path.read_text() if path.exists() else None
-    already = set(re.findall(r'\(property "Sheetname" "([^"]*)"', src or ""))
+    sheets = root_sheets(src)
+    already = set(sheets)
     fresh = [p for p in pages if p not in already]
+    last = max([n for _, n in sheets.values()] + [1])
 
     def lay(width, height=None, start=5 * GRID, only=pages):
         body, y = "", start
-        for n, page in enumerate(only, start=2):
+        for page in only:
+            n = (pages.index(page) + 2 if src is None
+                 else last + 1 + fresh.index(page))
             body += sheet_sexp(project, root, page,
                                f"{project}-{slug(page)}.kicad_sch",
                                n, 5 * GRID, y, 25 * GRID, 10 * GRID)
@@ -884,7 +904,7 @@ def write_root(board, project, root, pages, fixed):
         return body, y + 5 * GRID, 35 * GRID
 
     paths = "".join(
-        f"\t\t(path \"/{root}/{uid(project, 'sheet', page)}\"\n"
+        f"\t\t(path \"/{root}/{sheets[page][0] if page in sheets else uid(project, 'sheet', page)}\"\n"
         f"\t\t\t(page \"{n}\")\n\t\t)\n"
         for n, page in enumerate(pages, start=2))
 
@@ -906,8 +926,9 @@ def write_root(board, project, root, pages, fixed):
         return len(pages)
 
     if fresh:
-        body, _ = lay(PAPERS[paper_of(src)][0],
-                      snap(lowest_used(src) + 14 * GRID), fresh)
+        body, _, _ = lay(PAPERS[paper_of(src)][0],
+                         start=snap(lowest_used(src) + 14 * GRID),
+                         only=fresh)
         close = src.rstrip().rfind(")")
         src = src[:close] + body + src[close:]
     src = re.sub(r"\(sheet_instances\n(?:.*?\n)*?\t\)\n",
@@ -1244,10 +1265,13 @@ def main(argv):
     print(f"{project}.kicad_sch  {added} page(s) added, {len(pages)} in all")
 
     touched = set(refreshed)
+    sheets = root_sheets((board / f"{project}.kicad_sch").read_text())
     for page in pages:
         on_page = [r for r in drawable if r["page"] == page]
+        if page not in sheets:
+            raise Bad(f"root sheet has no sheet symbol for page {page!r}")
         name, new, kept = write_page(board, project, root, page, on_page,
-                                     blocks, None)
+                                     blocks, None, sheets[page][0])
         touched.discard(name)
         normalize(board / name)
         came_in = sum(1 for _, f, _, _ in entered if f == name)
