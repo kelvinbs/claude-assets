@@ -458,6 +458,7 @@ FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
           "MPN", "note", "ipn", "checked"]
 
 PULLED = {"Description": ("parts_table", "description"),
+          "Value": ("parts_table", "value"),
           "Footprint": ("parts_table", "footprint"),
           "note": ("parts_table", "note"),
           "Manufacturer": ("parts_table", "manufacturer"),
@@ -602,9 +603,9 @@ def push_instances(con, board, project, root_src):
 
 
 def pull_fields(con, library, nickname):
-    """Library to record: Description, Footprint, note to `parts_table`;
-    Manufacturer, Datasheet to the blank-rank MPN. MPN and Value are
-    reported on mismatch, never written."""
+    """Library to record: Description, Value, Footprint, note, Manufacturer,
+    Datasheet to `parts_table`. MPN is reported on mismatch, never
+    written."""
     src = library.read_text()
     want = field_rows(con, nickname)
     blocks = lib_blocks(src)

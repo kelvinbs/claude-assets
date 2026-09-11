@@ -44,7 +44,7 @@ free number for its class's reference prefix and a fresh UUID.
 `--description` is required. A part with no description is a row nobody can
 read six months later.
 
-`--note` is the other `parts_table` field it writes.
+`--value` and `--note` are the other `parts_table` fields it writes.
 
 `--parent` names the instance this one serves — the op-amp instance a
 feedback resistor closes the loop around. Parenthood is a property of use,

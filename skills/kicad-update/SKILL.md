@@ -24,7 +24,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --
 |---|---|---|
 | place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
 | `--push` | record to library and sheets | rewrites every library symbol's fields, and every placed instance's, from the record — T2.11. Graphics and positions untouched |
-| `--pull` | library to record | reads library fields back onto the part: `Description`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` and `Value` are reported on mismatch, never written — `Value` is the part's MPN, else the description |
+| `--pull` | library to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
 then `--pull`. Claude's is `table-write`, then `--push`. Instances take
@@ -78,10 +78,6 @@ new parts arrive in.
 | `Value` | `parts_table.value` |
 | `Footprint` | `parts_table.footprint`, hidden |
 | `ipn` | `parts_table.ipn`, hidden. The key back to the record, T2.11 |
-
-`Value` shows the part the board was designed against, because that is what
-a person reads on a sheet. The IPN is the key and travels in its own field,
-where nothing about how the part is bought can disturb it.
 
 ## Re-entry
 
