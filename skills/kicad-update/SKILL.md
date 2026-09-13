@@ -22,8 +22,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --
 
 | Verb | Direction | Does |
 |---|---|---|
-| place, the default | record to sheets | draws missing instances, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--push` | record to library and sheets | rewrites every library symbol's fields, and every placed instance's, from the record — T2.11. Graphics and positions untouched |
+| place, the default | record to sheets | draws missing instances with a global label on every pin `net_table` names, enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
+| `--push` | record to library and sheets | rewrites every library symbol's fields, and every placed instance's, from the record — T2.11. Then the labels: every global label on any pin end of any record instance is deleted and every `net_table` row written back as one. Graphics, positions and labels elsewhere untouched |
 | `--pull` | library to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's |
 
 The User's UI for part data is the Symbol Editor: edit the field there,

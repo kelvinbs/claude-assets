@@ -85,6 +85,15 @@ SCHEMA = {
             "checked       TEXT",
             "PRIMARY KEY (ipn, vendor, vendor_pn, break_qty)",
         ),
+        # T2.6a — the nets. One row per pin that carries a net name; the
+        # sheet gets a global label at that pin from it
+        "net_table": (
+            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
+            " ON DELETE RESTRICT",
+            "pin           TEXT NOT NULL",
+            "net           TEXT NOT NULL",
+            "PRIMARY KEY (ipn, pin)",
+        ),
     },
 }
 

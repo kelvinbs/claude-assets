@@ -227,6 +227,71 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right):
     )
 
 
+LABEL_ANGLE = {0: 180, 180: 0, 90: 270, 270: 90}   # pin rotation -> label
+
+
+def nets_of(con):
+    """net_table as {ipn: {pin: net}}."""
+    out = {}
+    for ipn, pin, net in con.execute("select ipn, pin, net from net_table"):
+        out.setdefault(ipn, {})[pin] = net
+    return out
+
+
+def pin_points(block, unit):
+    """(number, x, y, rotation) of every pin the instance shows: the unit's
+    own sub-symbols and the shared unit 0. Library coordinates, y up."""
+    out = []
+    for m in re.finditer(r'\(symbol "[^"]*_(\d+)_\d+"\n((?:.*\n)*?)\t\t\)',
+                         block):
+        u = int(m.group(1))
+        if u not in (0, unit):
+            continue
+        for p in re.finditer(r'\(pin \w+ \w+\n\s*\(at (-?[\d.]+) (-?[\d.]+)'
+                             r' (-?[\d.]+)\)(?:.*\n)*?\s*\(number "([^"]*)"',
+                             m.group(2)):
+            out.append((p.group(4), float(p.group(1)), float(p.group(2)),
+                        int(float(p.group(3))) % 360))
+    return out
+
+
+def pin_ends(block, unit, x, y, rot):
+    """Sheet coordinates of every pin end of an instance placed at (x, y)
+    with rotation rot: {number: (X, Y, pin rotation on the sheet)}."""
+    out = {}
+    a = math.radians(rot)
+    for num, px, py, prot in pin_points(block, unit):
+        # library y is up, sheet y is down
+        dx, dy = px, -py
+        rx = dx * math.cos(a) - dy * math.sin(a)
+        ry = dx * math.sin(a) + dy * math.cos(a)
+        out[num] = (round(x + rx, 2), round(y + ry, 2), (prot - rot) % 360)
+    return out
+
+
+def label_sexp(net, x, y, angle):
+    return (
+        f"\t(global_label \"{esc(net)}\"\n"
+        "\t\t(shape passive)\n"
+        f"\t\t(at {x:.2f} {y:.2f} {angle})\n"
+        "\t\t(fields_autoplaced yes)\n"
+        f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
+        f"\t\t\t(justify {'right' if angle == 180 else 'left'})\n\t\t)\n"
+        f"\t\t(uuid \"{uid('label', net, f'{x:.2f}', f'{y:.2f}')}\")\n"
+        "\t)\n"
+    )
+
+
+def labels_sexp(row, block, x, y, rot, nets):
+    """Global labels for every pin of this instance that net_table names."""
+    pins = nets.get(row["ipn"]) or {}
+    if not pins:
+        return ""
+    ends = pin_ends(block, row.get("unit") or 1, x, y, rot)
+    return "".join(label_sexp(pins[n], *ends[n]) for n in sorted(pins)
+                   if n in ends)
+
+
 def sheet_sexp(project, root, name, filename, page_number, x, y, w, h):
     return (
         "\t(sheet\n"
@@ -602,6 +667,61 @@ def push_instances(con, board, project, root_src):
     return changed
 
 
+LABEL_RE = re.compile(r'\n\t\(global_label "(?:[^"\\]|\\.)*"\n(?:.*\n)*?\t\)')
+
+
+def push_labels(con, board, project, root_src):
+    """Record to sheets, the nets: every global label on any pin end of any
+    record instance is deleted, then every net_table row is written as a
+    label at its pin. Labels elsewhere on the page are not touched.
+    Returns {sheet file: labels written}."""
+    rows = {r["uuid"]: r for r in instances(con)}
+    nets = nets_of(con)
+    placed = read_pages(board, project, root_src)
+    by_file = {}
+    for u, (fname, page, sym) in placed.items():
+        if u in rows:
+            by_file.setdefault(fname, set()).add(u)
+    changed = {}
+    for fname, wanted in sorted(by_file.items()):
+        path = board / fname
+        before = src = path.read_text()
+        lib_ids = {rows[u]["symbol"] for u in wanted}
+        blocks = library_blocks(board, project, lib_ids)
+        ends, fresh = set(), ""
+        for start, end in symbol_blocks(src):
+            block = src[start:end]
+            sym = read_symbol(block)
+            u = sym["uuid"]
+            if u not in wanted:
+                continue
+            at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)', block)
+            x, y, rot = float(at.group(1)), float(at.group(2)), int(float(at.group(3)))
+            row = rows[u]
+            pe = pin_ends(blocks[row["symbol"]], sym["unit"], x, y, rot)
+            ends.update((px, py) for px, py, _ in pe.values())
+            pins = nets.get(row["ipn"]) or {}
+            fresh += "".join(label_sexp(pins[n], *pe[n]) for n in sorted(pins)
+                             if n in pe)
+        def keep(m):
+            at = re.search(r'\(at (-?[\d.]+) (-?[\d.]+)', m.group(0))
+            return (round(float(at.group(1)), 2), round(float(at.group(2)), 2)) not in ends
+        src = LABEL_RE.sub(lambda m: m.group(0) if keep(m) else "", src)
+        if fresh:
+            close = src.rstrip().rfind(")")
+            src = src[:close] + fresh + src[close:]
+        if src != before:
+            path.write_text(src)
+            run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                                  str(path)], capture_output=True, text=True)
+            if run.returncode != 0:
+                path.write_text(before)
+                raise Bad(f"kicad-cli could not normalize {path}: "
+                          + (run.stderr or run.stdout).strip())
+            changed[fname] = fresh.count("(global_label")
+    return changed
+
+
 def pull_fields(con, library, nickname):
     """Library to record: Description, Value, Footprint, note, Manufacturer,
     Datasheet to `parts_table`. MPN is reported on mismatch, never
@@ -762,7 +882,8 @@ def outline_sexp(drawn):
     )
 
 
-def flow(rows, blocks, project, path_uuid, width, start_y, height=None):
+def flow(rows, blocks, project, path_uuid, width, start_y, height=None,
+         nets=None):
     """Lay the sheet as boxes, not as text. A box is a parent and everything
     under it, packed roughly square and sized by its contents. Boxes then
     pack the page, largest first, and a box never splits across a wrap."""
@@ -783,6 +904,7 @@ def flow(rows, blocks, project, path_uuid, width, start_y, height=None):
             page_h = max(page_h, y + half_h + GRID + MARGIN)
             page_w = max(page_w, x + half_w + GRID + MARGIN)
             body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
+            body += labels_sexp(row, blocks[row["symbol"]], x, y, 0, nets or {})
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
@@ -849,7 +971,8 @@ def merge_sheet(src, blocks, needed, body):
     return src[:close] + body + src[close:]
 
 
-def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid):
+def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid,
+               nets=None):
     name = f"{project}-{slug(page)}.kicad_sch"
     path = Path(board) / name
     path_uuid = f"/{root}/{sheet_uuid}"
@@ -863,7 +986,7 @@ def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid):
         paper = paper_of(src)
         width, height = PAPERS.get(paper, PAPERS["A"])
         body, _, _ = flow(fresh, blocks, project, path_uuid, width,
-                          snap(lowest_used(src) + 10 * GRID), height)
+                          snap(lowest_used(src) + 10 * GRID), height, nets)
         path.write_text(merge_sheet(src, blocks, needed, body))
         return name, len(fresh), len(rows) - len(fresh)
 
@@ -872,7 +995,7 @@ def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid):
 
     def lay(width, height=None):
         return flow(rows, blocks, project, path_uuid, width, 5 * GRID,
-                    height)
+                    height, nets)
 
     paper, body = fit_paper(lay, fixed)
     path.write_text(new_sheet(project, uid(project, "file", page), paper,
@@ -1085,6 +1208,10 @@ def main(argv):
                                         root_path.read_text())
                 print(f"push  {sum(sheets.values())} instance(s) updated on "
                       f"{len(sheets)} sheet(s)")
+                labels = push_labels(con, board, project,
+                                     root_path.read_text())
+                print(f"push  {sum(labels.values())} label(s) written on "
+                      f"{len(labels)} sheet(s)")
             else:
                 applied, reported = pull_fields(con, library, project)
                 print(f"pull  {len(applied)} field(s) into the record")
@@ -1121,6 +1248,7 @@ def main(argv):
     con = connect(board)
     try:
         known = {r["uuid"] for r in instances(con)}
+        nets = nets_of(con)
         parts = {r[0] for r in con.execute("select ipn from parts_table")}
         refs = {r[0]: r[1] for r in con.execute(
             "select ref, uuid from ref_table where ref is not null")}
@@ -1269,7 +1397,7 @@ def main(argv):
         if page not in sheets:
             raise Bad(f"root sheet has no sheet symbol for page {page!r}")
         name, new, kept = write_page(board, project, root, page, on_page,
-                                     blocks, None, sheets[page][0])
+                                     blocks, None, sheets[page][0], nets)
         touched.discard(name)
         normalize(board / name)
         came_in = sum(1 for _, f, _, _ in entered if f == name)

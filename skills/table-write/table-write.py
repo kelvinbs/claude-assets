@@ -13,6 +13,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> parent <ref> --under <ref> | --none
     table-write.py <board-dir> drop   <ref>
     table-write.py <board-dir> price  <ipn> --vendor V --break QTY:PRICE ...
+    table-write.py <board-dir> net    <ipn> <pin> <name> | --none
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -285,6 +286,27 @@ def price(con, args):
           f" {len(breaks)} breaks recorded")
 
 
+def net(con, args):
+    """Name the net on one pin of a part, or clear it. Upsert on (ipn, pin).
+    The sheet takes a global label at that pin on the next place or push."""
+    part(con, args.ipn)
+    if args.none:
+        n = con.execute("delete from net_table where ipn = ? and pin = ?",
+                        (args.ipn, args.pin)).rowcount
+        con.commit()
+        print(f"{args.ipn}  pin {args.pin}: net cleared" if n
+              else f"{args.ipn}  pin {args.pin}: no net to clear")
+        return
+    if not args.name:
+        raise Bad("net wants a name, or --none")
+    con.execute(
+        "insert into net_table (ipn, pin, net) values (?,?,?)"
+        " on conflict(ipn, pin) do update set net = excluded.net",
+        (args.ipn, args.pin, args.name))
+    con.commit()
+    print(f"{args.ipn}  pin {args.pin}: {args.name}")
+
+
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
@@ -381,6 +403,13 @@ def main(argv):
                    metavar="QTY:PRICE", help="one vendor break. Repeatable")
     v.set_defaults(run=price)
 
+    n = sub.add_parser("net", help="name the net on one pin")
+    n.add_argument("ipn")
+    n.add_argument("pin")
+    n.add_argument("name", nargs="?")
+    n.add_argument("--none", action="store_true", help="clear the net")
+    n.set_defaults(run=net)
+
     w = sub.add_parser("show", help="print parts and their instances")
     w.add_argument("ipn", nargs="?")
     w.set_defaults(run=show)
@@ -391,7 +420,7 @@ def main(argv):
         if getattr(args, "ipn", None):
             # n0.3: a name or an approved MPN serves anywhere an IPN does
             args.ipn = resolve(con, args.ipn)
-        if args.verb in ("place", "set", "price") \
+        if args.verb in ("place", "set", "price", "net") \
                 and not IPN.match(args.ipn):
             raise Bad(f"'{args.ipn}' names no part")
         args.run(con, args)

@@ -165,6 +165,21 @@
 - Quantity per board is not stored. It is `ref_table` count, and units are
   that count times the number of boards.
 
+**T2.6a — `net_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `ipn` | TEXT | Key | |
+| 2 | `pin` | TEXT | Key | |
+| 3 | `net` | TEXT | | |
+
+- One row per pin that carries a net name. A pin with no row carries no
+  label.
+- `kicad-update` writes a global label at the pin end from it, on place
+  and on push. Push deletes every label on every pin end of every record
+  instance first, so a moved or cleared net leaves nothing behind.
+- A label typed by hand on a record part's pin lasts until the next push.
+
 ### 2.5 — The relations
 
 **T2.9 — The relations**
@@ -174,6 +189,7 @@
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
 | 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
+| 4 | `net_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 
 - All are declared foreign keys.
 - Every skill sets `PRAGMA foreign_keys = ON`.
@@ -234,6 +250,7 @@
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 | 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref` |
 | 11 | `room` | the instance | `ref_table.room` |
+| 12 | global label | the instance's pin end | `net_table.net` |
 | 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 
 - `pinout_checked` stays in the record. It is not a project field and does
