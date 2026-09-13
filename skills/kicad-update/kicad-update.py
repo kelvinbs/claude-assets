@@ -259,10 +259,8 @@ def pin_ends(block, unit, x, y, rot):
     out = {}
     a = math.radians(rot)
     for num, px, py, prot, plen in pin_points(block, unit):
-        # the free end: length back along the pin from `at`, which is
-        # the body end in these symbols. Library y is up, sheet y is down
-        px -= plen * math.cos(math.radians(prot))
-        py -= plen * math.sin(math.radians(prot))
+        # `at` is the connection point, the free end. Library y is up,
+        # sheet y is down
         dx, dy = px, -py
         rx = dx * math.cos(a) - dy * math.sin(a)
         ry = dx * math.sin(a) + dy * math.cos(a)
