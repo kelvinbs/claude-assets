@@ -236,8 +236,8 @@ def nets_of(con):
 
 
 def pin_points(block, unit):
-    """(number, x, y, rotation) of every pin the instance shows: the unit's
-    own sub-symbols and the shared unit 0. Library coordinates, y up."""
+    """(number, x, y, rotation, length) of every pin the instance shows: the
+    unit's own sub-symbols and the shared unit 0. Library coordinates, y up."""
     out = []
     for m in re.finditer(r'\(symbol "[^"]*_(\d+)_\d+"\n((?:.*\n)*?)\t\t\)',
                          block):
@@ -245,10 +245,11 @@ def pin_points(block, unit):
         if u not in (0, unit):
             continue
         for p in re.finditer(r'\(pin \w+ \w+\n\s*\(at (-?[\d.]+) (-?[\d.]+)'
-                             r' (-?[\d.]+)\)(?:.*\n)*?\s*\(number "([^"]*)"',
+                             r' (-?[\d.]+)\)\n\s*\(length ([\d.]+)\)'
+                             r'(?:.*\n)*?\s*\(number "([^"]*)"',
                              m.group(2)):
-            out.append((p.group(4), float(p.group(1)), float(p.group(2)),
-                        int(float(p.group(3))) % 360))
+            out.append((p.group(5), float(p.group(1)), float(p.group(2)),
+                        int(float(p.group(3))) % 360, float(p.group(4))))
     return out
 
 
@@ -257,8 +258,11 @@ def pin_ends(block, unit, x, y, rot):
     with rotation rot: {number: (X, Y, pin rotation on the sheet)}."""
     out = {}
     a = math.radians(rot)
-    for num, px, py, prot in pin_points(block, unit):
-        # library y is up, sheet y is down
+    for num, px, py, prot, plen in pin_points(block, unit):
+        # the free end: length back along the pin from `at`, which is
+        # the body end in these symbols. Library y is up, sheet y is down
+        px -= plen * math.cos(math.radians(prot))
+        py -= plen * math.sin(math.radians(prot))
         dx, dy = px, -py
         rx = dx * math.cos(a) - dy * math.sin(a)
         ry = dx * math.sin(a) + dy * math.cos(a)
