@@ -279,6 +279,9 @@ def label_sexp(net, x, y, angle):
         f"\t\t(at {x:.2f} {y:.2f} {angle})\n"
         "\t\t(fields_autoplaced yes)\n"
         f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
+        # KiCad pairs the angle with a justify; without it kicad-cli
+        # upgrade folds 180 to 0 and 270 to 90
+        f"\t\t\t(justify {'right' if angle in (180, 270) else 'left'})\n"
         "\t\t)\n"
         f"\t\t(uuid \"{uid('label', net, f'{x:.2f}', f'{y:.2f}')}\")\n"
         "\t)\n"
