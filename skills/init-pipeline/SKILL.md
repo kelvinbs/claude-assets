@@ -61,6 +61,11 @@ the skill that decides when it is required.
 - A table that is absent is created.
 - A table that is there is left exactly as it is, rows included.
 
+## The converter
+
+`tools/board-build/.venv` with `easyeda2kicad`, made on first run, kept
+out of git. `copy-kicad-part --lcsc` runs it.
+
 ## What it refuses
 
 A table whose columns are not the schema stops the run, and the run names

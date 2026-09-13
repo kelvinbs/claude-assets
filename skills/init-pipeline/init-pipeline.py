@@ -21,6 +21,7 @@ import json
 import re
 import shutil
 import sqlite3
+import subprocess
 import sys
 import uuid
 from pathlib import Path
@@ -369,6 +370,24 @@ def make_table(board, project):
     return path, True
 
 
+def ensure_converter():
+    """easyeda2kicad in a venv the tool owns, tools/board-build/.venv. Made
+    once; copy-kicad-part --lcsc runs it."""
+    root = Path(__file__).resolve().parents[2]
+    venv = root / ".venv"
+    exe = venv / "bin" / "easyeda2kicad"
+    if exe.exists():
+        return venv, False
+    subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True,
+                   capture_output=True)
+    run = subprocess.run([str(venv / "bin" / "pip"), "install", "-q",
+                          "easyeda2kicad"], capture_output=True, text=True)
+    if run.returncode != 0:
+        raise Bad("could not install easyeda2kicad: "
+                  + (run.stderr or run.stdout).strip()[-200:])
+    return venv, True
+
+
 def main(argv):
     args = argv[1:]
     burn = None
@@ -419,6 +438,8 @@ def main(argv):
                        make_table(board, project),
                        make_fp_table(board, project)):
         print(f"{path}  {'written' if made else 'already there'}")
+    venv, made = ensure_converter()
+    print(f"{venv}  {'created' if made else 'present'}  easyeda2kicad")
     return 0
 
 

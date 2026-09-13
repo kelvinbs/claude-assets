@@ -518,6 +518,82 @@ def copy(library, nickname, spec, name, extra, pins=None, pinout=None):
     return f"{nickname}:{name}"
 
 
+# ------------------------------------------------------------------- lcsc
+
+CONVERTER = Path(__file__).resolve().parents[2] / ".venv" / "bin" / "easyeda2kicad"
+
+
+def reindent(text):
+    """easyeda2kicad writes two-space indents; the library is tab-indented."""
+    out = []
+    for line in text.split("\n"):
+        n = len(line) - len(line.lstrip(" "))
+        out.append("\t" * (n // 2) + line.lstrip(" "))
+    return "\n".join(out)
+
+
+def from_lcsc(board, library, nickname, name, lcsc, pinout=None):
+    """Copy a part's symbol, footprint and 3D model from the files LCSC
+    publishes for it, through easyeda2kicad. Source letter `v` (T2.5)."""
+    if not CONVERTER.exists():
+        raise Bad(f"{CONVERTER} is missing. Run init-pipeline")
+    with tempfile.TemporaryDirectory() as tmp:
+        run = subprocess.run([str(CONVERTER), "--full", "--lcsc_id", lcsc,
+                              "--output", f"{tmp}/{lcsc}"],
+                             capture_output=True, text=True)
+        if run.returncode != 0:
+            raise Bad(f"easyeda2kicad failed for {lcsc}: "
+                      + (run.stderr or run.stdout).strip()[-300:])
+        sym_path = Path(tmp) / f"{lcsc}.kicad_sym"
+        if not sym_path.exists():
+            raise Bad(f"LCSC {lcsc} has no symbol")
+        src = reindent(sym_path.read_text(errors="replace"))
+        m = re.search(r'\n\t\(symbol "([^"]+)"', src)
+        if not m:
+            raise Bad(f"LCSC {lcsc}: no symbol in the converted file")
+        donor = m.group(1)
+        block = top_level(src, donor)
+        if pinout:
+            block = apply_pinout(block, pinout, name)
+            block = rename_pins(block, {str(n): pname for n, pname, *_ in pinout})
+        block = block.replace(f'(symbol "{donor}"', f'(symbol "{name}"', 1)
+        block = block.replace(f'"{donor}_', f'"{name}_')
+        block = set_property(block, "Value", name)
+        block = set_property(block, "Footprint", "")
+        block = set_property(block, "Datasheet", "")
+        block = set_property(block, "origin", f"LCSC:{lcsc}")
+        write(library, name, "\t" + block.strip() + "\n")
+        subprocess.run(["kicad-cli", "sym", "upgrade", "--force", str(library)],
+                       capture_output=True)
+        pins = len(re.findall(r'\(pin ', block))
+        # footprint and model
+        fp_id = None
+        pretty = Path(tmp) / f"{lcsc}.pretty"
+        mods = sorted(pretty.glob("*.kicad_mod")) if pretty.exists() else []
+        if mods:
+            fp_name = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
+            text = mods[0].read_text(errors="replace")
+            text = re.sub(r'\(footprint "[^"]*"', f'(footprint "{fp_name}"', text, count=1)
+            steps = sorted((Path(tmp) / f"{lcsc}.3dshapes").glob("*.step")) \
+                if (Path(tmp) / f"{lcsc}.3dshapes").exists() else []
+            if steps:
+                (board / "lib" / "3d").mkdir(parents=True, exist_ok=True)
+                (board / "lib" / "3d" / f"{fp_name}.step").write_bytes(steps[0].read_bytes())
+                text = re.sub(r'\(model "[^"]*"',
+                              f'(model "${{KIPRJMOD}}/lib/3d/{fp_name}.step"', text)
+            else:
+                text = re.sub(r'\n\s*\(model "[^"]*"(?:.*\n)*?\s*\)\n', "\n", text)
+            (board / "lib" / f"{nickname}.pretty" / f"{fp_name}.kicad_mod").write_text(text)
+            fp_id = f"{nickname}:{fp_name}"
+    for part in (board / "parts").glob(f"*-{name}.json"):
+        data = json.loads(part.read_text())
+        data["symbol_donor"] = f"LCSC {lcsc}"
+        if fp_id:
+            data["footprint_donor"] = f"LCSC {lcsc}"
+        part.write_text(json.dumps(data, indent=2) + "\n")
+    return f"{nickname}:{name}", pins, fp_id
+
+
 # ------------------------------------------------------------------------ run
 
 def main(argv):
@@ -546,12 +622,26 @@ def main(argv):
                          'run, one ask')
     ap.add_argument("--lib", action="append",
                     help="another directory of .kicad_sym files. Repeatable")
+    ap.add_argument("--lcsc", metavar="Cnnnn",
+                    help="copy symbol, footprint and 3D model from what LCSC "
+                         "publishes for this part, via easyeda2kicad. No "
+                         "search, no take")
     args = ap.parse_args(argv[1:])
 
     board = Path(args.board)
     if not board.is_dir():
         raise Bad(f"{board} is not a directory")
     nickname, library = library_of(board, args.nickname)
+
+    if args.lcsc:
+        name = args.ipn or re.sub(r"[^A-Za-z0-9_.-]", "_", args.hint or args.lcsc)[:48]
+        pinout = json.load(open(args.pinout)) if args.pinout else None
+        lib_id, pins, fp_id = from_lcsc(board, library, nickname, name,
+                                        args.lcsc, pinout)
+        print(f"{name}  {lib_id}  (lcsc)  {pins} pin(s)"
+              + (f"  footprint {fp_id}" if fp_id else "  no footprint"))
+        print(f"    from LCSC {args.lcsc}")
+        return 0
 
     if args.batch:
         parts = json.load(open(args.batch))

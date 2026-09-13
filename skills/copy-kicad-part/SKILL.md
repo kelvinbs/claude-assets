@@ -16,6 +16,7 @@ prints what it wrote, or `null`.
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/copy-kicad-part/copy-kicad-part.py <board-dir> <hint> [--ipn IPN] [--nickname N] [--lib DIR ...]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/copy-kicad-part/copy-kicad-part.py <board-dir> --batch FILE [--lib DIR ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/copy-kicad-part/copy-kicad-part.py <board-dir> --lcsc Cnnnn --ipn IPN [--pinout FILE]
 ```
 
 `--pins N` gives the part's pin count — a scoring preference.
@@ -75,6 +76,17 @@ the name, gains `symbol_donor` — or `footprint_donor` — naming the same.
 No part file, nothing written there.
 
 `init-pipeline` must have made the library first.
+
+## From LCSC
+
+`--lcsc Cnnnn` copies what LCSC publishes for that part number: symbol,
+footprint and STEP, through `easyeda2kicad` in `tools/board-build/.venv`,
+which `init-pipeline` makes. No search, no take. The symbol is renamed to
+`--ipn`, its `Footprint` and `Datasheet` emptied, `origin` set to
+`LCSC:Cnnnn`. With `--pinout` the pins are renamed from the part file. The
+footprint lands in `lib/<nickname>.pretty/<ipn>.kicad_mod`, the model in
+`lib/3d/`, and the part file gains `symbol_donor` and `footprint_donor`.
+Source letter `v`, T2.5. Use it when the stock libraries hold no match.
 
 ## Footprints
 

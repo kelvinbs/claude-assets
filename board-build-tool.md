@@ -132,7 +132,7 @@
 | # | Letter | Origin |
 |---|---|---|
 | 1 | `s` | KiCad stock libraries |
-| 2 | `v` | Manufacturer or a publishing service |
+| 2 | `v` | Manufacturer or a publishing service. LCSC, through `copy-kicad-part --lcsc` |
 | 3 | `h` | Drawn here, against the datasheet |
 | 4 | `-` | Absent |
 
