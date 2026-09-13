@@ -266,7 +266,9 @@ def pin_ends(block, unit, x, y, rot):
         dx, dy = px, -py
         rx = dx * math.cos(a) - dy * math.sin(a)
         ry = dx * math.sin(a) + dy * math.cos(a)
-        out[num] = (round(x + rx, 2), round(y + ry, 2), (prot - rot) % 360)
+        # label angle is the way the text extends: away from the body,
+        # opposite the pin's own rotation
+        out[num] = (round(x + rx, 2), round(y + ry, 2), (prot - rot + 180) % 360)
     return out
 
 
