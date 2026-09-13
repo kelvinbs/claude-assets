@@ -24,7 +24,7 @@ table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
 table-write.py <board-dir> parent <ref> --under <ref> | --none
 table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
 table-write.py <board-dir> drop   <ref>
-table-write.py <board-dir> net    <ipn> <pin> <name> | --none
+table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> show   [<ipn>]
 ```
 
@@ -92,8 +92,8 @@ it came out of.
 
 ## net
 
-Names the net on one pin of a part: one `net_table` row, upsert on the
-part and pin. `--none` clears it. The sheet takes a global label at that
+Names the net on one pin of one instance: one `net_table` row, upsert on
+the instance and pin. The instance is named by its reference. `--none` clears it. The sheet takes a global label at that
 pin on the next `kicad-update` place or push, and loses it on the push
 after the row goes.
 

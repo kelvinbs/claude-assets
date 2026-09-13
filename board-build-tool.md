@@ -169,12 +169,13 @@
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| 1 | `ipn` | TEXT | Key | |
+| 1 | `uuid` | TEXT | Key | |
 | 2 | `pin` | TEXT | Key | |
 | 3 | `net` | TEXT | | |
 
-- One row per pin that carries a net name. A pin with no row carries no
-  label.
+- One row per instance pin that carries a net name. A pin with no row
+  carries no label. The instance, not the part: two instances of one part
+  sit on different nets.
 - `kicad-update` writes a global label at the pin end from it, on place
   and on push. Push deletes every label on every pin end of every record
   instance first, so a moved or cleared net leaves nothing behind.
@@ -189,7 +190,7 @@
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
 | 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 4 | `net_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
+| 4 | `net_table.uuid` | `ref_table.uuid` | Many-to-one | Cascade |
 
 - All are declared foreign keys.
 - Every skill sets `PRAGMA foreign_keys = ON`.

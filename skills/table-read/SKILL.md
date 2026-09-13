@@ -65,7 +65,7 @@ together, at any point.
 | `ready_view` | `select p.name, p.ipn, p.description, trim(case when p.mpn is null then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |
 | `price_view` | `select p.name, p.ipn, x.vendor, x.vendor_pn, x.break_qty, x.unit_price, x.stock, x.checked from price_table x join parts_table p using (ipn) order by p.ipn, x.vendor, x.vendor_pn, x.break_qty;` |
 | `cost_view` | `with u as (select p.ipn, p.name, count(r.uuid) as per_board, count(r.uuid) * <N> as units from parts_table p left join ref_table r using (ipn) group by p.ipn) select u.ipn, u.name, u.per_board, u.units, (select x.unit_price from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as unit_price, (select x.vendor from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as vendor from u order by u.ipn;` |
-| `net_view` | `select n.net, r.ref, n.pin, r.page from net_table n join ref_table r using (ipn) order by n.net, r.ref, n.pin;` |
+| `net_view` | `select n.net, r.ref, n.pin, r.page from net_table n join ref_table r using (uuid) order by n.net, r.ref, n.pin;` |
 
 `cost_view` takes a build size: replace `<N>` with the number of boards.
 It reads the highest break at or below the units required.

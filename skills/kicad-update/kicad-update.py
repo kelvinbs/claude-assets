@@ -231,10 +231,10 @@ LABEL_ANGLE = {0: 180, 180: 0, 90: 270, 270: 90}   # pin rotation -> label
 
 
 def nets_of(con):
-    """net_table as {ipn: {pin: net}}."""
+    """net_table as {instance uuid: {pin: net}}."""
     out = {}
-    for ipn, pin, net in con.execute("select ipn, pin, net from net_table"):
-        out.setdefault(ipn, {})[pin] = net
+    for u, pin, net in con.execute("select uuid, pin, net from net_table"):
+        out.setdefault(u, {})[pin] = net
     return out
 
 
@@ -284,7 +284,7 @@ def label_sexp(net, x, y, angle):
 
 def labels_sexp(row, block, x, y, rot, nets):
     """Global labels for every pin of this instance that net_table names."""
-    pins = nets.get(row["ipn"]) or {}
+    pins = nets.get(row["uuid"]) or {}
     if not pins:
         return ""
     ends = pin_ends(block, row.get("unit") or 1, x, y, rot)
@@ -700,7 +700,7 @@ def push_labels(con, board, project, root_src):
             row = rows[u]
             pe = pin_ends(blocks[row["symbol"]], sym["unit"], x, y, rot)
             ends.update((px, py) for px, py, _ in pe.values())
-            pins = nets.get(row["ipn"]) or {}
+            pins = nets.get(u) or {}
             fresh += "".join(label_sexp(pins[n], *pe[n]) for n in sorted(pins)
                              if n in pe)
         def keep(m):
