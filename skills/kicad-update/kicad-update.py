@@ -43,6 +43,7 @@ HERE = Path(__file__).resolve().parent
 SCH_VERSION = 20250114
 GRID = 2.54
 SHEET_W = 20 * GRID    # a sheet symbol's width; its height follows its pins
+PORT_W = 16 * GRID     # the port area's width, kept clear at a page's right edge
 STUB = 2 * GRID        # wire or bus from a sheet pin to its label
 FONT = 1.27
 LINE = 2.54   # field line pitch; Reference over Value at the lower right
@@ -1238,6 +1239,15 @@ def port_area(src, page, model):
     x, y, top = snap(width - MARGIN - 12 * GRID), 5 * GRID, 5 * GRID
     limit = height - MARGIN
     body = ""
+    # a drawing that reaches into the port area would touch its labels.
+    # Reported: the page was laid out before the port area had room, and
+    # placing it afresh gives it room
+    reach = max([float(m) for m in re.findall(r'\n\t\t\(at (-?[\d.]+) ', src)]
+                + [0.0])
+    if reach > x - 4 * GRID and (ports or buses):
+        print(f"    {page}: a symbol sits at x {reach:.1f}, inside the port "
+              f"area from x {x - 4 * GRID:.1f}. Labels may touch. Place "
+              "the page afresh")
 
     def place(h):
         nonlocal x, y
@@ -1509,7 +1519,7 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
     room = (height or width) - start_y - MARGIN
     placed, _, used_h = shelf(items, max(room, GRID), gap=BOX_GAP, down=True)
 
-    body, page_h, page_w = "", start_y, MARGIN
+    body, page_h, page_w = "", start_y, MARGIN + PORT_W
     for bx, by, flat in placed:
         drawn, refs = [], set()
         for dx, dy, row in flat:
@@ -1517,7 +1527,9 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
             x = snap(MARGIN + bx + dx + half_w)
             y = snap(start_y + by + dy + half_h + GRID)
             page_h = max(page_h, y + half_h + GRID + MARGIN)
-            page_w = max(page_w, x + half_w + GRID + MARGIN)
+            # the port area sits at the right edge; a page is sized to
+            # hold it beside the drawing
+            page_w = max(page_w, x + half_w + GRID + MARGIN + PORT_W)
             if row.get("sheet"):
                 pins = model.sheet_pins(row["sheet"])
                 sx, sy = snap(x - half_w), snap(y - half_h)
@@ -1616,8 +1628,19 @@ def write_page(board, project, page, rows, blocks, fixed, ctx):
         if fresh:
             paper = paper_of(src)
             width, height = PAPERS.get(paper, PAPERS["A"])
-            body, _, _ = flow(fresh, blocks, project, ctx, width,
-                              snap(lowest_used(src) + 10 * GRID), height)
+            body, tall, wide = flow(fresh, blocks, project, ctx, width,
+                                    snap(lowest_used(src) + 10 * GRID),
+                                    height)
+            # what was there stays put; the paper grows to hold what is
+            # appended below it, ANSI sizes up to E
+            for name in PAPER_ORDER:
+                w, h = PAPERS[name]
+                if tall <= h and wide <= w and (w, h) >= (width, height):
+                    if name != paper:
+                        src = re.sub(r'\(paper "[^"]*"\)', f'(paper "{name}")',
+                                     src, count=1)
+                        print(f"    {page}: paper {paper} to {name}")
+                    break
             src = merge_sheet(src, blocks, needed, body)
         src, buses = port_area(src, page, model)
         if buses:

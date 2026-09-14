@@ -189,8 +189,10 @@ pin is hidden: `copy-kicad-part` strips pin hiding as a symbol comes in.
 
 ## Paper
 
-A new page takes the smallest ANSI size, `A` to `E`, that its parts fit on.
-A page that already exists keeps the size it has.
+A new page takes the smallest ANSI size, `A` to `E`, that its parts fit on
+with the port area's width kept clear at the right edge. A page that already
+exists keeps the size it has; a run says when its drawing reaches into the
+port area, and placing that page afresh is the fix.
 
 ## What it refuses
 
