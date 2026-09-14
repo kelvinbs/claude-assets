@@ -190,7 +190,9 @@ pin is hidden: `copy-kicad-part` strips pin hiding as a symbol comes in.
 ## Paper
 
 A new page takes the smallest ANSI size, `A` to `E`, that its parts fit on
-with the port area's width kept clear at the right edge. A page that already
+with the port area's width kept clear at the right edge. Drawings and the
+port area start 12 grid from the top, so a label on a top pin clears the
+frame. A page that already
 exists keeps the size it has; a run says when its drawing reaches into the
 port area, and placing that page afresh is the fix.
 

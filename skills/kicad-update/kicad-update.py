@@ -44,6 +44,7 @@ SCH_VERSION = 20250114
 GRID = 2.54
 SHEET_W = 20 * GRID    # a sheet symbol's width; its height follows its pins
 PORT_W = 16 * GRID     # the port area's width, kept clear at a page's right edge
+TOP = 12 * GRID        # first row of drawings; a top pin's label stands above its symbol
 STUB = 2 * GRID        # wire or bus from a sheet pin to its label
 FONT = 1.27
 LINE = 2.54   # field line pitch; Reference over Value at the lower right
@@ -1236,7 +1237,7 @@ def port_area(src, page, model):
                          uid("buslabel", page, bus, m)})
     src = remove_by_uuid(src, gone)
     width, height = PAPERS.get(paper_of(src), PAPERS["A"])
-    x, y, top = snap(width - MARGIN - 12 * GRID), 5 * GRID, 5 * GRID
+    x, y, top = snap(width - MARGIN - 12 * GRID), TOP, TOP
     limit = height - MARGIN
     body = ""
     # a drawing that reaches into the port area would touch its labels.
@@ -1653,7 +1654,7 @@ def write_page(board, project, page, rows, blocks, fixed, ctx):
                           for k in sorted(needed))
 
     def lay(width, height=None):
-        return flow(rows, blocks, project, ctx, width, 5 * GRID, height)
+        return flow(rows, blocks, project, ctx, width, TOP, height)
 
     paper, body = fit_paper(lay, fixed)
     src = new_sheet(project, uid(project, "file", page), paper, lib_symbols,
@@ -1689,15 +1690,15 @@ def write_root(board, project, root, pages, model, fixed=None):
                   else uid(project, "sheet", page)) for page in pages}
 
     def lay(width, height=None):
-        body, x, y = "", MARGIN, 5 * GRID
+        body, x, y = "", MARGIN, TOP
         col_w = SHEET_W + STUB + 16 * GRID
         tall, wide = y, x
         limit = (height or width) - MARGIN
         for page in pages:
             pins = model.sheet_pins(page)
             h = sheet_height(len(pins))
-            if y + h > limit and y > 5 * GRID:
-                x, y = snap(x + col_w), 5 * GRID
+            if y + h > limit and y > TOP:
+                x, y = snap(x + col_w), TOP
             body += sheet_sexp(project, f"/{root}", page,
                                f"{project}-{slug(page)}.kicad_sch",
                                numbers[page], x, y, SHEET_W, pins, ids[page])
