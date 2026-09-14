@@ -463,9 +463,11 @@ def unplace(con, args):
     """Send an instance back to the packer: its place and mark cleared,
     every row of the drawing. The symbol on the sheet stays where it is
     until the page is placed afresh."""
-    u, path, page = instance_of(con, args.ref)
+    instance_of(con, args.ref)
+    # every row under the reference: every unit of a package, every path
     n = con.execute("update ref_table set x = null, y = null, rot = null, "
-                    "placed = null where uuid = ?", (u,)).rowcount
+                    "placed = null where uuid in (select uuid from ref_table "
+                    "where ref = ?)", (args.ref,)).rowcount
     con.commit()
     print(f"{args.ref}  place cleared on {n} row(s); the packer lays it "
           "next time the page is placed afresh")
