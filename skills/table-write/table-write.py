@@ -16,6 +16,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
+    table-write.py <board-dir> room   <ref> <name> | --none
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -460,6 +461,20 @@ def net(con, args):
     print(f"{args.ref}  pin {args.pin}: {args.name}")
 
 
+def room(con, args):
+    """Put an instance in a room, T0.3: every row under the reference.
+    `--none` takes it out."""
+    instance_of(con, args.ref)
+    name = None if args.none else args.name
+    if not args.none and not name:
+        raise Bad("room wants a name, or --none")
+    n = con.execute("update ref_table set room = ? where uuid in "
+                    "(select uuid from ref_table where ref = ?)",
+                    (name, args.ref)).rowcount
+    con.commit()
+    print(f"{args.ref}  room {name or '—'} on {n} row(s)")
+
+
 def unplace(con, args):
     """Send an instance back to the packer: its place and mark cleared,
     every row of the drawing. The symbol on the sheet stays where it is
@@ -604,6 +619,12 @@ def main(argv):
     n.add_argument("name", nargs="?")
     n.add_argument("--none", action="store_true", help="clear the net")
     n.set_defaults(run=net)
+
+    rm = sub.add_parser("room", help="put an instance in a room")
+    rm.add_argument("ref")
+    rm.add_argument("name", nargs="?")
+    rm.add_argument("--none", action="store_true", help="out of its room")
+    rm.set_defaults(run=room)
 
     x = sub.add_parser("unplace", help="clear an instance's place")
     x.add_argument("ref")

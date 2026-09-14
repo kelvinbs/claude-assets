@@ -1593,21 +1593,52 @@ def boxes_of(rows, blocks, model=None, templates=None):
         for row in sorted(by_ref[ref], key=lambda r: r.get("unit") or 1):
             w, h = size_of(row, blocks, model)
             items.append((w, h, ("part", row)))
+        # children grouped by room: a room is a box of its own inside the
+        # parent's, named; children in no room pack beside
+        by_room = {}
+        own = ((by_ref.get(ref) or [{}])[0] or {}).get("room") or ""
         for kid in sorted(kids.get(ref, []), key=number_of):
-            kw, kh, inner = pack(kid)
-            items.append((kw, kh, ("box", inner)))
+            krow = (by_ref.get(kid) or [None])[0]
+            kroom = (krow or {}).get("room") or ""
+            # a child in its parent's own room is the family, not a room
+            # inside it
+            by_room.setdefault("" if kroom == own else kroom, []).append(kid)
+        for room, members in sorted(by_room.items()):
+            if not room:
+                for kid in members:
+                    kw, kh, inner = pack(kid)
+                    items.append((kw, kh, ("box", inner)))
+                continue
+            ritems = []
+            for kid in members:
+                kw, kh, inner = pack(kid)
+                ritems.append((kw, kh, ("box", inner)))
+            rplaced, rw, rh = shelf(ritems, box_extent(ritems, down=True),
+                                    down=True)
+            rflat = []
+            for x, y, (kind, payload) in rplaced:
+                rflat.extend((x + dx, y + dy, r) for dx, dy, r in payload)
+            pad = 2 * GRID
+            rflat = [(x + pad, y + pad, r) for x, y, r in rflat]
+            items.append((rw + 2 * pad, rh + 2 * pad,
+                          ("room", (room, rw + 2 * pad, rh + 2 * pad, rflat))))
         placed, w, h = shelf(items, box_extent(items, down=True),
                              down=True)
         flat = []
         for x, y, (kind, payload) in placed:
             if kind == "part":
                 flat.append((x, y, payload))
-            else:
+            elif kind == "box":
                 flat.extend((x + dx, y + dy, r) for dx, dy, r in payload)
+            else:
+                room, rw, rh, inner = payload
+                rooms_out.append((x, y, rw, rh, room))
+                flat.extend((x + dx, y + dy, r) for dx, dy, r in inner)
         return w, h, flat
 
     tops = [ref for ref, par in parent_of.items()
             if not par or par not in by_ref]
+    rooms_out = []
 
     def rank(ref):
         rs = by_ref[ref] or [by_ref[k][0] for k in kids.get(ref, [])
@@ -1616,10 +1647,33 @@ def boxes_of(rows, blocks, model=None, templates=None):
 
     out = []
     for ref in sorted(tops, key=rank):
+        rooms_out.clear()
         w, h, flat = pack(ref)
         if flat:
-            out.append((w, h, flat))
+            out.append((w, h, flat, list(rooms_out)))
     return out
+
+
+def room_sexp(x, y, w, h, name):
+    """A room's box inside its block's, with the room's name at the
+    corner."""
+    x0, y0 = snap(x), snap(y)
+    x1, y1 = snap(x + w), snap(y + h)
+    return (
+        "\t(rectangle\n"
+        f"\t\t(start {x0:.2f} {y0:.2f})\n"
+        f"\t\t(end {x1:.2f} {y1:.2f})\n"
+        "\t\t(stroke\n\t\t\t(width 0.1)\n\t\t\t(type dash)\n\t\t)\n"
+        "\t\t(fill\n\t\t\t(type none)\n\t\t)\n"
+        f"\t\t(uuid \"{uid('roombox', name, f'{x0:.2f}', f'{y0:.2f}')}\")\n"
+        "\t)\n"
+        f"\t(text \"{esc(name)}\"\n"
+        f"\t\t(at {x0 + GRID / 2:.2f} {y0 - GRID / 2:.2f} 0)\n"
+        f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
+        "\t\t\t(justify left bottom)\n\t\t)\n"
+        f"\t\t(uuid \"{uid('roomname', name, f'{x0:.2f}', f'{y0:.2f}')}\")\n"
+        "\t)\n"
+    )
 
 
 def outline_sexp(drawn):
@@ -1700,12 +1754,15 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
 
     boxes = boxes_of(free, blocks, model, ctx.get("templates"))
     boxes.sort(key=lambda b: -(b[0] * b[1]))
-    items = [(w, h, flat) for w, h, flat in boxes]
+    items = [(w, h, (flat, rooms)) for w, h, flat, rooms in boxes]
     room = (height or width) - start_y - MARGIN
     placed, _, used_h = shelf(items, max(room, GRID), gap=BOX_GAP, down=True)
 
-    for bx, by, flat in placed:
+    for bx, by, (flat, rooms) in placed:
         drawn, refs = [], set()
+        for rx, ry, rw, rh, room in rooms:
+            body += room_sexp(MARGIN + bx + rx, start_y + by + ry + GRID,
+                              rw, rh, room)
         for dx, dy, row in flat:
             half_w, half_h, bottom, right = geom(row, blocks, model)
             x = snap(MARGIN + bx + dx + half_w)

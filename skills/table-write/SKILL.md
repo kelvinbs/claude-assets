@@ -28,6 +28,7 @@ table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [-
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> unplace <ref>
+table-write.py <board-dir> room   <ref> <name> | --none
 table-write.py <board-dir> show   [<ipn>]
 ```
 
@@ -124,6 +125,12 @@ the drawing and pin. The drawing is named by any of its references.
 global — and loses it on the push after the row goes. On a sub-sheet
 instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 `{RAILS}`; the net is what it joins on the page above.
+
+## room
+
+Puts an instance in a room, every row under the reference: `room R3
+Filter_I`. `--none` takes it out. A room is one function drawn together;
+the page lays a room as a box inside its block's box.
 
 ## unplace
 
