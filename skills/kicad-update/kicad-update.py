@@ -1577,15 +1577,25 @@ def boxes_of(rows, blocks, model=None, templates=None):
         for row in rows_here[1:]:            # other units of the parent
             uw, uh = size_of(row, blocks, model)
             flat.append((w + GAP, 0.0, row)); w += GAP + uw; h = max(h, uh)
+        rooms = []
         for kid in rest:
-            kw, kh, inner = pack(kid)
+            kw, kh, inner, krooms = pack(kid)
             flat.extend((w + GAP + dx, dy, r) for dx, dy, r in inner)
+            rooms.extend((w + GAP + rx, ry, rw, rh, name)
+                         for rx, ry, rw, rh, name in krooms)
             w += GAP + kw; h = max(h, kh)
-        return w, h, flat
+        return w, h, flat, rooms
+
+    def shifted(rooms, dx, dy):
+        return [(rx + dx, ry + dy, rw, rh, name)
+                for rx, ry, rw, rh, name in rooms]
 
     def pack(ref):
-        """(width, height, [(dx, dy, row)]) for this reference and its
-        descendants, laid out inside a box of its own."""
+        """(width, height, [(dx, dy, row)], [(dx, dy, w, h, room)]) for
+        this reference and its descendants, laid out inside a box of its
+        own. Rooms come back relative to that box, whatever depth they
+        were drawn at, so a room inside a child's box lands where the
+        child's box lands."""
         done = from_template(ref)
         if done:
             return done
@@ -1606,39 +1616,43 @@ def boxes_of(rows, blocks, model=None, templates=None):
         for room, members in sorted(by_room.items()):
             if not room:
                 for kid in members:
-                    kw, kh, inner = pack(kid)
-                    items.append((kw, kh, ("box", inner)))
+                    kw, kh, inner, krooms = pack(kid)
+                    items.append((kw, kh, ("box", (inner, krooms))))
                 continue
             ritems = []
             for kid in members:
-                kw, kh, inner = pack(kid)
-                ritems.append((kw, kh, ("box", inner)))
+                kw, kh, inner, krooms = pack(kid)
+                ritems.append((kw, kh, ("box", (inner, krooms))))
             rplaced, rw, rh = shelf(ritems, box_extent(ritems, down=True),
                                     down=True)
-            rflat = []
-            for x, y, (kind, payload) in rplaced:
-                rflat.extend((x + dx, y + dy, r) for dx, dy, r in payload)
             pad = 2 * GRID
-            rflat = [(x + pad, y + pad, r) for x, y, r in rflat]
+            rflat, rrooms = [], []
+            for x, y, (kind, (inner, krooms)) in rplaced:
+                rflat.extend((x + pad + dx, y + pad + dy, r)
+                             for dx, dy, r in inner)
+                rrooms.extend(shifted(krooms, x + pad, y + pad))
             items.append((rw + 2 * pad, rh + 2 * pad,
-                          ("room", (room, rw + 2 * pad, rh + 2 * pad, rflat))))
+                          ("room", (room, rw + 2 * pad, rh + 2 * pad,
+                                    rflat, rrooms))))
         placed, w, h = shelf(items, box_extent(items, down=True),
                              down=True)
-        flat = []
+        flat, rooms = [], []
         for x, y, (kind, payload) in placed:
             if kind == "part":
                 flat.append((x, y, payload))
             elif kind == "box":
-                flat.extend((x + dx, y + dy, r) for dx, dy, r in payload)
-            else:
-                room, rw, rh, inner = payload
-                rooms_out.append((x, y, rw, rh, room))
+                inner, krooms = payload
                 flat.extend((x + dx, y + dy, r) for dx, dy, r in inner)
-        return w, h, flat
+                rooms.extend(shifted(krooms, x, y))
+            else:
+                room, rw, rh, inner, rrooms = payload
+                rooms.append((x, y, rw, rh, room))
+                rooms.extend(shifted(rrooms, x, y))
+                flat.extend((x + dx, y + dy, r) for dx, dy, r in inner)
+        return w, h, flat, rooms
 
     tops = [ref for ref, par in parent_of.items()
             if not par or par not in by_ref]
-    rooms_out = []
 
     def rank(ref):
         rs = by_ref[ref] or [by_ref[k][0] for k in kids.get(ref, [])
@@ -1647,10 +1661,9 @@ def boxes_of(rows, blocks, model=None, templates=None):
 
     out = []
     for ref in sorted(tops, key=rank):
-        rooms_out.clear()
-        w, h, flat = pack(ref)
+        w, h, flat, rooms = pack(ref)
         if flat:
-            out.append((w, h, flat, list(rooms_out)))
+            out.append((w, h, flat, rooms))
     return out
 
 
