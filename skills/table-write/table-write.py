@@ -379,28 +379,33 @@ def drop(con, args):
     """Remove one instance by reference. A sub-sheet instance takes the
     rows drawn under it. A symbol in a sub-sheet is one drawing, so its
     rows go together. Nets go with a symbol's last row."""
-    row = con.execute("select ipn, uuid, path from ref_table where ref = ?",
-                      (args.ref,)).fetchone()
-    if row is None:
+    rows = con.execute("select distinct ipn, uuid, path from ref_table "
+                       "where ref = ? order by uuid", (args.ref,)).fetchall()
+    if not rows:
         raise Bad(f"{args.ref} is not in ref_table")
-    ipn, u, path = row
-    if ipn.startswith("B"):
-        inst = f"{path}/{u}" if path else u
-        n = con.execute("delete from ref_table where path = ? "
-                        "or path like ?", (inst, inst + "/%")).rowcount
-        if n:
-            print(f"{args.ref}  {n} row(s) under it removed")
-        con.execute("delete from ref_table where uuid = ? and path = ?",
-                    (u, path))
-    elif path:
-        refs = [r[0] for r in con.execute(
-            "select ref from ref_table where uuid = ? order by ref", (u,))]
-        con.execute("delete from ref_table where uuid = ?", (u,))
-        print(f"{args.ref}  one drawing in a sub-sheet: {' '.join(refs)} "
-              "removed together")
-    else:
-        con.execute("delete from ref_table where uuid = ? and path = ''",
-                    (u,))
+    # a multi-unit package is one row per unit, each its own uuid, all
+    # under the one reference: the reference goes as a whole
+    for ipn, u, path in rows:
+        if ipn.startswith("B"):
+            inst = f"{path}/{u}" if path else u
+            n = con.execute("delete from ref_table where path = ? "
+                            "or path like ?", (inst, inst + "/%")).rowcount
+            if n:
+                print(f"{args.ref}  {n} row(s) under it removed")
+            con.execute("delete from ref_table where uuid = ? and path = ?",
+                        (u, path))
+        elif path:
+            refs = [r[0] for r in con.execute(
+                "select ref from ref_table where uuid = ? order by ref", (u,))]
+            con.execute("delete from ref_table where uuid = ?", (u,))
+            print(f"{args.ref}  one drawing in a sub-sheet: {' '.join(refs)} "
+                  "removed together")
+        else:
+            con.execute("delete from ref_table where uuid = ? and path = ''",
+                        (u,))
+    if len(rows) > 1:
+        print(f"{args.ref}  {len(rows)} unit(s) removed together")
+    ipn = rows[0][0]
     for (gone,) in con.execute(
             "select distinct uuid from net_table where uuid not in "
             "(select uuid from ref_table)").fetchall():
