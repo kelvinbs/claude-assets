@@ -89,8 +89,9 @@ loses a part. Removing one is `drop`, and it names the reference.
 
 Sets one instance's parent: `parent R3 --under U1`. `--none` clears it. It
 refuses a reference that names no instance, and a parent chain that closes
-a loop. In a sub-sheet the drawing's every row takes the parent, matched
-instance for instance when the parent is drawn in the same sheet.
+a loop. Every row under the reference takes the parent: every unit of a
+package, and in a sub-sheet the drawing's every row, matched instance for
+instance when the parent is drawn in the same sheet.
 
 ## mpn — retired into set
 

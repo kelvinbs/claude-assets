@@ -353,13 +353,14 @@ def reparent(con, args):
                                (walk,)).fetchone()[0]
     page = con.execute("select page from ref_table where ref = ?",
                        (args.ref,)).fetchone()[0]
-    for path, in con.execute("select path from ref_table where uuid = ?",
-                             (child,)).fetchall():
+    # every row under the reference: every unit of a package, every path
+    for u, path in con.execute("select uuid, path from ref_table where ref = ?",
+                               (args.ref,)).fetchall():
         parent, parent_path = (parent_for(con, args.under, page, path)
                                if new else (None, None))
         con.execute("update ref_table set parent = ?, parent_path = ? "
                     "where uuid = ? and path = ?",
-                    (parent, parent_path, child, path))
+                    (parent, parent_path, u, path))
     con.commit()
     print(f"{args.ref}  parent {ref_of(con, was) or '—'} -> "
           f"{args.under if new else '—'}")
