@@ -74,8 +74,8 @@ along it is — see T2.3.
 
 Changes fields on a part that exists. Prints what each field was and what it
 became, so a change is legible in the terminal as well as in the database.
-`--value` is what the sheet shows as Value. `--sim-model` is `R`, `C`, `L`
-or `opamp`, what the part is to the simulator; `--sim-params` its
+`--value` is what the sheet shows as Value. `--sim-model` is `R`, `C`, `L`,
+`opamp` or `rnet`, what the part is to the simulator; `--sim-params` its
 parameters, T2.3. `--footprint` takes the project footprint, `<nickname>:<name>`, written by
 the session at Update library — footprints, 3D (`copy-kicad-part.md`,
 Footprints).
@@ -182,7 +182,7 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 ## What it refuses
 
 - A class letter that is not in T2.10
-- A `sim_model` not `R`, `C`, `L` or `opamp`; a `sim add` kind not `ac`,
+- A `sim_model` not `R`, `C`, `L`, `opamp` or `rnet`; a `sim add` kind not `ac`,
   `tran`, `dc` or `op`; a `--block` that names no instance; a `sim` name
   already taken, or one that names no instance on `set` and `drop`
 - A `parent` or `--under` that names no instance, or closes a loop

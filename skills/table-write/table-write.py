@@ -68,7 +68,7 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 FIELDS = ("description", "value", "note", "name", "mpn", "manufacturer",
           "datasheet", "footprint", "sim_model", "sim_params")
 
-SIM_MODELS = ("R", "C", "L", "opamp")
+SIM_MODELS = ("R", "C", "L", "opamp", "rnet")
 SIM_KINDS = {"ac": ".ac dec 100 1 10meg", "tran": ".tran 1u 10m",
              "dc": ".op", "op": ".op",
              # the output node and the input source are the User's to set

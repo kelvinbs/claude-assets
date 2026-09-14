@@ -1410,6 +1410,40 @@ def write_models(con, board, project):
                      f" ROUT={p['rout']:g}\n")
         body += ".ends\n"
         models[ipn] = (sub, " ".join(f"{n}=n{n}" for n in numbers))
+    # rnet: a resistor between named pin pairs, every other pin open. A
+    # switch in one position, a jumper, a pad. sim_params
+    # `r=<ohm> pins=<a>:<b>,<c>:<d>`, names from the part file
+    for ipn, name, params in con.execute(
+            "select ipn, name, sim_params from parts_table "
+            "where sim_model = 'rnet' order by ipn"):
+        path = board / "parts" / f"{ipn}-{name}.json"
+        if not path.exists():
+            raise Bad(f"{ipn} {name}: sim_model rnet but no part file "
+                      f"{path.name}")
+        pins = json.loads(path.read_text()).get("pins") or []
+        by_name = {str(p[1]): str(p[0]) for p in pins}
+        p = {}
+        for tok in (params or "").split():
+            k, _, v = tok.partition("=")
+            p[k.lower()] = v
+        if "r" not in p or "pins" not in p:
+            raise Bad(f"{ipn} {name}: sim_params wants r=<ohm> pins=<a>:<b>,...")
+        pairs = []
+        for pair in p["pins"].split(","):
+            a, _, b = pair.partition(":")
+            if a not in by_name or b not in by_name:
+                raise Bad(f"{ipn} {name}: sim_params pins names {a}:{b}, "
+                          "not pins of the part file")
+            pairs.append((by_name[a], by_name[b]))
+        sub = subckt_name(name)
+        numbers = [str(pin[0]) for pin in pins]
+        body += (f"\n* {name}, {ipn}: resistor network, {p['r']} ohm between "
+                 f"{p['pins']}\n"
+                 f".subckt {sub} {' '.join(f'n{n}' for n in numbers)}\n")
+        for i, (a, b) in enumerate(pairs, 1):
+            body += f"  R{i} n{a} n{b} {p['r']}\n"
+        body += ".ends\n"
+        models[ipn] = (sub, " ".join(f"{n}=n{n}" for n in numbers))
     folder = board / "models"
     folder.mkdir(exist_ok=True)
     path = folder / f"{project}.sp"
@@ -1470,7 +1504,7 @@ def sim_fields_for(row, part, models, project):
         if not value:
             return None, f"value {part['value']!r} is not a spice value"
         return {"Sim.Device": model, "Sim.Params": value}, ""
-    if model == "opamp":
+    if model in ("opamp", "rnet"):
         if row["ipn"] not in models:
             return None, "no model written"
         sub, pins = models[row["ipn"]]

@@ -92,6 +92,7 @@ KiCad's own simulator, Inspect, Simulator, Run. What push writes:
 | `models/<project>.sp` | the design folder | every part with `sim_model` `opamp`: one subcircuit, nodes in pin-number order, one single-pole op-amp per channel with POLE = gbw / aol, GAIN = aol, ROUT = rout, and a series resistor at in+ with 4kTR = en², the noise. The op-amp is copied into the file, so nothing points outside the project |
 | `Sim.Device` `Sim.Params` | a passive inside the blocks, every unit | `sim_model` or the class letter; `sim_params` or `value` made spice, `1.13 kOhm` to `1.13k` |
 | `Sim.Device SUBCKT` `Sim.Library` `Sim.Name` `Sim.Pins` | an op-amp inside the blocks, every unit | the models file, `${KIPRJMOD}/models/<project>.sp`; the pin map from the part file, `1=n1 2=n2 ...` |
+| the same | an `rnet` part inside the blocks | the models file: a resistor between each named pin pair, `r=0.5 pins=S1A:D1,S2A:D2`, the rest open. A switch in one position |
 | `exclude_from_sim yes` | every instance outside the blocks, and one inside with no model | the exporter writes a junk line, `J6 __J6`, for a symbol with no model and no exclusion, and ngspice stops on it |
 | `VS1` `VS2` ..., a label at each pin | the sim room on the first block's page, below what is drawn | `sim_net_table` source rows: `dc <V>` a VDC with `dc=<V>`; `ac <V>` a VSIN with `ac=<V>`. `VDC` and `VSIN` copied from `Simulation_SPICE` into the project library once |
 | the directive as text, `.ac dec 100 1 10meg` | the sim room | `sim_table.directive` |

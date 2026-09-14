@@ -117,7 +117,7 @@
   User's mark that the part file's pins were read against the datasheet.
   Both default to `no`. The tool never sets either.
 - `sim_model` is what the part is to the simulator: `R`, `C`, `L`,
-  `opamp`, or null for a part that is not simulated. `sim_params` are its
+  `opamp`, `rnet`, or null for a part that is not simulated. `sim_params` are its
   parameters: a passive's spice value, `1.13k`, derived from `value` when
   null; an op-amp's `gbw=<Hz> aol=<V/V> en=<V/rtHz> rout=<Ohm>`, read
   from the datasheet. No vendor model: an op-amp is KiCad's own
@@ -297,6 +297,10 @@
   4kTR = en², the noise. Node order is pin-number order; the pin map is
   read from the part file's pin names, `IN_A+`, `IN_A-`, `OUT_A`, `V+`,
   `V-`.
+- `rnet` is a resistor between named pin pairs and nothing else: a switch
+  in one position, a jumper. `sim_params` `r=<ohm> pins=<a>:<b>,<c>:<d>`,
+  names from the part file. The subcircuit joins the models file the same
+  way.
 
 ### 2.5 — The relations
 
