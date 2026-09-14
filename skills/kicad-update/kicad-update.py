@@ -1866,13 +1866,13 @@ def write_page(board, project, page, rows, blocks, fixed, ctx):
                                     height)
             # what was there stays put; the paper grows to hold what is
             # appended below it, ANSI sizes up to E
-            for name in PAPER_ORDER:
-                w, h = PAPERS[name]
+            for size in PAPER_ORDER:
+                w, h = PAPERS[size]
                 if tall <= h and wide <= w and (w, h) >= (width, height):
-                    if name != paper:
-                        src = re.sub(r'\(paper "[^"]*"\)', f'(paper "{name}")',
+                    if size != paper:
+                        src = re.sub(r'\(paper "[^"]*"\)', f'(paper "{size}")',
                                      src, count=1)
-                        print(f"    {page}: paper {paper} to {name}")
+                        print(f"    {page}: paper {paper} to {size}")
                     break
             src = merge_sheet(src, blocks, needed, body)
         src, buses = port_area(src, page, model)
