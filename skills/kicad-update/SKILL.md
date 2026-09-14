@@ -23,7 +23,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --
 | Verb | Direction | Does |
 |---|---|---|
 | place, the default | record to sheets | rewrites the root; draws missing drawings with a label on every pin `net_table` names, sheet symbols for sub-sheet instances, a breakout for every bus that leaves a page; enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. Then the labels: every label on any pin end of any record drawing is deleted and every `net_table` row written back as one; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, routing and labels elsewhere untouched |
+| `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. Then the labels: every label on the page is deleted, wherever it sits, and every `net_table` row written back as one at the pin's current place; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, wires and routing untouched |
 | `--pull` | library to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
@@ -66,7 +66,7 @@ the same name. A net in a bus leaves as the bus.
 
 | Drawn | Where | Kept where the User left it |
 |---|---|---|
-| local label at a pin end | every drawing's named pin | no — rewritten on push |
+| local label at a pin end | every drawing's named pin, where the pin is now | no — every label on the page is deleted and written afresh on push |
 | sheet symbol, pins down the right edge, a stub and a local label at each pin | a sub-sheet instance, on the page that placed it | position yes; pins and fittings rewritten on push |
 | port — hierarchical label, stub, local label | the port area, one per leaving net | no — the port area is the tool's, top right, redrawn every run |
 | bus breakout — hierarchical bus label, bus, an entry per member the file uses, a local label at each | the port area, one per bus that leaves | no — as above |

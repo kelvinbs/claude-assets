@@ -1124,9 +1124,9 @@ LABEL_RE = re.compile(r'\n\t\((?:global_label|hierarchical_label|label) '
 
 
 def push_labels(con, board, project, root, root_src, rows, model):
-    """Record to sheets, the nets: every label on any pin end of any
-    record drawing is deleted, then every net_table row is written back as
-    a label at its pin, of the kind the net model gives it. Sheet symbols
+    """Record to sheets, the nets: every label on the page is deleted,
+    then every net_table row is written back as a label at its pin, of the
+    kind the net model gives it. Sheet symbols
     get their pins, stubs and labels afresh. Each bus that leaves a page
     gets its hierarchical label once. Labels elsewhere on the page are not
     touched. Returns {sheet file: labels written}."""
@@ -1188,10 +1188,10 @@ def push_labels(con, board, project, root, root_src, rows, model):
             out.append(src[last:])
             src = "".join(out)
 
-        def keep(m):
-            at = re.search(r'\(at (-?[\d.]+) (-?[\d.]+)', m.group(0))
-            return (round(float(at.group(1)), 2), round(float(at.group(2)), 2)) not in ends
-        src = LABEL_RE.sub(lambda m: m.group(0) if keep(m) else "", src)
+        # every label on the page goes, wherever it sits: the record is the
+        # only source of a net, so a label is the tool's to write afresh.
+        # A symbol moved by hand leaves nothing behind
+        src = LABEL_RE.sub("", src)
         src = remove_by_uuid(src, gone)
         src = remove_matching(src, fresh)
         src, buses = port_area(src, page, model)

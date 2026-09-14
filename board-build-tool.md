@@ -199,9 +199,10 @@
 - `kicad-update` writes a label at the pin end from it, on place and on
   push — a local `label`, or a `hierarchical_label` when the net leaves
   the sheet file (T2.6c). Never a global label. Push deletes every label
-  on every pin end of every record drawing first, so a moved or cleared
-  net leaves nothing behind.
-- A label typed by hand on a record part's pin lasts until the next push.
+  on the page first, wherever it sits, so a moved symbol, a moved or
+  cleared net, leaves nothing behind.
+- A label typed by hand lasts until the next push. The record is the
+  only source of a net.
 
 **T2.6b — `bus_table`**
 
