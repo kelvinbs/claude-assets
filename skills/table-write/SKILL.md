@@ -24,6 +24,7 @@ table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
 table-write.py <board-dir> parent <ref> --under <ref> | --none
 table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
 table-write.py <board-dir> drop   <ref>
+table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [--checked DATE] [--library L] --break QTY:PRICE ...
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> show   [<ipn>]
@@ -95,6 +96,15 @@ instance for instance when the parent is drawn in the same sheet.
 The part number is a column on the part (n0.4): `set <part> --mpn ...`,
 with `--manufacturer` and `--datasheet` beside it. A prototype buys one
 part one way.
+
+## price
+
+Records one vendor's survey of a part: one `price_table` row per break,
+upsert on the vendor part number and break. `--stock` and `--checked`
+date the survey. `--library` is the vendor's tier for that part number,
+at JLCPCB `basic` or `extended`; an extended part carries a loading fee
+per part number per order. A survey given without it keeps the tier
+already recorded.
 
 ## drop
 

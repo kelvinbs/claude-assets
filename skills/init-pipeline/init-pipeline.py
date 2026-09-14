@@ -92,6 +92,7 @@ SCHEMA = {
             "unit_price    REAL",
             "stock         INTEGER",
             "checked       TEXT",
+            "library       TEXT",
             "PRIMARY KEY (ipn, vendor, vendor_pn, break_qty)",
         ),
         # T2.6a — the nets. One row per symbol pin that carries a net

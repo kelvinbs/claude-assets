@@ -422,13 +422,15 @@ def price(con, args):
     for qty, unit in sorted(breaks):
         con.execute(
             "insert into price_table (ipn, vendor, vendor_pn,"
-            " break_qty, unit_price, stock, checked) values (?,?,?,?,?,?,?)"
+            " break_qty, unit_price, stock, checked, library)"
+            " values (?,?,?,?,?,?,?,?)"
             " on conflict(ipn, vendor, vendor_pn, break_qty) do update set"
             " unit_price = excluded.unit_price,"
             " stock = excluded.stock,"
-            " checked = excluded.checked",
+            " checked = excluded.checked,"
+            " library = coalesce(excluded.library, price_table.library)",
             (args.ipn, args.vendor, args.vendor_pn, qty, unit,
-             args.stock, args.checked))
+             args.stock, args.checked, args.library))
     con.commit()
     print(f"{args.ipn}  {args.vendor} {args.vendor_pn}:"
           f" {len(breaks)} breaks recorded")
@@ -574,6 +576,8 @@ def main(argv):
     v.add_argument("--vendor-pn", dest="vendor_pn", required=True)
     v.add_argument("--stock", type=int)
     v.add_argument("--checked", help="date the survey was taken")
+    v.add_argument("--library", help="the vendor's library tier: JLCPCB "
+                   "basic or extended")
     v.add_argument("--break", dest="brk", action="append", default=[],
                    metavar="QTY:PRICE", help="one vendor break. Repeatable")
     v.set_defaults(run=price)

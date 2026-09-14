@@ -168,6 +168,9 @@
 | 5 | `unit_price` | REAL | | Yes |
 | 6 | `stock` | INTEGER | | Yes |
 | 7 | `checked` | TEXT | | Yes |
+| 8 | `library` | TEXT | | Yes |
+
+- `library` is the vendor's tier for that part number: at JLCPCB `basic`, no loading fee, or `extended`, one loading fee per part number per order.
 
 - One row per vendor break. The key is the part, the vendor, the vendor
   part number and the break, so a re-survey overwrites the rung it re-quotes

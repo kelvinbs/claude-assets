@@ -50,7 +50,7 @@ together, at any point.
 | `library_view` | IPN | ipn, description, value, symbol, footprint, source, pinout_checked | What is drawn and what is not |
 | `sourcing_view` | IPN | name, ipn, description, mpn, manufacturer, datasheet, checked | What is bought |
 | `ready_view` | IPN | ipn, description, missing | What blocks layout |
-| `price_view` | vendor break | name, ipn, vendor, vendor_pn, break_qty, unit_price, stock, checked | What a part costs at every quantity |
+| `price_view` | vendor break | name, ipn, vendor, vendor_pn, break_qty, unit_price, stock, checked, library | What a part costs at every quantity |
 | `cost_view` | IPN | ipn, name, per_board, units, unit_price, vendor | What a build of `<N>` boards costs |
 | `net_view` | drawing pin | net, ref, pin, page | What every named net connects |
 | `bus_view` | bus member | bus, net, pages | What travels together, and where |
@@ -65,7 +65,7 @@ together, at any point.
 | `library_view` | `select name, ipn, description, value, symbol, footprint, source, pinout_checked from parts_table order by symbol is not null, footprint is not null, ipn;` |
 | `sourcing_view` | `select p.name, p.ipn, p.description, p.mpn, p.manufacturer, p.datasheet, p.checked from parts_table p where p.mpn is not null order by p.ipn;` |
 | `ready_view` | `select p.name, p.ipn, p.description, trim(case when p.mpn is null then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |
-| `price_view` | `select p.name, p.ipn, x.vendor, x.vendor_pn, x.break_qty, x.unit_price, x.stock, x.checked from price_table x join parts_table p using (ipn) order by p.ipn, x.vendor, x.vendor_pn, x.break_qty;` |
+| `price_view` | `select p.name, p.ipn, x.vendor, x.vendor_pn, x.break_qty, x.unit_price, x.stock, x.checked, x.library from price_table x join parts_table p using (ipn) order by p.ipn, x.vendor, x.vendor_pn, x.break_qty;` |
 | `cost_view` | `with u as (select p.ipn, p.name, count(r.uuid) as per_board, count(r.uuid) * <N> as units from parts_table p left join ref_table r using (ipn) group by p.ipn) select u.ipn, u.name, u.per_board, u.units, (select x.unit_price from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as unit_price, (select x.vendor from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as vendor from u order by u.ipn;` |
 | `net_view` | `select n.net, r.ref, n.pin, r.page from net_table n join ref_table r using (uuid) order by n.net, r.ref, n.pin;` |
 | `bus_view` | `select b.bus, b.net, group_concat(distinct r.page) as pages from bus_table b left join net_table n using (net) left join ref_table r using (uuid) group by b.bus, b.net order by b.bus, b.net;` |
