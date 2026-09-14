@@ -36,17 +36,16 @@ beside the design files.
 
 ## The schema
 
-Three tables in one file, and their columns are T2.3, T2.4 and
-T2.13 of
-`board-build-tool.md`.
+Six tables in one file, and their columns are T2.3, T2.4, T2.6, T2.6a,
+T2.6b and T2.13 of `board-build-tool.md`.
 `init-pipeline.py` holds them in executable form and is the only
 place they are written as DDL. A column added to those tables is added
 there in the same commit.
 
 Keys carry the constraint the document states: `ipn` on `parts_table`,
-`uuid` on `ref_table`.
+`(uuid, path)` on `ref_table`.
 
-Every relation of T2.9 is declared — there are five and none is exempt.
+Every declarable relation of T2.9 is declared.
 `parent` sits on `ref_table`: parenthood is a property of use.
 Tables are created in an order that lets a reference resolve, and
 `parts_table` carries the unique index over `name`.
@@ -59,7 +58,11 @@ the skill that decides when it is required.
 
 - A database file that is absent is created.
 - A table that is absent is created.
-- A table that is there is left exactly as it is, rows included.
+- A table that is there is left exactly as it is, rows included — unless
+  its shape is an earlier one of this schema: a column the schema adds at
+  the end is added; a table whose key changed, or whose columns sit in
+  another order, is rebuilt under the schema and every row carried across.
+  The run says which.
 
 ## The converter
 
@@ -68,11 +71,10 @@ out of git. `copy-kicad-part --lcsc` runs it.
 
 ## What it refuses
 
-A table whose columns are not the schema stops the run, and the run names
-the file, the table, and the difference — a column missing, a column not in
-the schema, or the order differing. Nothing is dropped, altered or emptied,
-so the fix is a decision made in the open rather than a migration made
-silently.
+A table with a column the schema does not have, or missing one it cannot
+add, stops the run, and the run names the file, the table, and the
+difference. Nothing is dropped or emptied, so the fix is a decision made
+in the open.
 
 The run exits non-zero on that, and on a `<board-dir>` that is not a
 directory.

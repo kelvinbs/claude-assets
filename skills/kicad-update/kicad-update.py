@@ -5,7 +5,9 @@
 
 The skill of stages 4 and 6. Every instance in `ref_table` that carries a
 page and whose part carries a symbol is drawn on that page, in the order of
-T2.12: room first, then family for the instances with no room.
+T2.12: room first, then family for the instances with no room. Every net
+the record names is a local or a hierarchical label, never a global one;
+the root joins the pages by sheet pins, and buses carry grouped nets.
 
 The return direction, section 2.2: every page is read back. A symbol the
 User placed enters `ref_table` under its own uuid when its `ipn` field names
@@ -40,6 +42,8 @@ HERE = Path(__file__).resolve().parent
 
 SCH_VERSION = 20250114
 GRID = 2.54
+SHEET_W = 20 * GRID    # a sheet symbol's width; its height follows its pins
+STUB = 2 * GRID        # wire or bus from a sheet pin to its label
 FONT = 1.27
 LINE = 2.54   # field line pitch; Reference over Value at the lower right
 
@@ -119,37 +123,86 @@ def value_of(con, ipn, description):
 
 
 def instances(con):
-    """One row per thing to draw, with everything the sheet needs on it.
+    """One row per instance, (uuid, path), with everything the sheet needs
+    on it. A symbol in a sub-sheet is one drawing and several rows.
 
     `Value` is parts_table.value. The IPN is on the row in its own field,
     and that is what the record keys on."""
     rows = []
-    for uuid_, ipn, ref, page, room, unit, symbol, footprint, description, \
-            datasheet, manufacturer, mpn, note, checked in con.execute(
-            "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, "
+    for uuid_, ipn, ref, page, room, unit, path, symbol, footprint, \
+            description, datasheet, manufacturer, mpn, note, checked, \
+            name in con.execute(
+            "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, r.path, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
-            "       p.manufacturer, p.mpn, p.note, p.checked "
+            "       p.manufacturer, p.mpn, p.note, p.checked, p.name "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
-            "order by r.ipn, r.ref, r.unit"):
+            "order by r.ipn, r.path, r.ref, r.unit"):
         rows.append({
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
-            "unit": unit or 1,
+            "unit": unit or 1, "path": path or "",
             "symbol": symbol, "footprint": footprint or "",
             "value": value_of(con, ipn, description),
             "description": description or "", "datasheet": datasheet or "",
             "manufacturer": manufacturer or "", "mpn": mpn or "",
             "note": note or "", "checked": checked or "no",
             "parent": "", "room_field": (room or "").strip(),
+            "sheet": name if (symbol or "").startswith("sheet:") else "",
         })
     # T2.11: `parent` reaches the sheet as the parent instance's reference,
-    # not its uuid. A reference is what an engineer reads on a page
-    ref_of_uuid = {r["uuid"]: r["ref"] for r in rows}
-    parent_of = dict(con.execute(
-        "select uuid, parent from ref_table where parent is not null"))
+    # not its uuid. A reference is what an engineer reads on a page. A
+    # drawing shared by several instances names every parent, in order
+    ref_of = {(r["uuid"], r["path"]): r["ref"] for r in rows}
+    parent_of = {(u, p or ""): (pu, pp or "") for u, p, pu, pp in con.execute(
+        "select uuid, path, parent, parent_path from ref_table "
+        "where parent is not null")}
     for r in rows:
-        r["parent"] = ref_of_uuid.get(parent_of.get(r["uuid"]), "")
+        r["parent"] = ref_of.get(parent_of.get((r["uuid"], r["path"]),
+                                               None), "")
+        r["parent_field"] = r["parent"]
+    by_uuid = {}
+    for r in rows:
+        by_uuid.setdefault(r["uuid"], []).append(r)
+    for rs in by_uuid.values():
+        if len(rs) > 1:
+            parents = [x["parent"] for x in rs if x["parent"]]
+            joined = " ".join(dict.fromkeys(parents))
+            for x in rs:
+                x["parent_field"] = joined
     return rows
+
+
+def drawings(rows):
+    """One row per symbol to draw - the first instance of each uuid - with
+    `paths`: [(path, ref, unit)] for every instance it stands for."""
+    out, seen = [], {}
+    for r in rows:
+        if r["uuid"] not in seen:
+            seen[r["uuid"]] = dict(r, paths=[])
+            out.append(seen[r["uuid"]])
+        seen[r["uuid"]]["paths"].append((r["path"], r["ref"], r["unit"]))
+    return out
+
+
+def root_page_of(rows):
+    """The root page each sheet-instance chain starts on: uuid of a
+    sub-sheet instance placed on a root page -> that page."""
+    return {r["uuid"]: r["page"] for r in rows
+            if r["sheet"] and not r["path"]}
+
+
+def kicad_path(root, sheets, starts, page, path):
+    """The KiCad instance path of a sheet instance: the root, the root
+    page's sheet symbol, then the chain of sub-sheet symbols."""
+    if not path:
+        if page not in sheets:
+            raise Bad(f"root sheet has no sheet symbol for page {page!r}")
+        return f"/{root}/{sheets[page][0]}"
+    first = path.split("/")[0]
+    if first not in starts:
+        raise Bad(f"instance path {path} starts at no sub-sheet on a root "
+                  "page")
+    return f"/{root}/{sheets[starts[first]][0]}/{path}"
 
 
 def number_of(ref):
@@ -212,27 +265,153 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right):
         + property_sexp("MPN", row["mpn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("note", row["note"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
-        + property_sexp("parent", row["parent"], f"{x:.2f}", f"{y:.2f}",
+        + property_sexp("parent", row["parent_field"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("room", row["room_field"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("checked", row["checked"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
-        + "\t\t(instances\n"
-        f"\t\t\t(project \"{project}\"\n"
-        f"\t\t\t\t(path \"{path_uuid}\"\n"
-        f"\t\t\t\t\t(reference \"{row['ref']}\")\n\t\t\t\t\t(unit {unit})\n"
-        "\t\t\t\t)\n\t\t\t)\n\t\t)\n"
-        "\t)\n"
+        + instances_sexp(project, row, path_uuid)
+        + "\t)\n"
     )
 
 
+def instances_sexp(project, row, path_of):
+    """The per-instance block: one path entry per instance the drawing
+    stands for, each with its own reference. `path_of` maps a record
+    path to the KiCad path, or is the one KiCad path when the row has
+    no `paths`."""
+    entries = row.get("paths") or [(row.get("path", ""), row["ref"],
+                                    row.get("unit") or 1)]
+    body = ("\t\t(instances\n"
+            f"\t\t\t(project \"{project}\"\n")
+    for path, ref, unit in entries:
+        kp = path_of(path) if callable(path_of) else path_of
+        body += (f"\t\t\t\t(path \"{kp}\"\n"
+                 f"\t\t\t\t\t(reference \"{esc(ref)}\")\n"
+                 f"\t\t\t\t\t(unit {unit})\n"
+                 "\t\t\t\t)\n")
+    return body + "\t\t\t)\n\t\t)\n"
+
+
 def nets_of(con):
-    """net_table as {instance uuid: {pin: net}}."""
+    """net_table as {symbol uuid: {pin: net}}."""
     out = {}
     for u, pin, net in con.execute("select uuid, pin, net from net_table"):
         out.setdefault(u, {})[pin] = net
     return out
+
+
+def is_bus(name):
+    return name.startswith("{") and name.endswith("}")
+
+
+class Nets:
+    """The net model of TB.4: what label a net takes on a page, and what
+    pins a page's sheet symbol carries. Derived from the record alone.
+
+    A net that appears in one sheet file is local. One that appears in
+    two or more leaves each by a hierarchical label and a sheet pin. A
+    net in a bus is local on its page and travels as the bus. A
+    sub-sheet's pins are also whatever its instances name on their pins."""
+
+    def __init__(self, con, rows):
+        self.pins = nets_of(con)
+        self.bus_of = dict(con.execute("select net, bus from bus_table"))
+        self.members = {}
+        for net, bus in self.bus_of.items():
+            self.members.setdefault(bus, []).append(net)
+        page_of = {r["uuid"]: r["page"] for r in rows}
+        self.sheet_pages = {r["sheet"] for r in rows if r["sheet"]}
+        # what sits under a page: the sub-sheets instanced on it, and
+        # theirs. A net shared only inside that subtree does not leave
+        # the page
+        below = {}
+        for r in rows:
+            if r["sheet"]:
+                below.setdefault(r["page"], set()).add(r["sheet"])
+        self.under = {}
+        for page in set(below) | self.sheet_pages | set(page_of.values()):
+            seen, todo = set(), list(below.get(page, ()))
+            while todo:
+                x = todo.pop()
+                if x not in seen:
+                    seen.add(x)
+                    todo.extend(below.get(x, ()))
+            self.under[page] = seen
+        # a multi-unit package is one instance under one reference; its
+        # nets may be recorded against any of its unit rows, and each
+        # unit draws the pins it shows
+        self.by_ref = {}
+        for r in rows:
+            self.by_ref.setdefault((r["page"], r["ref"]), {}).update(
+                self.pins.get(r["uuid"], {}))
+        self.files, self.bus_files, self.declared = {}, {}, {}
+        for r in rows:
+            if not r["sheet"]:
+                continue
+            for pin in self.pins.get(r["uuid"], {}):
+                self.declared.setdefault(r["sheet"], set()).add(pin)
+        for u, pins in self.pins.items():
+            page = page_of.get(u)
+            if not page:
+                continue
+            for pin, net in pins.items():
+                if is_bus(net):
+                    self.bus_files.setdefault(net[1:-1], set()).add(page)
+                    continue
+                self.files.setdefault(net, set()).add(page)
+                if net in self.bus_of:
+                    self.bus_files.setdefault(self.bus_of[net],
+                                              set()).add(page)
+
+    def pins_for(self, row):
+        """{pin: net} for a drawing: every net named on any unit row of
+        its reference on its page."""
+        return self.by_ref.get((row["page"], row["ref"])) \
+            or self.pins.get(row["uuid"]) or {}
+
+    def outside(self, files, page):
+        """Whether something on `page` is also somewhere outside the page
+        and the sub-sheets under it."""
+        return bool(files - {page} - self.under.get(page, set()))
+
+    def kind(self, net, page):
+        """The label at a pin is always local. A net that leaves the page
+        gets its hierarchical label in the port area, joined by name."""
+        return "label"
+
+    def hier(self, net, page):
+        """Whether this net leaves this page: outside the page and what is
+        under it, or named as a pin of this sub-sheet."""
+        if is_bus(net) or net in self.bus_of:
+            return False
+        if self.outside(self.files.get(net, set()), page):
+            return True
+        return net in self.declared.get(page, ())
+
+    def buses(self, page):
+        """The buses that leave this page, by name, sorted."""
+        out = {b for b, fs in self.bus_files.items()
+               if page in fs and self.outside(fs, page)}
+        out |= {p[1:-1] for p in self.declared.get(page, ()) if is_bus(p)}
+        return sorted(out)
+
+    def leaving(self, page):
+        """The nets that leave this page by their own pin, sorted."""
+        out = {n for n, fs in self.files.items() if page in fs
+               and self.hier(n, page)}
+        out |= {p for p in self.declared.get(page, ()) if not is_bus(p)}
+        return sorted(out)
+
+    def sheet_pins(self, page):
+        """The pins of a sheet symbol standing for this page: buses first,
+        then nets. Each as the name written on the pin."""
+        return ([f"{{{b}}}" for b in self.buses(page)]
+                + self.leaving(page))
+
+    def aliases(self):
+        return {b: sorted(ns) for b, ns in self.members.items()}
 
 
 def pin_points(block, unit):
@@ -270,10 +449,14 @@ def pin_ends(block, unit, x, y, rot):
     return out
 
 
-def label_sexp(net, x, y, angle):
+def label_sexp(net, x, y, angle, kind="label", uuid_=None):
+    """A label at a point. `label` is local to the sheet file;
+    `hierarchical_label` pairs with a pin on the sheet symbol above.
+    Never a global label."""
+    shape = "\t\t(shape passive)\n" if kind == "hierarchical_label" else ""
     return (
-        f"\t(global_label \"{esc(net)}\"\n"
-        "\t\t(shape passive)\n"
+        f"\t({kind} \"{esc(net)}\"\n"
+        f"{shape}"
         f"\t\t(at {x:.2f} {y:.2f} {angle})\n"
         "\t\t(fields_autoplaced yes)\n"
         f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
@@ -281,22 +464,74 @@ def label_sexp(net, x, y, angle):
         # upgrade folds 180 to 0 and 270 to 90
         f"\t\t\t(justify {'right' if angle in (180, 270) else 'left'})\n"
         "\t\t)\n"
-        f"\t\t(uuid \"{uid('label', net, f'{x:.2f}', f'{y:.2f}')}\")\n"
+        f"\t\t(uuid \"{uuid_ or uid('label', net, f'{x:.2f}', f'{y:.2f}')}\")\n"
         "\t)\n"
     )
 
 
-def labels_sexp(row, block, x, y, rot, nets):
-    """Global labels for every pin of this instance that net_table names."""
-    pins = nets.get(row["uuid"]) or {}
+def stub_sexp(x0, y0, x1, y1, bus, uuid_):
+    """A short wire, or bus, from a sheet pin to the label that names it."""
+    return (
+        f"\t({'bus' if bus else 'wire'}\n"
+        f"\t\t(pts\n\t\t\t(xy {x0:.2f} {y0:.2f}) (xy {x1:.2f} {y1:.2f})\n\t\t)\n"
+        "\t\t(stroke\n\t\t\t(width 0)\n\t\t\t(type default)\n\t\t)\n"
+        f"\t\t(uuid \"{uuid_}\")\n"
+        "\t)\n"
+    )
+
+
+def sheet_pin_sexp(name, x, y, uuid_):
+    return (
+        f"\t\t(pin \"{esc(name)}\" passive\n"
+        f"\t\t\t(at {x:.2f} {y:.2f} 0)\n"
+        f"\t\t\t(effects\n\t\t\t\t(font\n\t\t\t\t\t(size {FONT} {FONT})\n"
+        "\t\t\t\t)\n\t\t\t\t(justify right)\n\t\t\t)\n"
+        f"\t\t\t(uuid \"{uuid_}\")\n"
+        "\t\t)\n"
+    )
+
+
+def sheet_height(npins):
+    return max(4 * GRID, (npins + 1) * GRID)
+
+
+def sheet_pin_points(x, y, w, pins):
+    """{pin name: (X, Y)} on the right edge of a sheet symbol at (x, y)."""
+    return {name: (round(x + w, 2), round(y + GRID * (i + 1), 2))
+            for i, name in enumerate(pins)}
+
+
+def pin_fittings_sexp(sheet_uuid, x, y, w, pins, labels, kinds):
+    """For every pin of a sheet symbol: a stub out to the right and a label
+    at its end. `labels` maps pin name to the label text, `kinds` to the
+    label kind. Deterministic uuids, so a rerun replaces its own work."""
+    body = ""
+    for name, (px, py) in sheet_pin_points(x, y, w, pins).items():
+        text = labels.get(name)
+        if not text:
+            continue
+        body += stub_sexp(px, py, px + STUB, py, is_bus(text),
+                          uid("stub", sheet_uuid, name))
+        body += label_sexp(text, px + STUB, py, 0, kinds.get(name, "label"),
+                           uid("pinlabel", sheet_uuid, name))
+    return body
+
+
+def labels_sexp(row, block, x, y, rot, model):
+    """Labels for every pin of this drawing that net_table names."""
+    pins = model.pins_for(row)
     if not pins:
         return ""
     ends = pin_ends(block, row.get("unit") or 1, x, y, rot)
-    return "".join(label_sexp(pins[n], *ends[n]) for n in sorted(pins)
-                   if n in ends)
+    return "".join(label_sexp(pins[n], *ends[n], model.kind(pins[n], row["page"]))
+                   for n in sorted(pins) if n in ends)
 
 
-def sheet_sexp(project, root, name, filename, page_number, x, y, w, h):
+def sheet_sexp(project, parent_path, name, filename, page_number, x, y, w,
+               pins, sheet_uuid):
+    """A sheet symbol with its pins down the right edge."""
+    h = sheet_height(len(pins))
+    points = sheet_pin_points(x, y, w, pins)
     return (
         "\t(sheet\n"
         f"\t\t(at {x:.2f} {y:.2f})\n"
@@ -304,16 +539,60 @@ def sheet_sexp(project, root, name, filename, page_number, x, y, w, h):
         "\t\t(fields_autoplaced yes)\n"
         "\t\t(stroke\n\t\t\t(width 0.1524)\n\t\t\t(type solid)\n\t\t)\n"
         "\t\t(fill\n\t\t\t(color 0 0 0 0.0000)\n\t\t)\n"
-        f"\t\t(uuid \"{uid(project, 'sheet', name)}\")\n"
-        + property_sexp("Sheetname", name, f"{x:.2f}", f"{y - GRID:.2f}")
+        f"\t\t(uuid \"{sheet_uuid}\")\n"
+        + property_sexp("Sheetname", esc(name), f"{x:.2f}", f"{y - GRID:.2f}")
         + property_sexp("Sheetfile", filename, f"{x:.2f}",
                         f"{y + h + GRID:.2f}")
+        + "".join(sheet_pin_sexp(p, *points[p], uid("pin", sheet_uuid, p))
+                  for p in pins)
         + "\t\t(instances\n"
         f"\t\t\t(project \"{project}\"\n"
-        f"\t\t\t\t(path \"/{root}\"\n\t\t\t\t\t(page \"{page_number}\")\n"
+        f"\t\t\t\t(path \"{parent_path}\"\n\t\t\t\t\t(page \"{page_number}\")\n"
         "\t\t\t\t)\n\t\t\t)\n\t\t)\n"
         "\t)\n"
     )
+
+
+def bus_entry_sexp(x, y, uuid_):
+    return (
+        "\t(bus_entry\n"
+        f"\t\t(at {x:.2f} {y:.2f})\n"
+        f"\t\t(size {GRID:.2f} {GRID:.2f})\n"
+        "\t\t(stroke\n\t\t\t(width 0)\n\t\t\t(type default)\n\t\t)\n"
+        f"\t\t(uuid \"{uuid_}\")\n"
+        "\t)\n"
+    )
+
+
+def port_sexp(page, net, x, y):
+    """A port: the hierarchical label a leaving net needs, a stub, and a
+    local label of the same name, so the label at the pin joins it."""
+    return (label_sexp(net, x, y, 180, "hierarchical_label",
+                       uid("port", page, net))
+            + stub_sexp(x, y, x + STUB, y, False, uid("portstub", page, net))
+            + label_sexp(net, x + STUB, y, 0, "label",
+                         uid("portlabel", page, net)))
+
+
+def bus_breakout_sexp(page, bus, members, x, y):
+    """A bus that leaves a page, drawn once per page: the hierarchical bus
+    label at the top, the bus running down, and one entry per member
+    ending in a local label. The member labels at the symbol pins join by
+    name, so the page is connected without a wire drawn. The User moves
+    it, or draws on from it."""
+    n = len(members)
+    bottom = y + (n + 1) * GRID
+    body = label_sexp(f"{{{bus}}}", x, y, 180, "hierarchical_label",
+                      uid("bus", page, bus))
+    body += stub_sexp(x, y, x, bottom, True, uid("busstub", page, bus))
+    for i, m in enumerate(sorted(members)):
+        ey = y + (i + 1) * GRID
+        body += bus_entry_sexp(x, ey, uid("busentry", page, bus, m))
+        body += stub_sexp(x + GRID, ey + GRID, x + 3 * GRID, ey + GRID, False,
+                          uid("buswire", page, bus, m))
+        body += label_sexp(m, x + 3 * GRID, ey + GRID, 0, "label",
+                           uid("buslabel", page, bus, m))
+    return body
 
 
 # ---------------------------------------------------------------- the library
@@ -332,6 +611,8 @@ def library_blocks(board, nickname, lib_ids):
     out = {}
     for lib_id in sorted(lib_ids):
         nick, name = lib_id.split(":", 1)
+        if nick == "sheet":
+            continue
         if nick != nickname:
             raise Bad(f"{lib_id} is not in this project's library. "
                       f"symbol-draw copies a symbol in before it is placed")
@@ -401,15 +682,20 @@ def unesc(value):
     return value.replace('\\"', '"').replace("\\\\", "\\")
 
 
-def symbol_blocks(src):
-    """Every placed symbol on a page — the top-level `(symbol` blocks, as
-    (start, end) spans of the text. Library definitions sit one level down
-    inside `lib_symbols` and are not matched."""
+def top_blocks(src, head):
+    """Every top-level block opening with `head` - e.g. "(symbol", "(sheet",
+    "(wire" - as (start, end) spans of the text. Library definitions sit
+    one level down inside `lib_symbols` and are not matched."""
     spans, i = [], 0
+    key = f"\n\t{head}"
     while True:
-        j = src.find("\n\t(symbol\n", i)
+        j = src.find(key, i)
         if j < 0:
             return spans
+        after = src[j + len(key):j + len(key) + 1]
+        if after not in ("\n", " ", ""):
+            i = j + 1
+            continue
         start = j + 1
         depth, k, in_str = 0, start, False
         while k < len(src):
@@ -431,6 +717,130 @@ def symbol_blocks(src):
             k += 1
         spans.append((start, k))
         i = k
+
+
+def symbol_blocks(src):
+    """Every placed symbol on a page."""
+    return top_blocks(src, "(symbol")
+
+
+def sheet_blocks(src):
+    """Every sheet symbol on a page."""
+    return top_blocks(src, "(sheet")
+
+
+FITTINGS = ("(wire", "(bus", "(bus_entry", "(label", "(hierarchical_label",
+            "(global_label")
+
+
+def remove_by_uuid(src, uuids):
+    """Drop every wire, bus and label whose uuid is in the set."""
+    if not uuids:
+        return src
+    spans = []
+    for head in FITTINGS:
+        for a, b in top_blocks(src, head):
+            u = re.search(r'\(uuid "([^"]+)"\)', src[a:b])
+            if u and u.group(1) in uuids:
+                spans.append((a, b))
+    for a, b in sorted(spans, reverse=True):
+        src = src[:a] + src[b:]
+    return src
+
+
+def signature(head, block):
+    """What a fitting is, geometrically: its kind and every point in it."""
+    pts = re.findall(r'\((?:at|xy) (-?[\d.]+) (-?[\d.]+)', block)
+    return (head, tuple(sorted((round(float(x), 2), round(float(y), 2))
+                               for x, y in pts)))
+
+
+def remove_matching(src, body):
+    """Drop every fitting in src that coincides exactly - kind and all its
+    points - with one the tool is about to write. A fitting orphaned by an
+    earlier run under another uuid goes this way."""
+    want = set()
+    for head in FITTINGS:
+        for a, b in top_blocks(body, head):
+            want.add(signature(head, body[a:b]))
+    if not want:
+        return src
+    spans = []
+    for head in FITTINGS:
+        for a, b in top_blocks(src, head):
+            if signature(head, src[a:b]) in want:
+                spans.append((a, b))
+    for a, b in sorted(spans, reverse=True):
+        src = src[:a] + src[b:]
+    return src
+
+
+def read_sheet(block):
+    """What a page says about one sheet symbol: uuid, name, file, place,
+    size and pin names."""
+    u = re.search(r'\n\t\t\(uuid "([^"]+)"\)', block)
+    name = re.search(r'\(property "Sheetname" "((?:[^"\\]|\\.)*)"', block)
+    file = re.search(r'\(property "Sheetfile" "((?:[^"\\]|\\.)*)"', block)
+    at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+)\)', block)
+    size = re.search(r'\n\t\t\(size (-?[\d.]+) (-?[\d.]+)\)', block)
+    pins = re.findall(r'\n\t\t\(pin "((?:[^"\\]|\\.)*)"', block)
+    return {"uuid": u.group(1) if u else None,
+            "name": unesc(name.group(1)) if name else "",
+            "file": file.group(1) if file else "",
+            "at": (float(at.group(1)), float(at.group(2))) if at else (0, 0),
+            "size": (float(size.group(1)), float(size.group(2))) if size
+            else (SHEET_W, sheet_height(0)),
+            "pins": [unesc(p) for p in pins]}
+
+
+def set_sheet_pins(block, pins, sheet_uuid):
+    """Rewrite a sheet symbol's pin list and height for these pins. Its
+    place on the page stays."""
+    sh = read_sheet(block)
+    x, y = sh["at"]
+    w = sh["size"][0]
+    block = re.sub(r'\n\t\t\(pin "(?:[^"\\]|\\.)*"[^\n]*\n(?:\t\t\t.*\n)*?\t\t\)',
+                   "", block)
+    block = re.sub(r'\n\t\t\(size [^)]*\)',
+                   f"\n\t\t(size {w:.2f} {sheet_height(len(pins)):.2f})",
+                   block, count=1)
+    points = sheet_pin_points(x, y, w, pins)
+    new = "".join(sheet_pin_sexp(p, *points[p], uid("pin", sheet_uuid, p))
+                  for p in pins)
+    i = block.find("\n\t\t(instances")
+    if i < 0:
+        i = block.rstrip().rfind("\n")
+    return block[:i + 1] + new + block[i + 1:]
+
+
+def set_instances(block, project, row, path_of):
+    """Rewrite a symbol's per-instance block from the record."""
+    new = instances_sexp(project, row, path_of)
+    i = block.find("\n\t\t(instances\n")
+    if i < 0:
+        j = block.rstrip().rfind("\n")
+        return block[:j + 1] + new + block[j + 1:]
+    depth, k, in_str = 0, i + 1, False
+    while k < len(block):
+        c = block[k]
+        if in_str:
+            if c == "\\":
+                k += 1
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                k += 1
+                break
+        k += 1
+    while k < len(block) and block[k] == "\n":
+        k += 1
+    return block[:i + 1] + new + block[k:]
 
 
 PROP = r'\n\t\t\(property "%s" "((?:[^"\\]|\\.)*)"'
@@ -496,12 +906,20 @@ def page_names(root_src):
     return dict(zip(files, names))
 
 
-def read_pages(board, project, root_src):
-    """Every symbol on every page: uuid -> (file name, page name, symbol,
-    block span). Pages are the files the root names, plus any
-    `<project>-*.kicad_sch` beside them."""
+def page_files(con, project, root_src):
+    """Sheetfile to page name: the root's sheet symbols, plus every
+    sub-sheet the record names, whose file is named from its name."""
     by_file = page_names(root_src)
-    found = {}
+    for (name,) in con.execute("select name from parts_table where symbol "
+                               "like 'sheet:%' and name is not null"):
+        by_file[f"{project}-{slug(name)}.kicad_sch"] = name
+    return by_file
+
+
+def read_pages(board, project, by_file):
+    """Every symbol and every sheet symbol on every page: two maps, uuid ->
+    (file name, page name, what was read)."""
+    found, sheets = {}, {}
     for path in sorted(board.glob(f"{project}-*.kicad_sch")):
         page = by_file.get(path.name)
         if page is None:
@@ -511,7 +929,11 @@ def read_pages(board, project, root_src):
             sym = read_symbol(src[start:end])
             if sym["uuid"]:
                 found[sym["uuid"]] = (path.name, page, sym)
-    return found
+        for start, end in sheet_blocks(src):
+            sh = read_sheet(src[start:end])
+            if sh["uuid"]:
+                sheets[sh["uuid"]] = (path.name, page, sh)
+    return found, sheets
 
 
 def next_ref_free(con, prefix, taken):
@@ -628,36 +1050,60 @@ def push_fields(con, library, nickname, only=None):
 INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
                    ("Description", "description"), ("Datasheet", "datasheet"),
                    ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
-                   ("note", "note"), ("parent", "parent"),
+                   ("note", "note"), ("parent", "parent_field"),
                    ("room", "room_field"), ("checked", "checked"))
 
 
-def push_instances(con, board, project, root_src):
+def push_instances(con, board, project, root, root_src, rows):
     """Record to sheets: T2.11's fields onto every placed instance the
-    record knows (n4.3). Positions, wiring and graphics untouched. Returns
-    {sheet file: instances rewritten}."""
-    rows = {r["uuid"]: r for r in instances(con)}
-    placed = read_pages(board, project, root_src)
+    record knows (n4.3), and the per-instance block - every path the
+    drawing stands for, with its reference. Positions, wiring and graphics
+    untouched. Returns {sheet file: instances rewritten}."""
+    draw = {d["uuid"]: d for d in drawings(rows)}
+    sheets = root_sheets(root_src)
+    starts = root_page_of(rows)
+    placed, placed_sheets = read_pages(board, project,
+                                       page_files(con, project, root_src))
     by_file = {}
     for u, (fname, page, sym) in placed.items():
-        if u in rows:
+        if u in draw:
+            by_file.setdefault(fname, set()).add(u)
+    for u, (fname, page, sh) in placed_sheets.items():
+        if u in draw:
             by_file.setdefault(fname, set()).add(u)
     changed = {}
     for fname, wanted in sorted(by_file.items()):
         path = board / fname
         before = src = path.read_text()
         out, last, count = [], 0, 0
+        edits = []
         for start, end in symbol_blocks(src):
             block = src[start:end]
             u = read_symbol(block)["uuid"]
             if u not in wanted:
                 continue
+            row = draw[u]
             new = block
             for field, key in INSTANCE_FIELDS:
-                new = set_property(new, field, rows[u][key])
+                new = set_property(new, field, row[key])
+            new = set_property(new, "Reference", row["ref"])
+            new = set_instances(
+                new, project, row,
+                lambda p, row=row: kicad_path(root, sheets, starts,
+                                              row["page"], p))
             if new != block:
-                out.append(src[last:start]); out.append(new); last = end
-                count += 1
+                edits.append((start, end, new))
+        for start, end in sheet_blocks(src):
+            block = src[start:end]
+            u = read_sheet(block)["uuid"]
+            if u not in wanted:
+                continue
+            new = set_property(block, "Sheetname", draw[u]["ref"])
+            if new != block:
+                edits.append((start, end, new))
+        for start, end, new in sorted(edits):
+            out.append(src[last:start]); out.append(new); last = end
+            count += 1
         if count:
             out.append(src[last:])
             path.write_text("".join(out))
@@ -671,28 +1117,34 @@ def push_instances(con, board, project, root_src):
     return changed
 
 
-LABEL_RE = re.compile(r'\n\t\(global_label "(?:[^"\\]|\\.)*"\n(?:.*\n)*?\t\)')
+LABEL_RE = re.compile(r'\n\t\((?:global_label|hierarchical_label|label) '
+                      r'"(?:[^"\\]|\\.)*"\n(?:.*\n)*?\t\)')
 
 
-def push_labels(con, board, project, root_src):
-    """Record to sheets, the nets: every global label on any pin end of any
-    record instance is deleted, then every net_table row is written as a
-    label at its pin. Labels elsewhere on the page are not touched.
-    Returns {sheet file: labels written}."""
-    rows = {r["uuid"]: r for r in instances(con)}
-    nets = nets_of(con)
-    placed = read_pages(board, project, root_src)
+def push_labels(con, board, project, root, root_src, rows, model):
+    """Record to sheets, the nets: every label on any pin end of any
+    record drawing is deleted, then every net_table row is written back as
+    a label at its pin, of the kind the net model gives it. Sheet symbols
+    get their pins, stubs and labels afresh. Each bus that leaves a page
+    gets its hierarchical label once. Labels elsewhere on the page are not
+    touched. Returns {sheet file: labels written}."""
+    draw = {d["uuid"]: d for d in drawings(rows)}
+    placed, placed_sheets = read_pages(board, project,
+                                       page_files(con, project, root_src))
     by_file = {}
     for u, (fname, page, sym) in placed.items():
-        if u in rows:
-            by_file.setdefault(fname, set()).add(u)
+        if u in draw:
+            by_file.setdefault(fname, (page, set()))[1].add(u)
+    for u, (fname, page, sh) in placed_sheets.items():
+        if u in draw:
+            by_file.setdefault(fname, (page, set()))[1].add(u)
     changed = {}
-    for fname, wanted in sorted(by_file.items()):
+    for fname, (page, wanted) in sorted(by_file.items()):
         path = board / fname
         before = src = path.read_text()
-        lib_ids = {rows[u]["symbol"] for u in wanted}
+        lib_ids = {draw[u]["symbol"] for u in wanted if not draw[u]["sheet"]}
         blocks = library_blocks(board, project, lib_ids)
-        ends, fresh = set(), ""
+        ends, fresh, gone = set(), "", set()
         for start, end in symbol_blocks(src):
             block = src[start:end]
             sym = read_symbol(block)
@@ -701,16 +1153,47 @@ def push_labels(con, board, project, root_src):
                 continue
             at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)', block)
             x, y, rot = float(at.group(1)), float(at.group(2)), int(float(at.group(3)))
-            row = rows[u]
+            row = draw[u]
             pe = pin_ends(blocks[row["symbol"]], sym["unit"], x, y, rot)
             ends.update((px, py) for px, py, _ in pe.values())
-            pins = nets.get(u) or {}
-            fresh += "".join(label_sexp(pins[n], *pe[n]) for n in sorted(pins)
-                             if n in pe)
+            pins = model.pins_for(row)
+            fresh += "".join(label_sexp(pins[n], *pe[n], model.kind(pins[n], page))
+                             for n in sorted(pins) if n in pe)
+        edits = []
+        for start, end in sheet_blocks(src):
+            block = src[start:end]
+            sh = read_sheet(block)
+            u = sh["uuid"]
+            if u not in wanted:
+                continue
+            row = draw[u]
+            pins = model.sheet_pins(row["sheet"])
+            for name in set(sh["pins"]) | set(pins):
+                gone.add(uid("stub", u, name))
+                gone.add(uid("pinlabel", u, name))
+            new = set_sheet_pins(block, pins, u)
+            if new != block:
+                edits.append((start, end, new))
+            x, y = sh["at"]
+            named = model.pins.get(u) or {}
+            fresh += pin_fittings_sexp(
+                u, x, y, sh["size"][0], pins, named,
+                {n: model.kind(net, page) for n, net in named.items()})
+        if edits:
+            out, last = [], 0
+            for start, end, new in sorted(edits):
+                out.append(src[last:start]); out.append(new); last = end
+            out.append(src[last:])
+            src = "".join(out)
+
         def keep(m):
             at = re.search(r'\(at (-?[\d.]+) (-?[\d.]+)', m.group(0))
             return (round(float(at.group(1)), 2), round(float(at.group(2)), 2)) not in ends
         src = LABEL_RE.sub(lambda m: m.group(0) if keep(m) else "", src)
+        src = remove_by_uuid(src, gone)
+        src = remove_matching(src, fresh)
+        src, buses = port_area(src, page, model)
+        fresh += buses
         if fresh:
             close = src.rstrip().rfind(")")
             src = src[:close] + fresh + src[close:]
@@ -722,8 +1205,121 @@ def push_labels(con, board, project, root_src):
                 path.write_text(before)
                 raise Bad(f"kicad-cli could not normalize {path}: "
                           + (run.stderr or run.stdout).strip())
-            changed[fname] = fresh.count("(global_label")
+            changed[fname] = (fresh.count("(label") + fresh.count("(hierarchical_label"))
     return changed
+
+
+def port_area(src, page, model):
+    """The page's port area: every port and every bus breakout, one column
+    at the top right, another column to the left when the first is full.
+    Tool-owned: what an earlier run drew is removed, by uuid and by
+    geometry, and the area is drawn afresh. Returns (src, text to add)."""
+    buses = model.buses(page)
+    ports = model.leaving(page)
+    old_buses = set()
+    for a, b in top_blocks(src, "(hierarchical_label"):
+        m = re.match(r'\t\(hierarchical_label "\{([^}"]*)\}"', src[a:b])
+        u = re.search(r'\(uuid "([^"]+)"\)', src[a:b])
+        if m and u and u.group(1) == uid("bus", page, m.group(1)):
+            old_buses.add(m.group(1))
+    candidates = set(model.files) | set(model.bus_of)
+    gone = set()
+    for net in candidates:
+        gone.update({uid("port", page, net), uid("portstub", page, net),
+                     uid("portlabel", page, net)})
+    for bus in old_buses | set(buses) | set(model.members):
+        gone.update({uid("bus", page, bus), uid("busstub", page, bus)})
+        for m in candidates:
+            gone.update({uid("busentry", page, bus, m),
+                         uid("buswire", page, bus, m),
+                         uid("buslabel", page, bus, m)})
+    src = remove_by_uuid(src, gone)
+    width, height = PAPERS.get(paper_of(src), PAPERS["A"])
+    x, y, top = snap(width - MARGIN - 12 * GRID), 5 * GRID, 5 * GRID
+    limit = height - MARGIN
+    body = ""
+
+    def place(h):
+        nonlocal x, y
+        if y + h > limit and y > top:
+            x, y = snap(x - 20 * GRID), top
+        at = (x, y)
+        y = snap(y + h)
+        return at
+
+    for net in ports:
+        body += port_sexp(page, net, *place(2 * GRID))
+    for bus in buses:
+        members = [m for m in model.members.get(bus, [])
+                   if page in model.files.get(m, ())]
+        body += bus_breakout_sexp(page, bus, members,
+                                  *place((len(members) + 3) * GRID))
+    return remove_matching(src, body), body
+
+
+def push_board(board, project, root, root_src, rows):
+    """Record to board: every footprint whose Reference the record holds
+    takes that instance's sheet path, so Update PCB from Schematic finds
+    it where the symbol now is. Placement and routing untouched. Returns
+    (rewritten, unknown references)."""
+    path = Path(board) / f"{project}.kicad_pcb"
+    if not path.exists():
+        return 0, []
+    sheets = root_sheets(root_src)
+    starts = root_page_of(rows)
+    by_ref = {}
+    for r in rows:
+        if r["ref"] and r["page"] and not r["sheet"]:
+            by_ref.setdefault(r["ref"], r)
+    before = src = path.read_text()
+    out, last, count, unknown = [], 0, 0, []
+    for a, b in top_blocks(src, "(footprint"):
+        block = src[a:b]
+        ref = re.search(r'\n\t\t\(property "Reference" "((?:[^"\\]|\\.)*)"',
+                        block)
+        if not ref:
+            continue
+        row = by_ref.get(unesc(ref.group(1)))
+        if row is None:
+            unknown.append(unesc(ref.group(1)))
+            continue
+        try:
+            kp = kicad_path(root, sheets, starts, row["page"], row["path"])
+        except Bad:
+            continue
+        # the board omits the root: /<page sheet>/<sub-sheets>/<symbol>
+        want = kp[len(f"/{root}"):] + f"/{row['uuid']}"
+        new = re.sub(r'\n\t\t\(path "[^"]*"\)', f'\n\t\t(path "{want}")',
+                     block, count=1)
+        if new != block:
+            out.append(src[last:a]); out.append(new); last = b
+            count += 1
+    if count:
+        out.append(src[last:])
+        path.write_text("".join(out))
+        run = subprocess.run(["kicad-cli", "pcb", "upgrade", "--force",
+                              str(path)], capture_output=True, text=True)
+        if run.returncode != 0:
+            path.write_text(before)
+            raise Bad(f"kicad-cli could not normalize {path}: "
+                      + (run.stderr or run.stdout).strip())
+    return count, sorted(set(unknown))
+
+
+def write_bus_aliases(board, project, model):
+    """The bus aliases into the project file, `schematic.bus_aliases`, the
+    only key this tool touches there after init."""
+    path = Path(board) / f"{project}.kicad_pro"
+    if not path.exists():
+        return False
+    data = json.loads(path.read_text())
+    want = model.aliases()
+    sch = data.setdefault("schematic", {})
+    if sch.get("bus_aliases") == want:
+        return False
+    sch["bus_aliases"] = want
+    path.write_text(json.dumps(data, indent=2) + "\n")
+    return True
 
 
 def pull_fields(con, library, nickname):
@@ -767,11 +1363,26 @@ GAP = 5 * GRID          # between parts inside a box
 BOX_GAP = 12 * GRID     # between boxes on the page
 
 
-def size_of(row, blocks):
+def size_of(row, blocks, model=None):
     """The space one symbol needs, its own drawing plus the clearance that
     keeps a neighbour's pins off it."""
-    half_w, half_h = extent(blocks[row["symbol"]])
+    half_w, half_h, _, _ = geom(row, blocks, model)
     return 2 * half_w, 2 * (half_h + GRID)
+
+
+def geom(row, blocks, model=None):
+    """(half width, half height, bottom, right) of a drawing: a symbol from
+    its block, a sheet symbol from its pin count plus room for the labels
+    off its right edge."""
+    if row.get("sheet"):
+        n = len(model.sheet_pins(row["sheet"])) if model else 0
+        w = SHEET_W + STUB + 10 * GRID
+        h = sheet_height(n)
+        return w / 2, h / 2, h / 2, w / 2
+    block = blocks[row["symbol"]]
+    half_w, half_h = extent(block)
+    bottom, right = edges(block)
+    return half_w, half_h, bottom, right
 
 
 def shelf(items, limit, gap=GAP, down=False):
@@ -811,7 +1422,7 @@ def box_extent(items, down=False):
     return max(max(w for w, _, _ in items), math.sqrt(area * ASPECT))
 
 
-def boxes_of(rows, blocks):
+def boxes_of(rows, blocks, model=None):
     """A box is a parent and everything under it, else a room, else the part
     on its own. A child that is itself a parent packs first and enters its
     parent's box as one item, so nesting needs no special case."""
@@ -836,7 +1447,7 @@ def boxes_of(rows, blocks):
         descendants, laid out inside a box of its own."""
         items = []
         for row in sorted(by_ref[ref], key=lambda r: r.get("unit") or 1):
-            w, h = size_of(row, blocks)
+            w, h = size_of(row, blocks, model)
             items.append((w, h, ("part", row)))
         for kid in sorted(kids.get(ref, []), key=number_of):
             kw, kh, inner = pack(kid)
@@ -886,12 +1497,13 @@ def outline_sexp(drawn):
     )
 
 
-def flow(rows, blocks, project, path_uuid, width, start_y, height=None,
-         nets=None):
+def flow(rows, blocks, project, ctx, width, start_y, height=None):
     """Lay the sheet as boxes, not as text. A box is a parent and everything
     under it, packed roughly square and sized by its contents. Boxes then
-    pack the page, largest first, and a box never splits across a wrap."""
-    boxes = boxes_of(rows, blocks)
+    pack the page, largest first, and a box never splits across a wrap.
+    `ctx`: page, model, path_of, numbers."""
+    model = ctx["model"]
+    boxes = boxes_of(rows, blocks, model)
     boxes.sort(key=lambda b: -(b[0] * b[1]))
     items = [(w, h, flat) for w, h, flat in boxes]
     room = (height or width) - start_y - MARGIN
@@ -901,14 +1513,28 @@ def flow(rows, blocks, project, path_uuid, width, start_y, height=None,
     for bx, by, flat in placed:
         drawn, refs = [], set()
         for dx, dy, row in flat:
-            half_w, half_h = extent(blocks[row["symbol"]])
-            bottom, right = edges(blocks[row["symbol"]])
+            half_w, half_h, bottom, right = geom(row, blocks, model)
             x = snap(MARGIN + bx + dx + half_w)
             y = snap(start_y + by + dy + half_h + GRID)
             page_h = max(page_h, y + half_h + GRID + MARGIN)
             page_w = max(page_w, x + half_w + GRID + MARGIN)
-            body += instance_sexp(project, path_uuid, row, x, y, bottom, right)
-            body += labels_sexp(row, blocks[row["symbol"]], x, y, 0, nets or {})
+            if row.get("sheet"):
+                pins = model.sheet_pins(row["sheet"])
+                sx, sy = snap(x - half_w), snap(y - half_h)
+                body += sheet_sexp(
+                    project, ctx["path_of"](row["path"]), row["ref"],
+                    f"{project}-{slug(row['sheet'])}.kicad_sch",
+                    ctx["numbers"].get((row["uuid"], row["path"]), 0),
+                    sx, sy, SHEET_W, pins, row["uuid"])
+                named = model.pins.get(row["uuid"]) or {}
+                body += pin_fittings_sexp(
+                    row["uuid"], sx, sy, SHEET_W, pins, named,
+                    {n: model.kind(net, ctx["page"])
+                     for n, net in named.items()})
+            else:
+                body += instance_sexp(project, ctx["path_of"], row, x, y,
+                                      bottom, right)
+                body += labels_sexp(row, blocks[row["symbol"]], x, y, 0, model)
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
@@ -918,8 +1544,9 @@ def flow(rows, blocks, project, path_uuid, width, start_y, height=None,
 
 def fit_paper(lay, fixed):
     """Lay the page out on each sheet size in turn and take the first it
-    fits."""
-    sizes = [fixed] if fixed else PAPER_ORDER
+    fits. A fixed size that is too small falls through to the ANSI run."""
+    sizes = ([fixed] + [p for p in PAPER_ORDER if p != fixed]) if fixed \
+        else PAPER_ORDER
     for name in sizes:
         width, height = PAPERS[name]
         drawn, tall, wide = lay(width, height)
@@ -975,92 +1602,110 @@ def merge_sheet(src, blocks, needed, body):
     return src[:close] + body + src[close:]
 
 
-def write_page(board, project, root, page, rows, blocks, fixed, sheet_uuid,
-               nets=None):
+def write_page(board, project, page, rows, blocks, fixed, ctx):
+    """One page file: every drawing the record puts on it. `rows` are the
+    drawings, each with its paths."""
     name = f"{project}-{slug(page)}.kicad_sch"
     path = Path(board) / name
-    path_uuid = f"/{root}/{sheet_uuid}"
-    needed = {r["symbol"] for r in rows}
+    needed = {r["symbol"] for r in rows if not r["sheet"]}
+    model = ctx["model"]
 
     if path.exists():
         src = path.read_text()
         fresh = [r for r in rows if r["uuid"] not in existing_uuids(src)]
-        if not fresh:
-            return name, 0, len(rows)
-        paper = paper_of(src)
-        width, height = PAPERS.get(paper, PAPERS["A"])
-        body, _, _ = flow(fresh, blocks, project, path_uuid, width,
-                          snap(lowest_used(src) + 10 * GRID), height, nets)
-        path.write_text(merge_sheet(src, blocks, needed, body))
+        if fresh:
+            paper = paper_of(src)
+            width, height = PAPERS.get(paper, PAPERS["A"])
+            body, _, _ = flow(fresh, blocks, project, ctx, width,
+                              snap(lowest_used(src) + 10 * GRID), height)
+            src = merge_sheet(src, blocks, needed, body)
+        src, buses = port_area(src, page, model)
+        if buses:
+            close = src.rstrip().rfind(")")
+            src = src[:close] + buses + src[close:]
+        path.write_text(src)
         return name, len(fresh), len(rows) - len(fresh)
 
     lib_symbols = "".join(indent_block(blocks[k], 1).rstrip() + "\n"
                           for k in sorted(needed))
 
     def lay(width, height=None):
-        return flow(rows, blocks, project, path_uuid, width, 5 * GRID,
-                    height, nets)
+        return flow(rows, blocks, project, ctx, width, 5 * GRID, height)
 
     paper, body = fit_paper(lay, fixed)
-    path.write_text(new_sheet(project, uid(project, "file", page), paper,
-                              lib_symbols, body))
+    src = new_sheet(project, uid(project, "file", page), paper, lib_symbols,
+                    body)
+    src, buses = port_area(src, page, model)
+    if buses:
+        close = src.rstrip().rfind(")")
+        src = src[:close] + buses + src[close:]
+    path.write_text(src)
     return name, len(rows), 0
 
 
-def write_root(board, project, root, pages, fixed):
-    """The root carries one sheet symbol per page and no parts of its own.
-    A page already on it keeps its symbol; a new page is added below."""
+def write_root(board, project, root, pages, model, fixed=None):
+    """The root is the tool's. It carries one sheet symbol per root page,
+    each pin a net or bus that leaves the page, each pin joined to a root
+    label by a stub. Rewritten on every run; a page keeps its sheet uuid
+    and its page number. Returns {page: (sheet uuid, page number)}."""
     path = Path(board) / f"{project}.kicad_sch"
     src = path.read_text() if path.exists() else None
-    sheets = root_sheets(src)
-    already = set(sheets)
-    fresh = [p for p in pages if p not in already]
-    last = max([n for _, n in sheets.values()] + [1])
+    have = root_sheets(src)
+    used = {n for _, n in have.values()}
+    numbers, nxt = {}, 2
+    for page in pages:
+        if page in have and have[page][1]:
+            numbers[page] = have[page][1]
+    for page in pages:
+        if page not in numbers:
+            while nxt in used:
+                nxt += 1
+            numbers[page] = nxt
+            used.add(nxt)
+    ids = {page: (have[page][0] if page in have
+                  else uid(project, "sheet", page)) for page in pages}
 
-    def lay(width, height=None, start=5 * GRID, only=pages):
-        body, y = "", start
-        for page in only:
-            n = (pages.index(page) + 2 if src is None
-                 else last + 1 + fresh.index(page))
-            body += sheet_sexp(project, root, page,
+    def lay(width, height=None):
+        body, x, y = "", MARGIN, 5 * GRID
+        col_w = SHEET_W + STUB + 16 * GRID
+        tall, wide = y, x
+        limit = (height or width) - MARGIN
+        for page in pages:
+            pins = model.sheet_pins(page)
+            h = sheet_height(len(pins))
+            if y + h > limit and y > 5 * GRID:
+                x, y = snap(x + col_w), 5 * GRID
+            body += sheet_sexp(project, f"/{root}", page,
                                f"{project}-{slug(page)}.kicad_sch",
-                               n, 5 * GRID, y, 25 * GRID, 10 * GRID)
-            y = snap(y + 14 * GRID)
-        return body, y + 5 * GRID, 35 * GRID
+                               numbers[page], x, y, SHEET_W, pins, ids[page])
+            body += pin_fittings_sexp(ids[page], x, y, SHEET_W, pins,
+                                      {p: p for p in pins},
+                                      {p: "label" for p in pins})
+            tall = max(tall, y + h + 2 * GRID + MARGIN)
+            wide = max(wide, x + col_w + MARGIN)
+            y = snap(y + h + 4 * GRID)
+        return body, tall, wide
 
-    paths = "".join(
-        f"\t\t(path \"/{root}/{sheets[page][0] if page in sheets else uid(project, 'sheet', page)}\"\n"
-        f"\t\t\t(page \"{n}\")\n\t\t)\n"
-        for n, page in enumerate(pages, start=2))
-
-    if src is None:
-        paper, sheets = fit_paper(lay, fixed)
-        path.write_text(
-            "(kicad_sch\n"
-            f"\t(version {SCH_VERSION})\n"
-            "\t(generator \"kicad-update.py\")\n"
-            "\t(generator_version \"10.0\")\n"
-            f"\t(uuid \"{root}\")\n"
-            f"\t(paper \"{paper}\")\n"
-            "\t(lib_symbols\n\t)\n"
-            f"{sheets}"
-            "\t(sheet_instances\n\t\t(path \"/\"\n\t\t\t(page \"1\")\n\t\t)\n"
-            f"{paths}\t)\n"
-            "\t(embedded_fonts no)\n"
-            ")\n")
-        return len(pages)
-
-    if fresh:
-        body, _, _ = lay(PAPERS[paper_of(src)][0],
-                         start=snap(lowest_used(src) + 14 * GRID),
-                         only=fresh)
-        close = src.rstrip().rfind(")")
-        src = src[:close] + body + src[close:]
-    src = re.sub(r"\(sheet_instances\n(?:.*?\n)*?\t\)\n",
-                 "(sheet_instances\n\t\t(path \"/\"\n\t\t\t(page \"1\")\n\t\t)\n"
-                 + paths + "\t)\n", src, count=1)
-    path.write_text(src)
-    return len(fresh)
+    paper, body = fit_paper(lay, fixed or (paper_of(src) if src else None))
+    if paper not in PAPERS:
+        paper = "A"
+    instances = "".join(
+        f"\t\t(path \"/{root}/{ids[page]}\"\n\t\t\t(page \"{numbers[page]}\")\n\t\t)\n"
+        for page in pages)
+    path.write_text(
+        "(kicad_sch\n"
+        f"\t(version {SCH_VERSION})\n"
+        "\t(generator \"kicad-update.py\")\n"
+        "\t(generator_version \"10.0\")\n"
+        f"\t(uuid \"{root}\")\n"
+        f"\t(paper \"{paper}\")\n"
+        "\t(lib_symbols\n\t)\n"
+        f"{body}"
+        "\t(sheet_instances\n\t\t(path \"/\"\n\t\t\t(page \"1\")\n\t\t)\n"
+        f"{instances}\t)\n"
+        "\t(embedded_fonts no)\n"
+        ")\n")
+    return {page: (ids[page], numbers[page]) for page in pages}
 
 
 def write_project_file(board, project):
@@ -1194,6 +1839,28 @@ def main(argv):
 
     if args.push and args.pull:
         raise Bad("--push or --pull, not both")
+
+    # n8.4: instance paths are rooted at the ROOT SHEET'S OWN uuid -
+    # init-pipeline wrote it. Inventing one makes KiCad repair every
+    # path on load.
+    root_path = board / f"{project}.kicad_sch"
+    if not root_path.exists():
+        raise Bad(f"{root_path} does not exist. Run init-pipeline first")
+    root_src = root_path.read_text()
+    found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', root_src)
+    if not found:
+        raise Bad(f"{root_path} carries no uuid")
+    root = found.group(1)
+
+    def normalize(path):
+        """n8.2 - the sheet must load with no dialogs. KiCad's own writer
+        has the final word on the format."""
+        run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                              str(path)], capture_output=True, text=True)
+        if run.returncode != 0:
+            raise Bad(f"kicad-cli could not normalize {path}: "
+                      + (run.stderr or run.stdout).strip())
+
     if args.push or args.pull:
         library = board / "lib" / f"{project}.kicad_sym"
         if not library.exists():
@@ -1204,18 +1871,30 @@ def main(argv):
                 changed = push_fields(con, library, project)
                 print(f"push  {len(changed)} symbol(s) updated"
                       + (": " + " ".join(changed) if changed else ""))
-                root_path = board / f"{project}.kicad_sch"
-                if not root_path.exists():
-                    raise Bad(f"{root_path} does not exist. Run "
-                              "init-pipeline first")
-                sheets = push_instances(con, board, project,
-                                        root_path.read_text())
+                rows = instances(con)
+                model = Nets(con, rows)
+                root_pages = sorted({r["page"] for r in rows if r["page"]
+                                     and r["page"] not in model.sheet_pages})
+                write_root(board, project, root, root_pages, model)
+                normalize(root_path)
+                root_src = root_path.read_text()
+                print(f"{project}.kicad_sch  rewritten, {len(root_pages)} "
+                      "page(s)")
+                sheets = push_instances(con, board, project, root, root_src,
+                                        rows)
                 print(f"push  {sum(sheets.values())} instance(s) updated on "
                       f"{len(sheets)} sheet(s)")
-                labels = push_labels(con, board, project,
-                                     root_path.read_text())
+                labels = push_labels(con, board, project, root, root_src,
+                                     rows, model)
                 print(f"push  {sum(labels.values())} label(s) written on "
                       f"{len(labels)} sheet(s)")
+                if write_bus_aliases(board, project, model):
+                    print(f"{project}.kicad_pro  bus aliases written")
+                fixed, unknown = push_board(board, project, root, root_src,
+                                            rows)
+                print(f"push  {fixed} footprint path(s) rewritten on the "
+                      "board" + (f"; not in the record: {' '.join(unknown)}"
+                                 if unknown else ""))
             else:
                 applied, reported = pull_fields(con, library, project)
                 print(f"pull  {len(applied)} field(s) into the record")
@@ -1234,28 +1913,22 @@ def main(argv):
             con.close()
         return 0
 
-    # n8.4: instance paths are rooted at the ROOT SHEET'S OWN uuid -
-    # init-pipeline wrote it. Inventing one makes KiCad repair every
-    # path on load.
-    root_path = board / f"{project}.kicad_sch"
-    if not root_path.exists():
-        raise Bad(f"{root_path} does not exist. Run init-pipeline first")
-    root_src = root_path.read_text()
-    found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', root_src)
-    if not found:
-        raise Bad(f"{root_path} carries no uuid")
-    root = found.group(1)
-
     # The return direction. Read every page back before anything is placed,
     # and enter what the User put there.
-    placed = read_pages(board, project, root_src)
     con = connect(board)
     try:
-        known = {r["uuid"] for r in instances(con)}
-        nets = nets_of(con)
+        by_file = page_files(con, project, root_src)
+        placed, placed_sheets = read_pages(board, project, by_file)
+        rows = instances(con)
+        known = {r["uuid"] for r in rows}
         parts = {r[0] for r in con.execute("select ipn from parts_table")}
         refs = {r[0]: r[1] for r in con.execute(
             "select ref, uuid from ref_table where ref is not null")}
+        sub_paths = {}   # sub-sheet page -> its instance paths
+        for r in rows:
+            if r["sheet"]:
+                sub_paths.setdefault(r["sheet"], []).append(
+                    f"{r['path']}/{r['uuid']}" if r["path"] else r["uuid"])
         entered, unresolved, conflicts, fixes = [], [], [], {}
         for u, (fname, page, sym) in sorted(placed.items()):
             if u in known:
@@ -1268,16 +1941,24 @@ def main(argv):
             if ref in refs and refs[ref] != u:
                 conflicts.append((u, fname, ref, refs[ref]))
                 continue
-            if not ref or ref.endswith("?"):
-                prefix = re.match(r"^[A-Za-z]+", ref or "U")
-                ref = next_ref_free(con, prefix.group(0) if prefix else "U",
-                                    set(refs))
-            con.execute("insert into ref_table (uuid, ipn, parent, ref, page, "
-                        "room) values (?, ?, null, ?, ?, null)",
-                        (u, ipn, ref, page))
-            refs[ref] = u
-            entered.append((u, fname, ref, ipn))
+            paths = sub_paths.get(page, [""])
+            if page in sub_paths and not paths:
+                unresolved.append((u, fname, sym))
+                continue
             fix = {}
+            for i, path in enumerate(paths):
+                use = ref if i == 0 else ""
+                if not use or use.endswith("?") or (use in refs):
+                    prefix = re.match(r"^[A-Za-z]+", ref or "U")
+                    use = next_ref_free(con, prefix.group(0) if prefix
+                                        else "U", set(refs))
+                con.execute("insert into ref_table (uuid, ipn, parent, ref, "
+                            "page, room, path) values (?, ?, null, ?, ?, "
+                            "null, ?)", (u, ipn, use, page, path))
+                refs[use] = u
+                if i == 0:
+                    ref = use
+            entered.append((u, fname, ref, ipn))
             if sym["props"].get("ipn", "").strip() != ipn:
                 fix["ipn"] = ipn
             if sym["props"].get("Reference", "").strip() != ref:
@@ -1293,7 +1974,7 @@ def main(argv):
     # Multi-unit packages, n9_1.22: the record holds one row per unit.
     # Where the symbol has more units than the record has rows, the
     # missing rows are minted here - in the record first, never invented
-    # on a sheet. Same ref, unit numbering from 1.
+    # on a sheet. Same ref, unit numbering from 1, one row per path.
     lib_path = board / "lib" / f"{project}.kicad_sym"
     lib_src = lib_path.read_text() if lib_path.exists() else ""
     lib_spans = lib_blocks(lib_src)
@@ -1310,23 +1991,31 @@ def main(argv):
             units = unit_count(lib_src[a:b], name)
             if units < 2:
                 continue
-            for ref, page, room in con.execute(
-                    "select ref, page, room from ref_table where ipn = ? "
-                    "and (unit is null or unit = 1)", (ipn,)).fetchall():
-                con.execute("update ref_table set unit = 1 where ipn = ? "
-                            "and ref = ? and (unit is null or unit = 1)",
-                            (ipn, ref))
-                have = {r[0] for r in con.execute(
-                    "select unit from ref_table where ipn = ? and ref = ?",
-                    (ipn, ref))}
-                for u in range(2, units + 1):
-                    if u in have:
+            con.execute("update ref_table set unit = 1 where ipn = ? "
+                        "and unit is null", (ipn,))
+            for (u1,) in con.execute(
+                    "select distinct uuid from ref_table where ipn = ? "
+                    "and unit = 1", (ipn,)).fetchall():
+                first = con.execute(
+                    "select ref, page, room, path, parent, parent_path "
+                    "from ref_table where uuid = ? and unit = 1",
+                    (u1,)).fetchall()
+                for unit in range(2, units + 1):
+                    have = con.execute(
+                        "select 1 from ref_table r join ref_table r1 "
+                        "on r1.ref = r.ref and r1.uuid = ? where r.unit = ?",
+                        (u1, unit)).fetchone()
+                    if have:
                         continue
-                    con.execute(
-                        "insert into ref_table (uuid, ipn, parent, ref, "
-                        "page, room, unit) values (?, ?, null, ?, ?, ?, ?)",
-                        (str(uuid.uuid4()), ipn, ref, page, room, u))
-                    minted += 1
+                    nu = str(uuid.uuid4())
+                    for ref, page, room, path, parent, ppath in first:
+                        con.execute(
+                            "insert into ref_table (uuid, ipn, parent, "
+                            "parent_path, ref, page, room, unit, path) "
+                            "values (?,?,?,?,?,?,?,?,?)",
+                            (nu, ipn, parent, ppath, ref, page, room, unit,
+                             path))
+                        minted += 1
         con.commit()
         if minted:
             rows = instances(con)
@@ -1343,16 +2032,29 @@ def main(argv):
     elsewhere = {u for u, (fname, page, sym) in placed.items()
                  if u in by_uuid and by_uuid[u]["page"] != page}
 
+    con = connect(board)
+    try:
+        model = Nets(con, rows)
+    finally:
+        con.close()
     unplaced = [r for r in rows if not r["page"]]
     nosymbol = [r for r in rows if r["page"] and not r["symbol"]]
-    drawable = [r for r in rows if r["page"] and r["symbol"]
+    drawable = [r for r in drawings(rows) if r["page"] and r["symbol"]
                 and r["uuid"] not in elsewhere]
+    orphan = [r for r in drawable if r["page"] in model.sheet_pages
+              and not any(r["path"] for r in [r])]
+    # a drawing in a sub-sheet with no instance path has no sheet to be in
+    drawable = [r for r in drawable if r not in orphan]
     if not drawable and not placed:
         raise Bad("nothing to place. Every instance is missing a page, a "
                   "symbol, or both")
 
-    blocks = library_blocks(board, project, {r["symbol"] for r in drawable})
-    pages = sorted({r["page"] for r in drawable})
+    blocks = library_blocks(board, project,
+                            {r["symbol"] for r in drawable if not r["sheet"]})
+    root_pages = sorted({r["page"] for r in drawable
+                         if r["page"] not in model.sheet_pages})
+    sub_pages = sorted({r["page"] for r in drawable
+                        if r["page"] in model.sheet_pages})
 
     # An entered symbol gets its `ipn` field, and its Reference when the
     # tool renumbered it. Nothing else on a sheet is rewritten - the User
@@ -1379,29 +2081,30 @@ def main(argv):
             path.write_text("".join(out))
             refreshed[path.name] = count
 
-    def normalize(path):
-        """n8.2 - the sheet must load with no dialogs. KiCad's own writer
-        has the final word on the format."""
-        run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
-                              str(path)], capture_output=True, text=True)
-        if run.returncode != 0:
-            raise Bad(f"kicad-cli could not normalize {path}: "
-                      + (run.stderr or run.stdout).strip())
-
     made = write_project_file(board, project)
-    added = write_root(board, project, root, pages, None)
-    normalize(board / f"{project}.kicad_sch")
+    sheets = write_root(board, project, root, root_pages, model)
+    normalize(root_path)
     print(f"{project}.kicad_pro  {'written' if made else 'kept'}")
-    print(f"{project}.kicad_sch  {added} page(s) added, {len(pages)} in all")
+    print(f"{project}.kicad_sch  rewritten, {len(root_pages)} page(s)")
+    if write_bus_aliases(board, project, model):
+        print(f"{project}.kicad_pro  bus aliases written")
+
+    # page numbers: root pages as the root says, sub-sheet instances after
+    starts = root_page_of(rows)
+    numbers, nxt = {}, max([n for _, n in sheets.values()] + [1]) + 1
+    for r in sorted((r for r in rows if r["sheet"]),
+                    key=lambda r: (r["page"], r["path"], r["ref"])):
+        numbers[(r["uuid"], r["path"])] = nxt
+        nxt += 1
 
     touched = set(refreshed)
-    sheets = root_sheets((board / f"{project}.kicad_sch").read_text())
-    for page in pages:
+    for page in root_pages + sub_pages:
         on_page = [r for r in drawable if r["page"] == page]
-        if page not in sheets:
-            raise Bad(f"root sheet has no sheet symbol for page {page!r}")
-        name, new, kept = write_page(board, project, root, page, on_page,
-                                     blocks, None, sheets[page][0], nets)
+        ctx = {"page": page, "model": model, "numbers": numbers,
+               "path_of": lambda p, page=page: kicad_path(root, sheets,
+                                                          starts, page, p)}
+        name, new, kept = write_page(board, project, page, on_page, blocks,
+                                     None, ctx)
         touched.discard(name)
         normalize(board / name)
         came_in = sum(1 for _, f, _, _ in entered if f == name)
@@ -1430,6 +2133,9 @@ def main(argv):
         print(f"\n{len(mismatched)} instance(s) on a page other than the "
               "record's, left where they are: "
               + " ".join(f"{ref}:{f}!={p}" for ref, f, p in mismatched))
+    if orphan:
+        print(f"\n{len(orphan)} drawing(s) in a sub-sheet with no instance, "
+              "not drawn: " + " ".join(sorted(r["ref"] for r in orphan)))
     if nosymbol:
         print(f"\n{len(nosymbol)} instance(s) with a page and no symbol: "
               + " ".join(sorted(r["ref"] for r in nosymbol)))

@@ -14,10 +14,17 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> drop   <ref>
     table-write.py <board-dir> price  <ipn> --vendor V --break QTY:PRICE ...
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
+    table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
 by naming its reference, one at a time.
+
+An instance is (uuid, path) — T2.4. On a root page the path is ''. In a
+sub-sheet it is the chain of sheet-instance uuids down to that sheet, so
+one symbol drawn once in a reused sheet is one row per instance of the
+sheet, each with its own reference. A sub-sheet is a part of class B; its
+instances are rows like any other, drawn as sheet symbols.
 """
 
 import argparse
@@ -31,6 +38,7 @@ from pathlib import Path
 # annotates under
 CLASSES = {
     "A": ("amplifier", "U"),
+    "B": ("block, sub-sheet", "SH"),
     "C": ("capacitor", "C"),
     "E": ("antenna", "AE"),
     "F": ("filter", "FL"),
@@ -133,6 +141,92 @@ def parent_uuid(con, ref):
     return row[0]
 
 
+def instance_of(con, ref):
+    """The row a reference names: (uuid, path, page)."""
+    row = con.execute("select uuid, path, page from ref_table where ref = ?",
+                      (ref,)).fetchone()
+    if row is None:
+        raise Bad(f"{ref} names no instance")
+    return row
+
+
+def sheet_part(con, page):
+    """The class-B part whose name is this page, else None: a page that is
+    a sub-sheet, instanced on other pages."""
+    row = con.execute("select ipn from parts_table where name = ? "
+                      "and ipn glob 'B[0-9][0-9][0-9][0-9]'",
+                      (page,)).fetchone()
+    return row[0] if row else None
+
+
+def paths_of_sheet(con, page):
+    """Every instance path of a sub-sheet: for each instance row of its
+    class-B part, that row's own path extended by its uuid."""
+    ipn = sheet_part(con, page)
+    if ipn is None:
+        return [""]
+    out = []
+    for u, path in con.execute("select uuid, path from ref_table where ipn = ? "
+                               "order by ref", (ipn,)):
+        out.append(f"{path}/{u}" if path else u)
+    if not out:
+        raise Bad(f"sub-sheet {page} has no instances yet. Place its part "
+                  f"({ipn}) on a page first")
+    return out
+
+
+def parent_for(con, parent_ref, page, path):
+    """(parent uuid, parent path) for a child on `page` at `path`. A parent
+    drawn in the same sub-sheet is matched instance for instance."""
+    if not parent_ref:
+        return None, None
+    pu, ppath, ppage = instance_of(con, parent_ref)
+    if ppage == page and ppath and path:
+        return pu, path
+    return pu, ppath
+
+
+def new_symbol(con, ipn, prefix, page, room, parent_ref):
+    """One symbol, drawn once: a fresh uuid, one row per instance path of
+    its page, each with the next free reference. Returns the refs."""
+    u = str(uuid.uuid4())
+    refs = []
+    for path in paths_of_sheet(con, page) if page else [""]:
+        ref = next_ref(con, prefix)
+        parent, parent_path = parent_for(con, parent_ref, page, path)
+        con.execute("insert into ref_table (uuid, ipn, parent, parent_path, "
+                    "ref, page, room, path) values (?,?,?,?,?,?,?,?)",
+                    (u, ipn, parent, parent_path, ref, page, room, path))
+        refs.append(ref)
+    return refs
+
+
+def replicate_sheet(con, ipn, new_paths):
+    """A sub-sheet gained instances: every symbol drawn in it gets a row
+    for each new path, so each instance carries its own references."""
+    name = con.execute("select name from parts_table where ipn = ?",
+                       (ipn,)).fetchone()[0]
+    if not name:
+        raise Bad(f"{ipn} is a sub-sheet and needs a --name: it names the "
+                  "page the sheet is drawn on")
+    added = 0
+    rows = con.execute(
+        "select uuid, ipn, parent, ref, room, unit, page from ref_table "
+        "where page = ? group by uuid order by ref", (name,)).fetchall()
+    for u, cipn, parent, ref, room, unit, page in rows:
+        prefix = REF.match(ref).group(1) if ref and REF.match(ref) else "U"
+        for path in new_paths:
+            if con.execute("select 1 from ref_table where uuid = ? and path = ?",
+                           (u, path)).fetchone():
+                continue
+            con.execute("insert into ref_table (uuid, ipn, parent, parent_path, "
+                        "ref, page, room, unit, path) values (?,?,?,?,?,?,?,?,?)",
+                        (u, cipn, parent, path if parent else None,
+                         next_ref(con, prefix), page, room, unit, path))
+            added += 1
+    return added
+
+
 def check(field, value):
     if value is None:
         return None
@@ -153,7 +247,8 @@ def add(con, args):
     ipn = next_ipn(con, letter)
     values = {f: check(f, getattr(args, f, None)) for f in FIELDS}
     values["description"] = args.description
-    under = parent_uuid(con, args.parent) if args.parent else None
+    if args.parent:
+        instance_of(con, args.parent)
 
     con.execute(
         f"insert into parts_table (ipn, {', '.join(FIELDS)}) "
@@ -161,13 +256,14 @@ def add(con, args):
         (ipn,) + tuple(values[f] for f in FIELDS))
     print(f"{ipn}  {category}")
 
+    if letter == "B":
+        if not values["name"]:
+            raise Bad("a sub-sheet needs --name: the page it is drawn on")
+        con.execute("update parts_table set symbol = ? where ipn = ?",
+                    (f"sheet:{values['name']}", ipn))
     for _ in range(args.count):
-        ref = next_ref(con, prefix)
-        con.execute("insert into ref_table (uuid, ipn, parent, ref, "
-                    "page, room) values (?,?,?,?,?,?)",
-                    (str(uuid.uuid4()), ipn, under, ref, args.page,
-                     args.room))
-        print(f"    {ref}  {args.page or '—'}")
+        refs = new_symbol(con, ipn, prefix, args.page, args.room, args.parent)
+        print(f"    {' '.join(refs)}  {args.page or '—'}")
     con.commit()
 
 
@@ -188,31 +284,52 @@ def setf(con, args):
 
 
 def place(con, args):
+    """Raise the symbol count of a part to --count. A symbol is drawn once;
+    in a sub-sheet it is one row per instance of the sheet."""
     part(con, args.ipn)
     prefix = CLASSES[args.ipn[0]][1]
-    have = con.execute("select count(*) from ref_table where ipn = ?",
-                       (args.ipn,)).fetchone()[0]
+    have = con.execute("select count(distinct uuid) from ref_table "
+                       "where ipn = ?", (args.ipn,)).fetchone()[0]
     if args.count < have:
-        raise Bad(f"{args.ipn} has {have} instances. This tool does not "
+        raise Bad(f"{args.ipn} has {have} symbols. This tool does not "
                   f"remove them — name the reference with drop")
-    under = parent_uuid(con, args.parent) if args.parent else None
+    page = args.page
+    if page is None:
+        row = con.execute("select page from ref_table where ipn = ? "
+                          "and page is not null limit 1",
+                          (args.ipn,)).fetchone()
+        page = row[0] if row else None
+    if args.parent:
+        instance_of(con, args.parent)
+    before = {r[0] for r in con.execute(
+        "select uuid from ref_table where ipn = ?", (args.ipn,))}
     for _ in range(args.count - have):
-        ref = next_ref(con, prefix)
-        con.execute("insert into ref_table (uuid, ipn, parent, ref, "
-                    "page, room) values (?,?,?,?,?,?)",
-                    (str(uuid.uuid4()), args.ipn, under, ref, args.page,
-                     args.room))
-        print(f"{args.ipn}  {ref}  {args.page or '—'}")
+        refs = new_symbol(con, args.ipn, prefix, page, args.room, args.parent)
+        print(f"{args.ipn}  {' '.join(refs)}  {page or '—'}")
     if args.page or args.room:
+        # the rows just made, and any row of the part still without a page
         sets, vals = [], []
         if args.page:
             sets.append("page = ?"); vals.append(args.page)
         if args.room:
             sets.append("room = ?"); vals.append(args.room)
-        con.execute(f"update ref_table set {', '.join(sets)} where ipn = ?",
+        con.execute(f"update ref_table set {', '.join(sets)} where ipn = ? "
+                    "and (page is null or page = '')",
                     tuple(vals) + (args.ipn,))
+    if args.ipn.startswith("B"):
+        fresh = [r[0] for r in con.execute(
+            "select uuid from ref_table where ipn = ?", (args.ipn,))
+            if r[0] not in before]
+        new_paths = [f"{p}/{u}" if p else u for u, p in con.execute(
+            "select uuid, path from ref_table where ipn = ?", (args.ipn,))
+            if u in fresh]
+        if new_paths:
+            n = replicate_sheet(con, args.ipn, new_paths)
+            if n:
+                print(f"{args.ipn}  {n} row(s) added for the symbols drawn "
+                      "in the sheet")
     con.commit()
-    print(f"{args.ipn}  {max(args.count, have)} instances")
+    print(f"{args.ipn}  {max(args.count, have)} symbol(s)")
 
 
 def reparent(con, args):
@@ -233,8 +350,15 @@ def reparent(con, args):
                 raise Bad(f"{args.ref} under {args.under} closes a loop")
             walk = con.execute("select parent from ref_table where uuid = ?",
                                (walk,)).fetchone()[0]
-    con.execute("update ref_table set parent = ? where uuid = ?",
-                (new, child))
+    page = con.execute("select page from ref_table where ref = ?",
+                       (args.ref,)).fetchone()[0]
+    for path, in con.execute("select path from ref_table where uuid = ?",
+                             (child,)).fetchall():
+        parent, parent_path = (parent_for(con, args.under, page, path)
+                               if new else (None, None))
+        con.execute("update ref_table set parent = ?, parent_path = ? "
+                    "where uuid = ? and path = ?",
+                    (parent, parent_path, child, path))
     con.commit()
     print(f"{args.ref}  parent {ref_of(con, was) or '—'} -> "
           f"{args.under if new else '—'}")
@@ -249,13 +373,37 @@ def ref_of(con, u):
 
 
 def drop(con, args):
-    row = con.execute("select ipn from ref_table where ref = ?",
+    """Remove one instance by reference. A sub-sheet instance takes the
+    rows drawn under it. A symbol in a sub-sheet is one drawing, so its
+    rows go together. Nets go with a symbol's last row."""
+    row = con.execute("select ipn, uuid, path from ref_table where ref = ?",
                       (args.ref,)).fetchone()
     if row is None:
         raise Bad(f"{args.ref} is not in ref_table")
-    con.execute("delete from ref_table where ref = ?", (args.ref,))
+    ipn, u, path = row
+    if ipn.startswith("B"):
+        inst = f"{path}/{u}" if path else u
+        n = con.execute("delete from ref_table where path = ? "
+                        "or path like ?", (inst, inst + "/%")).rowcount
+        if n:
+            print(f"{args.ref}  {n} row(s) under it removed")
+        con.execute("delete from ref_table where uuid = ? and path = ?",
+                    (u, path))
+    elif path:
+        refs = [r[0] for r in con.execute(
+            "select ref from ref_table where uuid = ? order by ref", (u,))]
+        con.execute("delete from ref_table where uuid = ?", (u,))
+        print(f"{args.ref}  one drawing in a sub-sheet: {' '.join(refs)} "
+              "removed together")
+    else:
+        con.execute("delete from ref_table where uuid = ? and path = ''",
+                    (u,))
+    for (gone,) in con.execute(
+            "select distinct uuid from net_table where uuid not in "
+            "(select uuid from ref_table)").fetchall():
+        con.execute("delete from net_table where uuid = ?", (gone,))
     con.commit()
-    print(f"{args.ref}  removed from {row[0]}")
+    print(f"{args.ref}  removed from {ipn}")
 def price(con, args):
     """Record a vendor's price survey: one row per break. Upsert, so a
     re-survey overwrites the tier it re-quotes and leaves the rest."""
@@ -306,6 +454,32 @@ def net(con, args):
         (u, args.pin, args.name))
     con.commit()
     print(f"{args.ref}  pin {args.pin}: {args.name}")
+
+
+def bus(con, args):
+    """Group nets into a bus. `bus` alone lists. `bus NAME NET...` puts the
+    nets in NAME, moving any that were elsewhere. `--drop NET...` takes
+    them out of any bus."""
+    if args.drop:
+        for n in args.nets:
+            k = con.execute("delete from bus_table where net = ?",
+                            (n,)).rowcount
+            print(f"{n}  {'out of its bus' if k else 'was in no bus'}")
+        con.commit()
+        return
+    if not args.name:
+        for b, n in con.execute("select bus, net from bus_table "
+                                "order by bus, net"):
+            print(f"{b}  {n}")
+        return
+    if not args.nets:
+        raise Bad("bus wants the nets to put in it")
+    for n in args.nets:
+        con.execute("insert into bus_table (net, bus) values (?,?) "
+                    "on conflict(net) do update set bus = excluded.bus",
+                    (n, args.name))
+        print(f"{args.name}  {n}")
+    con.commit()
 
 
 def show(con, args):
@@ -411,11 +585,21 @@ def main(argv):
     n.add_argument("--none", action="store_true", help="clear the net")
     n.set_defaults(run=net)
 
+    b = sub.add_parser("bus", help="group nets into a bus")
+    b.add_argument("name", nargs="?", help="the bus")
+    b.add_argument("nets", nargs="*", help="member nets")
+    b.add_argument("--drop", action="store_true",
+                   help="take the named nets out of any bus")
+    b.set_defaults(run=bus)
+
     w = sub.add_parser("show", help="print parts and their instances")
     w.add_argument("ipn", nargs="?")
     w.set_defaults(run=show)
 
     args = ap.parse_args(argv[1:])
+    if args.verb == "bus" and args.drop and args.name:
+        args.nets = [args.name] + args.nets
+        args.name = None
     con = connect(args.board)
     try:
         if getattr(args, "ipn", None):

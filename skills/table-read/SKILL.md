@@ -18,8 +18,9 @@ There is no script. Table 3 holds the SQL; run it as it stands:
 sqlite3 -markdown <board-dir>/board.db "<statement>"
 ```
 
-No view returns `ref_table.uuid`. It is KiCad's key and carries nothing a
-person reads.
+No view returns `ref_table.uuid` or `path`. They are KiCad's keys and carry
+nothing a person reads. A drawing in a sub-sheet shows once per instance,
+under each instance's reference.
 
 ## 1 — The workflow, and the view for each step
 
@@ -51,7 +52,8 @@ together, at any point.
 | `ready_view` | IPN | ipn, description, missing | What blocks layout |
 | `price_view` | vendor break | name, ipn, vendor, vendor_pn, break_qty, unit_price, stock, checked | What a part costs at every quantity |
 | `cost_view` | IPN | ipn, name, per_board, units, unit_price, vendor | What a build of `<N>` boards costs |
-| `net_view` | instance pin | net, ref, pin, page | What every named net connects |
+| `net_view` | drawing pin | net, ref, pin, page | What every named net connects |
+| `bus_view` | bus member | bus, net, pages | What travels together, and where |
 
 ## 3 — The SQL
 
@@ -66,6 +68,7 @@ together, at any point.
 | `price_view` | `select p.name, p.ipn, x.vendor, x.vendor_pn, x.break_qty, x.unit_price, x.stock, x.checked from price_table x join parts_table p using (ipn) order by p.ipn, x.vendor, x.vendor_pn, x.break_qty;` |
 | `cost_view` | `with u as (select p.ipn, p.name, count(r.uuid) as per_board, count(r.uuid) * <N> as units from parts_table p left join ref_table r using (ipn) group by p.ipn) select u.ipn, u.name, u.per_board, u.units, (select x.unit_price from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as unit_price, (select x.vendor from price_table x where x.ipn = u.ipn and x.break_qty <= u.units order by x.break_qty desc limit 1) as vendor from u order by u.ipn;` |
 | `net_view` | `select n.net, r.ref, n.pin, r.page from net_table n join ref_table r using (uuid) order by n.net, r.ref, n.pin;` |
+| `bus_view` | `select b.bus, b.net, group_concat(distinct r.page) as pages from bus_table b left join net_table n using (net) left join ref_table r using (uuid) group by b.bus, b.net order by b.bus, b.net;` |
 
 `cost_view` takes a build size: replace `<N>` with the number of boards.
 It reads the highest break at or below the units required.

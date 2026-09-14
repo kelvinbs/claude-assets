@@ -63,15 +63,23 @@ SCHEMA = {
             "checked       TEXT NOT NULL DEFAULT 'no'",
             "pinout_checked TEXT NOT NULL DEFAULT 'no'",
         ),
+        # T2.4 — an instance is a symbol on a sheet, in one instance of
+        # that sheet: (uuid, path). path is '' on a root page, else the
+        # chain of sub-sheet instance uuids down to the symbol's sheet
         "ref_table": (
-            "uuid          TEXT PRIMARY KEY NOT NULL",
+            "uuid          TEXT NOT NULL",
             "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
-            "parent        TEXT REFERENCES ref_table(uuid) ON DELETE SET NULL",
+            "parent        TEXT",
             "ref           TEXT",
             "page          TEXT",
             "room          TEXT",
             "unit          INTEGER",
+            "path          TEXT NOT NULL DEFAULT ''",
+            "parent_path   TEXT",
+            "PRIMARY KEY (uuid, path)",
+            "FOREIGN KEY (parent, parent_path) REFERENCES ref_table(uuid, path)"
+            " ON DELETE SET NULL",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of
         # any size reads off it and the survey is done once
@@ -86,14 +94,22 @@ SCHEMA = {
             "checked       TEXT",
             "PRIMARY KEY (ipn, vendor, vendor_pn, break_qty)",
         ),
-        # T2.6a — the nets. One row per instance pin that carries a net
-        # name; the sheet gets a global label at that pin from it
+        # T2.6a — the nets. One row per symbol pin that carries a net
+        # name; the sheet gets a label at that pin from it. Keyed by the
+        # symbol, not the instance: a label is drawn once in the file.
+        # No declared key to ref_table, whose key is (uuid, path) —
+        # table-write removes the rows when the symbol's last row goes
         "net_table": (
-            "uuid          TEXT NOT NULL REFERENCES ref_table(uuid)"
-            " ON DELETE CASCADE",
+            "uuid          TEXT NOT NULL",
             "pin           TEXT NOT NULL",
             "net           TEXT NOT NULL",
             "PRIMARY KEY (uuid, pin)",
+        ),
+        # T2.6b — the buses. A net is in at most one bus; the bus alias
+        # goes to the project file and the members keep their names
+        "bus_table": (
+            "net           TEXT PRIMARY KEY NOT NULL",
+            "bus           TEXT NOT NULL",
         ),
     },
 }
@@ -103,9 +119,33 @@ class Bad(SystemExit):
         super().__init__(f"init-pipeline: {message}")
 
 
+CONSTRAINTS = ("PRIMARY KEY", "FOREIGN KEY")
+
+
 def columns_of(spec):
     """The column names a table definition declares, in order."""
-    return [line.split()[0] for line in spec if not line.startswith("PRIMARY KEY")]
+    return [line.split()[0] for line in spec
+            if not line.startswith(CONSTRAINTS)]
+
+
+# A table whose key changed is rebuilt, rows carried over. Detected by a
+# column the old shape lacks
+REBUILT = {"ref_table": "path", "net_table": None}
+
+
+def rebuild(con, table, spec, found):
+    """Recreate a table under the current definition and carry every row
+    across. New columns take their defaults."""
+    keep = [c for c in columns_of(spec) if c in found]
+    cols = ", ".join(keep)
+    con.execute("PRAGMA foreign_keys = OFF")
+    con.execute(create_sql(f"{table}_new", spec))
+    con.execute(f"INSERT INTO {table}_new ({cols}) SELECT {cols} FROM {table}")
+    con.execute(f"DROP TABLE {table}")
+    con.execute(f"ALTER TABLE {table}_new RENAME TO {table}")
+    for name, sql in INDEXES.get(table, ()):
+        con.execute(sql)
+    con.execute("PRAGMA foreign_keys = ON")
 
 
 # an index a table needs to hold a rule its columns cannot
@@ -147,16 +187,36 @@ def init_file(path, tables):
                 continue
             found = [r[1] for r in con.execute(f"PRAGMA table_info({table})")]
             wanted = columns_of(spec)
+            if table in REBUILT:
+                marker = REBUILT[table]
+                fks = con.execute(f"PRAGMA foreign_key_list({table})").fetchall()
+                old_shape = ((marker and marker not in found)
+                             or (marker is None and fks))
+                if old_shape:
+                    rebuild(con, table, spec, found)
+                    if table == "ref_table":
+                        # every parent a rebuilt row had was on a root page
+                        con.execute("UPDATE ref_table SET parent_path = '' "
+                                    "WHERE parent IS NOT NULL "
+                                    "AND parent_path IS NULL")
+                    report.append((table, "rebuilt, rows kept"))
+                    continue
             if found != wanted and not extra_of(found, wanted) \
                     and wanted[:len(found)] == found:
                 for line in spec:
                     name = line.split()[0]
-                    if name not in found and name != "PRIMARY":
+                    if name not in found and not line.startswith(CONSTRAINTS):
                         con.execute(f"ALTER TABLE {table} ADD COLUMN "
                                     + line.strip())
                 for name, sql in INDEXES.get(table, ()):
                     con.execute(sql)
                 report.append((table, "column(s) added"))
+                continue
+            if found != wanted and set(found) == set(wanted):
+                # same columns, another order - a column added at the end
+                # by an earlier tool. Rebuilt in the schema's order
+                rebuild(con, table, spec, found)
+                report.append((table, "rebuilt in schema order, rows kept"))
                 continue
             if found != wanted:
                 missing = [c for c in wanted if c not in found]
@@ -166,8 +226,6 @@ def init_file(path, tables):
                     detail.append("missing " + ", ".join(missing))
                 if extra:
                     detail.append("not in the schema: " + ", ".join(extra))
-                if not detail:
-                    detail.append("column order differs")
                 raise Bad(f"{path.name} {table} — " + "; ".join(detail))
             report.append((table, "present"))
         con.commit()

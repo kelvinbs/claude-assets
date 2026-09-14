@@ -70,9 +70,9 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
-| 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
+| 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
 
 - `board.db` is master. Part fields push to the library symbol; instance
   data pushes to the sheet; pull reads library fields back into the
@@ -126,6 +126,19 @@
 | 5 | `page` | TEXT | | Yes |
 | 6 | `room` | TEXT | | Yes |
 | 7 | `unit` | INTEGER | | Yes |
+| 8 | `path` | TEXT | Key | |
+| 9 | `parent_path` | TEXT | | Yes |
+
+- An instance is `(uuid, path)`: the symbol drawn on a sheet, in one
+  instance of that sheet. `uuid` is the symbol's uuid in the sheet file.
+  `path` is `''` on a root page; in a sub-sheet it is the chain of
+  sheet-instance uuids from the root page down, `/`-joined.
+- A sub-sheet is a part of class `B` (T2.10). Its instances are rows of
+  that part, drawn as sheet symbols on the page they name. Every symbol
+  drawn in the sub-sheet is one drawing and one row per instance of the
+  sheet, each row with its own `ref`.
+- `parent` with `parent_path` names the parent instance. A parent in the
+  same sub-sheet is matched instance for instance.
 
 **T2.5 — `source` letters**
 
@@ -173,13 +186,51 @@
 | 2 | `pin` | TEXT | Key | |
 | 3 | `net` | TEXT | | |
 
-- One row per instance pin that carries a net name. A pin with no row
-  carries no label. The instance, not the part: two instances of one part
-  sit on different nets.
-- `kicad-update` writes a global label at the pin end from it, on place
-  and on push. Push deletes every label on every pin end of every record
-  instance first, so a moved or cleared net leaves nothing behind.
+- One row per drawn pin that carries a net name. A pin with no row
+  carries no label. The drawing, not the part: two drawings of one part
+  sit on different nets. A drawing in a sub-sheet has one set of nets for
+  every instance of the sheet — a label is drawn once in the file.
+- A sheet instance has pins too: the nets its sub-sheet exports, named by
+  the pin. A row on a sheet instance names what the pin joins on the page
+  it sits on. A bus pin is named `{BUS}`.
+- `kicad-update` writes a label at the pin end from it, on place and on
+  push — a local `label`, or a `hierarchical_label` when the net leaves
+  the sheet file (T2.6c). Never a global label. Push deletes every label
+  on every pin end of every record drawing first, so a moved or cleared
+  net leaves nothing behind.
 - A label typed by hand on a record part's pin lasts until the next push.
+
+**T2.6b — `bus_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `net` | TEXT | Key | |
+| 2 | `bus` | TEXT | | |
+
+- A net is in at most one bus. Members keep their names; the bus is a
+  group alias, `{BUS}`, written to the project file's
+  `schematic.bus_aliases` by `kicad-update`.
+
+**T2.6c — What a net is on a sheet**
+
+| # | The net | On the sheet file | On the sheet symbol above |
+|---|---|---|---|
+| 1 | in this file only, or only here and in the sub-sheets under it | local `label` at the pin | nothing |
+| 2 | also outside this file and what is under it, not in a bus | local `label` at the pin; a port in the port area: `hierarchical_label`, stub, local `label` of the same name | one pin, that name |
+| 3 | in a bus | local `label` at the pin, the member's name; the bus breakout in the port area joins it | one pin per bus that leaves, `{BUS}` |
+| 4 | named as a pin on an instance of this sub-sheet | as row 2 | that pin |
+
+- A pin carries a local label and nothing else. A hierarchical label
+  sits only in the port area.
+- The port area: one per file, the tool's, at the top right, a column
+  and then another to its left. Every port and every bus breakout of the
+  file sits there, redrawn there on every run. A bus leaves a file when a
+  member does; its breakout is the hierarchical bus label, the bus, one
+  entry per member the file uses, ending in a local label.
+- The root joins its sheet symbols: every pin gets a stub and a root
+  label, wire and label for a net, bus and bus label for a bus. The root
+  is the tool's and is rewritten on every run; it keeps each page's sheet
+  uuid and page number.
 
 ### 2.5 — The relations
 
@@ -188,11 +239,14 @@
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 2 | `ref_table.parent` | `ref_table.uuid` | Many-to-one, self | Set null |
+| 2 | `ref_table.parent`, `ref_table.parent_path` | `ref_table.uuid`, `ref_table.path` | Many-to-one, self | Set null |
 | 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 4 | `net_table.uuid` | `ref_table.uuid` | Many-to-one | Cascade |
+| 4 | `net_table.uuid` | `ref_table.uuid` | Many-to-one | `table-write` removes the nets with a drawing's last row |
+| 5 | `bus_table.net` | `net_table.net` | Many-to-one, by name | none — a member with no pin yet is allowed |
 
-- All are declared foreign keys.
+- 1 to 3 are declared foreign keys. 4 cannot be declared: `ref_table`'s
+  key is `(uuid, path)` and a net belongs to the drawing, every path at
+  once.
 - Every skill sets `PRAGMA foreign_keys = ON`.
 
 ### 2.6 — The IPN
@@ -211,6 +265,7 @@
 | # | Letter | Class |
 |---|---|---|
 | 1 | `A` | Amplifier |
+| 1a | `B` | Block — a sub-sheet, drawn once, instanced where placed. Its `name` is the page it is drawn on; its `symbol` is `sheet:<name>`; its instances annotate as `SH` |
 | 2 | `C` | Capacitor |
 | 3 | `E` | Antenna, panel |
 | 4 | `F` | Filter |
@@ -249,9 +304,13 @@
 | 7 | `MPN` | the library symbol | `parts_table.mpn` |
 | 8 | `note` | the library symbol | `parts_table.note` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
-| 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref` |
+| 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref`; in a sub-sheet, every instance's parent, space-separated |
 | 11 | `room` | the instance | `ref_table.room` |
-| 12 | global label | the instance's pin end | `net_table.net` |
+| 12 | `label` or `hierarchical_label` | the drawing's pin end | `net_table.net`, kind per T2.6c |
+| 12a | sheet symbol, its pins, the stubs and labels on them | the page a sub-sheet instance sits on | `ref_table` rows of the class-`B` part; pins per T2.6c; labels from `net_table` |
+| 12b | bus breakout | each file a bus leaves | `bus_table` |
+| 12c | `schematic.bus_aliases` | `<project>.kicad_pro` | `bus_table` |
+| 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
 | 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 
 - `pinout_checked` stays in the record. It is not a project field and does
@@ -269,12 +328,17 @@
 
 | # | Rank | Dimension | Schematic | Board |
 |---|---|---|---|---|
-| 1 | 1 | `page` | Selects the file | — |
-| 2 | 2 | `room` | Block of the sheet | Region of the board |
-| 3 | 3 | `parent` | Groups a parent with its children | Groups a parent with its children |
+| 1 | 1 | `page` | Selects the file — a root page, or a sub-sheet | — |
+| 2 | 1a | `path` | Which instance of a sub-sheet. Derived, never chosen: every instance of the sheet | — |
+| 3 | 2 | `room` | Block of the sheet | Region of the board |
+| 4 | 3 | `parent` | Groups a parent with its children | Groups a parent with its children |
 
 - Order of rooms within a page is arbitrary — subject to re-entry,
   section 4.3.
+- A sub-sheet page is drawn once, in its own file, whatever the number of
+  instances. The instances sit on the page that placed the class-`B` part,
+  as sheet symbols. KiCad's multichannel tools carry one instance's layout
+  to the others on the board.
 
 ### 2.9 — The project name
 
@@ -317,8 +381,8 @@
 | 3 | `lib/*.pretty` | Hand |
 | 4 | `lib/3d/` | Hand |
 | 5 | `datasheets/` | Hand |
-| 6 | `*.kicad_pro` | Generated once |
-| 7 | `*.kicad_sch` | Updated by the tool, which does not wire |
+| 6 | `*.kicad_pro` | Generated once; `schematic.bus_aliases` rewritten by the tool |
+| 7 | `*.kicad_sch` | Updated by the tool, which does not wire. The root is the tool's, rewritten every run |
 | 8 | `*.kicad_pcb` | Updated by the tool, which does not route |
 | 9 | Board setup — stackup, fabricator rules, DRC rules | Hand |
 | 10 | `out/` — RF-simulation file | Generated |
@@ -367,7 +431,7 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its three tables |
+| 1 | `board.db` and its six tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/<project>.kicad_sym`, `lib/<project>.pretty/` |
 
 - The project folder names the project — its name is stored at first

@@ -25,6 +25,7 @@ table-write.py <board-dir> parent <ref> --under <ref> | --none
 table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
 table-write.py <board-dir> drop   <ref>
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
+table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> show   [<ipn>]
 ```
 
@@ -39,8 +40,14 @@ Creates one `parts_table` row and the `ref_table` rows that go with it.
 `--class` is the IPN letter of T2.10. The tool takes the next free number
 in that class, so the IPN is given by the tool.
 
-`--count` is how many instances to create, default 1. Each takes the lowest
-free number for its class's reference prefix and a fresh UUID.
+`--count` is how many drawings to create, default 1. Each takes a fresh
+UUID and, on a root page, one row with the lowest free number for its
+class's reference prefix. On a sub-sheet page it takes one row per instance
+of the sheet, each with its own reference (T2.4).
+
+`--class B` is a sub-sheet. It needs `--name`: the page it is drawn on.
+Its `symbol` is set to `sheet:<name>`; its instances annotate as `SH`. Place
+the sheet on a page first, then place parts on the sheet's page.
 
 `--description` is required. A part with no description is a row nobody can
 read six months later.
@@ -66,8 +73,11 @@ Footprints).
 
 ## place
 
-Raises the instance count to `--count`, adding the difference. `--page` and
-`--room` are applied to every instance of the part.
+Raises the drawing count to `--count`, adding the difference. `--page` and
+`--room` go on the rows added, and on any row of the part still without a
+page. A part placed on a sub-sheet page gets one row per instance of the
+sheet. Placing another instance of a class-`B` part adds a row for every
+drawing already on its page, with fresh references.
 
 It will not lower a count. An instance is a thing on a sheet with a UUID that
 a footprint may already point at, and losing one silently is how a board
@@ -77,7 +87,8 @@ loses a part. Removing one is `drop`, and it names the reference.
 
 Sets one instance's parent: `parent R3 --under U1`. `--none` clears it. It
 refuses a reference that names no instance, and a parent chain that closes
-a loop.
+a loop. In a sub-sheet the drawing's every row takes the parent, matched
+instance for instance when the parent is drawn in the same sheet.
 
 ## mpn — retired into set
 
@@ -88,14 +99,26 @@ part one way.
 ## drop
 
 Removes one instance by its reference. One at a time, and it says which part
-it came out of.
+it came out of. A sub-sheet instance takes the rows drawn under it. A
+drawing in a sub-sheet is one drawing, so its rows go together. A drawing's
+nets go with its last row.
 
 ## net
 
-Names the net on one pin of one instance: one `net_table` row, upsert on
-the instance and pin. The instance is named by its reference. `--none` clears it. The sheet takes a global label at that
-pin on the next `kicad-update` place or push, and loses it on the push
-after the row goes.
+Names the net on one pin of one drawing: one `net_table` row, upsert on
+the drawing and pin. The drawing is named by any of its references.
+`--none` clears it. The sheet takes a label at that pin on the next
+`kicad-update` place or push — local or hierarchical per T2.6c, never
+global — and loses it on the push after the row goes. On a sub-sheet
+instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
+`{RAILS}`; the net is what it joins on the page above.
+
+## bus
+
+Groups nets into a bus: `bus RAILS 3V3 5V0 GND`. A net is in one bus; naming
+it again moves it. `bus --drop GND` takes nets out. `bus` alone lists.
+Members keep their names; `kicad-update` writes the alias to the project
+and a breakout on every page the bus leaves.
 
 ## show
 
