@@ -74,7 +74,10 @@ the same name. A net in a bus leaves as the bus.
 
 The User wires nothing to make the pages connect: the label at the pin
 joins the port or the breakout by name, those leave by the sheet pin, the
-root joins the pins. Wires are drawn for what is not a named net.
+root joins the pins. Wires are drawn for what is not a named net. The
+record names nets; it is not the netlist. A wire, a junction, two pins
+placed to touch: yours, in KiCad, and the tool never draws, moves or
+deletes one. KiCad's netlist is the design's.
 
 Bus aliases go to `schematic.bus_aliases` in `<project>.kicad_pro`, the one
 key the tool touches there after init.

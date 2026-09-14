@@ -209,7 +209,11 @@
   on the page first, wherever it sits, so a moved symbol, a moved or
   cleared net, leaves nothing behind.
 - A label typed by hand lasts until the next push. The record is the
-  only source of a net.
+  only source of a label.
+- The record names nets; it is not the netlist. Wires, junctions and
+  pins placed to touch are the User's, drawn in KiCad, never drawn,
+  moved or deleted by the tool. KiCad's netlist is the design's; the
+  tool's labels are one part of it.
 
 **T2.6b — `bus_table`**
 
