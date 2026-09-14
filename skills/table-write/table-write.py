@@ -15,6 +15,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> price  <ipn> --vendor V --break QTY:PRICE ...
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+    table-write.py <board-dir> unplace <ref>
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -458,6 +459,18 @@ def net(con, args):
     print(f"{args.ref}  pin {args.pin}: {args.name}")
 
 
+def unplace(con, args):
+    """Send an instance back to the packer: its place and mark cleared,
+    every row of the drawing. The symbol on the sheet stays where it is
+    until the page is placed afresh."""
+    u, path, page = instance_of(con, args.ref)
+    n = con.execute("update ref_table set x = null, y = null, rot = null, "
+                    "placed = null where uuid = ?", (u,)).rowcount
+    con.commit()
+    print(f"{args.ref}  place cleared on {n} row(s); the packer lays it "
+          "next time the page is placed afresh")
+
+
 def bus(con, args):
     """Group nets into a bus. `bus` alone lists. `bus NAME NET...` puts the
     nets in NAME, moving any that were elsewhere. `--drop NET...` takes
@@ -588,6 +601,10 @@ def main(argv):
     n.add_argument("name", nargs="?")
     n.add_argument("--none", action="store_true", help="clear the net")
     n.set_defaults(run=net)
+
+    x = sub.add_parser("unplace", help="clear an instance's place")
+    x.add_argument("ref")
+    x.set_defaults(run=unplace)
 
     b = sub.add_parser("bus", help="group nets into a bus")
     b.add_argument("name", nargs="?", help="the bus")

@@ -82,6 +82,8 @@ SCHEMA = {
             "x             REAL",
             "y             REAL",
             "rot           INTEGER",
+            # who set the place: tool, the packer; hand, a pull found it moved
+            "placed        TEXT",
             "PRIMARY KEY (uuid, path)",
             "FOREIGN KEY (parent, parent_path) REFERENCES ref_table(uuid, path)"
             " ON DELETE SET NULL",

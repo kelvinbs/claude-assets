@@ -131,6 +131,7 @@
 | 10 | `x` | REAL | | Yes |
 | 11 | `y` | REAL | | Yes |
 | 12 | `rot` | INTEGER | | Yes |
+| 13 | `placed` | TEXT | | Yes |
 
 - An instance is `(uuid, path)`: the symbol drawn on a sheet, in one
   instance of that sheet. `uuid` is the symbol's uuid in the sheet file.
@@ -144,8 +145,11 @@
   same sub-sheet is matched instance for instance.
 - `x`, `y`, `rot` are the instance's place on its sheet: the symbol's
   origin in mm, KiCad's axes, y down, and its rotation in degrees. Null
-  until pulled off the page. A drawing in a sub-sheet has one place on
+  until placed or pulled. A drawing in a sub-sheet has one place on
   every row of it. A sheet-symbol instance's place is its top-left.
+- `placed` says who set it: `tool`, the packer; `hand`, a pull found the
+  symbol somewhere other than where the record had it. Null with no
+  place.
 
 **T2.5 — `source` letters**
 
@@ -350,14 +354,17 @@
 
 - Order of rooms within a page is arbitrary — subject to re-entry,
   section 4.3.
-- A place, `x`, `y`, `rot`, wins over all of these: an instance that has
-  one is drawn there. The ranks order only what has none, packed below
-  what has a place. A family with no place takes the arrangement of a
-  family with the same parent part and child parts, child to child by
-  part in reference order: the family template.
-- `--pull` reads every place off the pages into the record; `--push`
-  never writes one. Arrange by hand in KiCad, pull, and the arrangement
-  is the record's.
+- A place set by hand wins over all of these: an instance marked `hand`
+  is drawn where it is. The ranks order the rest, packed below what the
+  hand placed, and the packer writes where it put each one, marked
+  `tool`. A family with no hand place takes the arrangement of a family
+  marked `hand` with the same parent part and child parts, child to child
+  by part in reference order: the family template.
+- `--pull` writes a place only where the symbol is not where the record
+  has it, and marks it `hand`; `--push` never writes one. Arrange by hand
+  in KiCad, pull, and the arrangement is the record's. `table-write
+  unplace` clears a place, and the packer lays that part next time the
+  page is placed afresh.
 - A sub-sheet page is drawn once, in its own file, whatever the number of
   instances. The instances sit on the page that placed the class-`B` part,
   as sheet symbols. KiCad's multichannel tools carry one instance's layout

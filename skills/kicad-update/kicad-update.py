@@ -133,15 +133,15 @@ def instances(con):
     rows = []
     for uuid_, ipn, ref, page, room, unit, path, symbol, footprint, \
             description, datasheet, manufacturer, mpn, note, checked, \
-            name, x, y, rot in con.execute(
+            name, x, y, rot, placed in con.execute(
             "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, r.path, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
             "       p.manufacturer, p.mpn, p.note, p.checked, p.name, "
-            "       r.x, r.y, r.rot "
+            "       r.x, r.y, r.rot, r.placed "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "order by r.ipn, r.path, r.ref, r.unit"):
         rows.append({
-            "x": x, "y": y, "rot": rot or 0,
+            "x": x, "y": y, "rot": rot or 0, "placed": placed or "",
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
             "unit": unit or 1, "path": path or "",
@@ -1321,11 +1321,13 @@ def push_board(board, project, root, root_src, rows):
 
 def pull_positions(con, board, project, root_src):
     """Pages to record: the place of every symbol and sheet symbol the
-    record knows, as it stands on its page. Returns (written, moved)."""
+    record knows that is not where the record has it, marked `hand`. One
+    where the tool left it is not written. Returns (written, moved)."""
     placed, placed_sheets = read_pages(board, project,
                                        page_files(con, project, root_src))
     known = {(u, p): (x, y, r) for u, p, x, y, r in con.execute(
         "select uuid, path, x, y, rot from ref_table")}
+    hand = 0
     by_uuid = {}
     for (u, p), v in known.items():
         by_uuid.setdefault(u, []).append((p, v))
@@ -1339,8 +1341,10 @@ def pull_positions(con, board, project, root_src):
                     or (orot or 0) != rot:
                 if ox is not None:
                     moved += 1
-                con.execute("update ref_table set x = ?, y = ?, rot = ? "
-                            "where uuid = ? and path = ?", (x, y, rot, u, p))
+                # not where the tool left it: the hand's place, locked
+                con.execute("update ref_table set x = ?, y = ?, rot = ?, "
+                            "placed = 'hand' where uuid = ? and path = ?",
+                            (x, y, rot, u, p))
                 written += 1
     for u, (fname, page, sym) in placed.items():
         pass
@@ -1494,6 +1498,8 @@ def family_templates(rows):
             par = r.get("parent") or ""
             p = by_ref.get(par)
             if not p or p.get("x") is None or r.get("x") is None:
+                continue
+            if p.get("placed") != "hand" or r.get("placed") != "hand":
                 continue
             if r.get("unit", 1) not in (None, 1) or p.get("unit", 1) not in (None, 1):
                 continue
@@ -1670,8 +1676,9 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
     model = ctx["model"]
     body, page_h, page_w = "", start_y, MARGIN + PORT_W
     placed_rows = [r for r in rows if r.get("x") is not None
-                   and r.get("y") is not None]
+                   and r.get("y") is not None and r.get("placed") == "hand"]
     free = [r for r in rows if r not in placed_rows]
+    packed_out = ctx.setdefault("packed", [])
     low = start_y
     for row in placed_rows:
         x, y, rot = float(row["x"]), float(row["y"]), int(row.get("rot") or 0)
@@ -1711,8 +1718,11 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
             if row.get("sheet"):
                 body += draw_one(row, x - half_w, y - half_h, 0, blocks,
                                  project, ctx)
+                packed_out.append((row["uuid"], snap(x - half_w),
+                                   snap(y - half_h), 0))
             else:
                 body += draw_one(row, x, y, rot, blocks, project, ctx)
+                packed_out.append((row["uuid"], x, y, rot))
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
@@ -2299,6 +2309,16 @@ def main(argv):
                                                           starts, page, p)}
         name, new, kept = write_page(board, project, page, on_page, blocks,
                                      None, ctx)
+        if ctx.get("packed"):
+            con = connect(board)
+            try:
+                for u, px, py, prot in ctx["packed"]:
+                    con.execute("update ref_table set x = ?, y = ?, rot = ?, "
+                                "placed = 'tool' where uuid = ?",
+                                (px, py, prot, u))
+                con.commit()
+            finally:
+                con.close()
         touched.discard(name)
         normalize(board / name)
         came_in = sum(1 for _, f, _, _ in entered if f == name)

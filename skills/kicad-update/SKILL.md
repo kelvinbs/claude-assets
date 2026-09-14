@@ -24,7 +24,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --
 |---|---|---|
 | place, the default | record to sheets | rewrites the root; draws missing drawings with a label on every pin `net_table` names, sheet symbols for sub-sheet instances, a breakout for every bus that leaves a page; enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
 | `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. Then the labels: every label on the page is deleted, wherever it sits, and every `net_table` row written back as one at the pin's current place; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, wires and routing untouched |
-| `--pull` | library and pages to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's. Then every symbol's and sheet symbol's place off every page into `ref_table.x`, `y`, `rot`; the run says how many moved since the last pull |
+| `--pull` | library and pages to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's. Then every symbol and sheet symbol that is not where the record has it: its place into `ref_table.x`, `y`, `rot`, marked `hand`; the run says how many. One where the tool left it is not written |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
 then `--pull`. Claude's is `table-write`, then `--push`. Instances take
@@ -106,18 +106,21 @@ T2.12, in its order.
 | `room` | a block of the sheet. Rooms run in name order |
 | `parent` | a parent and its children, together |
 
-An instance with a place in the record, `x`, `y`, `rot`, is drawn there,
-whatever the ranks say. The ranks order only what has no place, packed
-below what has one. A family with no place takes the arrangement of a
-family with the same parent part and child parts, the template: each child
-at the same offset from its parent, matched by part in reference order;
-children the template does not name are packed beside. Otherwise parts
-run left to right and wrap at the page edge, and the sort puts a group's
-members next to each other, so they read in order.
+An instance placed by hand, `placed` `hand` with `x`, `y`, `rot`, is drawn
+there, whatever the ranks say. The ranks order the rest, packed below
+what the hand placed; the packer writes where it put each one, marked
+`tool`, so a pull can tell a move from a packed spot. A family with no
+hand place takes the arrangement of a hand-placed family with the same
+parent part and child parts, the template: each child at the same offset
+from its parent, matched by part in reference order; children the
+template does not name are packed beside. Otherwise parts run left to
+right and wrap at the page edge, and the sort puts a group's members
+next to each other, so they read in order.
 
 Arrange a family by hand in KiCad, then `--pull`: the arrangement is the
 record's, a page placed afresh comes back the same, and the next family
-of that kind takes it.
+of that kind takes it. `table-write unplace <ref>` sends a part back to
+the packer.
 
 Order between rooms is arbitrary and subject to re-entry: once
 a part is on the page it does not move, so the order is only ever the order

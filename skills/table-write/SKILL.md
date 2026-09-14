@@ -27,6 +27,7 @@ table-write.py <board-dir> drop   <ref>
 table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [--checked DATE] [--library L] --break QTY:PRICE ...
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> show   [<ipn>]
 ```
 
@@ -122,6 +123,12 @@ the drawing and pin. The drawing is named by any of its references.
 global — and loses it on the push after the row goes. On a sub-sheet
 instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 `{RAILS}`; the net is what it joins on the page above.
+
+## unplace
+
+Clears an instance's place and mark, every row of the drawing. The symbol
+stays on the sheet where it is; the packer lays it the next time the page
+is placed afresh.
 
 ## bus
 
