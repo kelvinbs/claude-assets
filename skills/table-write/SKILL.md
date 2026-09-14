@@ -1,6 +1,6 @@
 ---
 name: table-write
-description: Create or modify a part in board.db: add, set, place, parent, drop, show. Stage 2.
+description: Create or modify a part in board.db: add, set, place, parent, drop, show; tag a simulation: sim. Stage 2.
 ---
 
 # table-write
@@ -9,7 +9,7 @@ Create or modify a part. The skill of Update parts.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table` | `board.db` — `parts_table`, `ref_table` |
+| `board.db` — `parts_table`, `ref_table`, `net_table`; the part files' pins | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
 
 Part fields reach KiCad by `kicad-update --push`. It never opens a KiCad file, and of the sourcing tables it touches only
 `init-pipeline` must have run first.
@@ -29,6 +29,10 @@ table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> room   <ref> <name> | --none
+table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
+table-write.py <board-dir> sim    set <name> <net> <source> | <net> --none | --directive <line>
+table-write.py <board-dir> sim    drop <name>
+table-write.py <board-dir> sim    show
 table-write.py <board-dir> show   [<ipn>]
 ```
 
@@ -70,7 +74,9 @@ along it is — see T2.3.
 
 Changes fields on a part that exists. Prints what each field was and what it
 became, so a change is legible in the terminal as well as in the database.
-`--value` is what the sheet shows as Value. `--footprint` takes the project footprint, `<nickname>:<name>`, written by
+`--value` is what the sheet shows as Value. `--sim-model` is `R`, `C`, `L`
+or `opamp`, what the part is to the simulator; `--sim-params` its
+parameters, T2.3. `--footprint` takes the project footprint, `<nickname>:<name>`, written by
 the session at Update library — footprints, 3D (`copy-kicad-part.md`,
 Footprints).
 
@@ -132,6 +138,22 @@ Puts an instance in a room, every row under the reference: `room R3
 Filter_I`. `--none` takes it out. A room is one function drawn together;
 the page lays a room as a box inside its block's box.
 
+## sim
+
+A simulation instance, T2.6d and T2.6e: what KiCad runs when the User
+presses Run. `sim add bbfilt ac --block BB_Block` tags the blocks; the
+kind is `ac`, `tran`, `dc` or `op` and sets a default directive. The
+blocks' descendants by the parent chain are the simulated parts. Their
+boundary nets, those shared with a part outside the blocks, get a source
+row each: a rail named as a voltage, `3V3`, `-5V0`, gets `dc <V>`; a net
+an outside `output` pin drives, per the part file, gets `ac 1`; the rest
+are printed with no source. `GND` is ground and gets nothing. `sim set
+<name> <net> <source>` sets or adds a source, `--none` removes it,
+`--directive` replaces the spice line. `sim drop` removes the instance
+and its rows. `sim show` lists every instance. `kicad-update --push`
+draws the sources and the directive, and marks everything outside the
+blocks excluded from simulation.
+
 ## unplace
 
 Clears an instance's place and mark, every row of the drawing. The symbol
@@ -160,6 +182,9 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 ## What it refuses
 
 - A class letter that is not in T2.10
+- A `sim_model` not `R`, `C`, `L` or `opamp`; a `sim add` kind not `ac`,
+  `tran`, `dc` or `op`; a `--block` that names no instance; a `sim` name
+  already taken, or one that names no instance on `set` and `drop`
 - A `parent` or `--under` that names no instance, or closes a loop
 - An IPN that does not read as one, or names no row
 - A reference that names no instance

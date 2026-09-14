@@ -23,7 +23,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --
 | Verb | Direction | Does |
 |---|---|---|
 | place, the default | record to sheets | rewrites the root; draws missing drawings with a label on every pin `net_table` names, sheet symbols for sub-sheet instances, a breakout for every bus that leaves a page; enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. Then the labels: every label on the page is deleted, wherever it sits, and every `net_table` row written back as one at the pin's current place; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, wires and routing untouched |
+| `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. Then the labels: every label on the page is deleted, wherever it sits, and every `net_table` row written back as one at the pin's current place; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the simulation, T2.6d: the models file, `Sim.*` fields on every instance in the active instance's blocks and `exclude_from_sim` on everything else, the sources and the directive drawn in a sim room on the block's page. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, wires and routing untouched |
 | `--pull` | library and pages to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `note`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's. Then every symbol and sheet symbol that is not where the record has it: its place into `ref_table.x`, `y`, `rot`, marked `hand`; the run says how many. One where the tool left it is not written |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
@@ -81,6 +81,32 @@ deletes one. KiCad's netlist is the design's.
 
 Bus aliases go to `schematic.bus_aliases` in `<project>.kicad_pro`, the one
 key the tool touches there after init.
+
+## Simulation
+
+`table-write sim add` tags blocks; push makes the sheets simulate in
+KiCad's own simulator, Inspect, Simulator, Run. What push writes:
+
+| What | Where | From |
+|---|---|---|
+| `models/<project>.sp` | the design folder | every part with `sim_model` `opamp`: one subcircuit, nodes in pin-number order, one single-pole op-amp per channel with POLE = gbw / aol, GAIN = aol, ROUT = rout, and a series resistor at in+ with 4kTR = en², the noise. The op-amp is copied into the file, so nothing points outside the project |
+| `Sim.Device` `Sim.Params` | a passive inside the blocks, every unit | `sim_model` or the class letter; `sim_params` or `value` made spice, `1.13 kOhm` to `1.13k` |
+| `Sim.Device SUBCKT` `Sim.Library` `Sim.Name` `Sim.Pins` | an op-amp inside the blocks, every unit | the models file, `${KIPRJMOD}/models/<project>.sp`; the pin map from the part file, `1=n1 2=n2 ...` |
+| `exclude_from_sim yes` | every instance outside the blocks, and one inside with no model | the exporter writes a junk line, `J6 __J6`, for a symbol with no model and no exclusion, and ngspice stops on it |
+| `VS1` `VS2` ..., a label at each pin | the sim room on the first block's page, below what is drawn | `sim_net_table` source rows: `dc <V>` a VDC with `dc=<V>`; `ac <V>` a VSIN with `ac=<V>`. `VDC` and `VSIN` copied from `Simulation_SPICE` into the project library once |
+| the directive as text, `.ac dec 100 1 10meg` | the sim room | `sim_table.directive` |
+
+- The blocks' parts are the block instances and their descendants by
+  the parent chain. Pin names that do not read as an op-amp's, or a
+  `value` that is not a spice value, stop the push or skip the part,
+  named.
+- One instance at a time. Two rows in `sim_table` stop the push.
+- The sim room is the tool's: removed and redrawn every push, byte for
+  byte the same when nothing changed. Place and pull skip its symbols.
+- No instance in the record: every `Sim.*` field goes, every
+  `exclude_from_sim` is `no`, the room is gone. The sheet is as it was.
+- Node `GND` is ground to ngspice. A net named as a rail, `3V3`, gets a
+  DC source from `sim add`; the rest is the User's, `table-write sim set`.
 
 ## Sub-sheets
 

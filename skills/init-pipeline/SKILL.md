@@ -11,7 +11,7 @@ else.
 
 | Reads | Writes |
 |---|---|
-| `board-build-tool.md` — T2.3, T2.4, T2.13 | `board.db` — `project_table`, `parts_table`, `ref_table`<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`lib/<project>.pretty/`<br>`sym-lib-table`<br>`fp-lib-table` |
+| `board-build-tool.md` — T2.3, T2.4, T2.6, T2.6a, T2.6b, T2.6d, T2.6e, T2.13 | `board.db` — the eight tables<br>`<project>.kicad_pro`<br>`<project>.kicad_sch`<br>`<project>.kicad_pcb`<br>`lib/<project>.kicad_sym`<br>`lib/<project>.pretty/`<br>`sym-lib-table`<br>`fp-lib-table` |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/init-pipeline/init-pipeline.py <board-dir> [--scorch [warm|cold]]
@@ -36,8 +36,8 @@ beside the design files.
 
 ## The schema
 
-Six tables in one file, and their columns are T2.3, T2.4, T2.6, T2.6a,
-T2.6b and T2.13 of `board-build-tool.md`.
+Eight tables in one file, and their columns are T2.3, T2.4, T2.6, T2.6a,
+T2.6b, T2.6d, T2.6e and T2.13 of `board-build-tool.md`.
 `init-pipeline.py` holds them in executable form and is the only
 place they are written as DDL. A column added to those tables is added
 there in the same commit.

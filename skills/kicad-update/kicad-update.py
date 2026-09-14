@@ -1270,6 +1270,483 @@ def port_area(src, page, model):
     return remove_matching(src, body), body
 
 
+# ------------------------------------------------------------ simulation
+
+SIM_FIELDS = ("Sim.Device", "Sim.Type", "Sim.Params", "Sim.Library",
+              "Sim.Name", "Sim.Pins")
+SIM_SYMBOLS = ("VDC", "VSIN")       # copied from Simulation_SPICE, T2.6e
+SIM_REF = re.compile(r"^VS\d+$")    # a source the tool drew
+FOUR_KT = 4 * 1.380649e-23 * 300    # V^2/Hz per ohm at 300 K
+PASSIVE_CLASS = {"R": "R", "C": "C", "L": "L"}
+
+# KiCad's single-pole op-amp, Simulation_SPICE.sp, public domain, Holger
+# Vogt. Copied in so the models file needs nothing outside the project
+OPAMP_SUBCKT = """\
+* single-pole op-amp, after kicad_builtin_opamp (Holger Vogt, public domain)
+* POLE the open-loop pole, GAIN the open-loop gain, ROUT the output resistance
+.subckt bb_opamp in+ in- vcc vee out params: POLE=20 GAIN=20k ROUT=10
+  G10 0 int in+ in- 100u
+  R1 int 0 {GAIN/100u}
+  C1 int 0 {1/(6.28*(GAIN/100u)*POLE)}
+  Eout 2 0 int 0 1
+  Rout 2 out {ROUT}
+  Elow lee 0 vee 0 1
+  Ehigh lcc 0 vcc 0 1
+  Dlow lee int Dlimit
+  Dhigh int lcc Dlimit
+  .model Dlimit D N=0.01
+.ends
+"""
+
+VALUE_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([pnumkMG])?(?:Ohm|ohm|F|H|R|Ω)?\b")
+
+
+def spice_value(value):
+    """`1.13 kOhm` to `1.13k`, `100 pF` to `100p`, `6.8 uH` to `6.8u`. None
+    when the value does not start with a number."""
+    m = VALUE_RE.match(value or "")
+    if not m:
+        return None
+    return m.group(1) + (m.group(2) or "")
+
+
+def del_property(block, name):
+    """Remove one field from a symbol block, if it carries it."""
+    pat = re.compile(r'\n\t\t\(property "%s" "(?:[^"\\]|\\.)*"\n(?:.*\n)*?\t\t\)'
+                     % re.escape(name))
+    return pat.sub("", block, count=1)
+
+
+def set_exclude(block, yes):
+    return re.sub(r"\(exclude_from_sim (?:yes|no)\)",
+                  f"(exclude_from_sim {'yes' if yes else 'no'})", block,
+                  count=1)
+
+
+def sim_params_of(text):
+    """`gbw=1e9 aol=1e5 en=1e-9 rout=10` as floats."""
+    out = {}
+    for tok in (text or "").split():
+        if "=" in tok:
+            k, v = tok.split("=", 1)
+            try:
+                out[k.strip().lower()] = float(v)
+            except ValueError:
+                raise Bad(f"sim_params: '{tok}' is not <name>=<number>")
+    return out
+
+
+def opamp_pinmap(pins):
+    """The op-amp's channels from its part-file pin names. Returns
+    (channels, vplus, vminus): channels {key: {'in+', 'in-', 'out'}} of
+    pin numbers. Names read `OUT_A` `IN_A+` `IN_A-` `V+` `V-`, or `VOUT1`
+    `+IN1` `-IN1` `+VS` `-VS`, or `OUT1` `IN1+` `IN1-` `VCC` `GND`."""
+    chans, vplus, vminus = {}, None, None
+    for number, name, *_ in pins:
+        n = str(name).upper().replace("–", "-").replace("−", "-")
+        n = n.replace("_", "")
+        if n in ("V+", "+VS", "VS+", "VCC", "VDD", "VS", "+V", "VP"):
+            vplus = str(number); continue
+        if n in ("V-", "-VS", "VS-", "VEE", "GND", "VSS", "-V", "VN"):
+            vminus = str(number); continue
+        m = re.match(r"^V?OUT([A-Z0-9]*)$", n)
+        if m:
+            chans.setdefault(m.group(1), {})["out"] = str(number); continue
+        m = re.match(r"^([+-])?IN([A-Z0-9]*)([+-])?$", n)
+        if m and (m.group(1) or m.group(3)) and not (m.group(1) and m.group(3)):
+            sign = m.group(1) or m.group(3)
+            chans.setdefault(m.group(2), {})["in" + sign] = str(number)
+            continue
+    bad = [k for k, c in chans.items() if set(c) != {"in+", "in-", "out"}]
+    if bad or not chans or vplus is None or vminus is None:
+        return None
+    return chans, vplus, vminus
+
+
+def subckt_name(name):
+    return re.sub(r"[^A-Za-z0-9_]", "_", name or "part")
+
+
+def write_models(con, board, project):
+    """`models/<project>.sp` from every `opamp` part: one subckt per part,
+    nodes in pin-number order. Returns {ipn: (subckt, Sim.Pins)}."""
+    models, body = {}, OPAMP_SUBCKT
+    for ipn, name, params in con.execute(
+            "select ipn, name, sim_params from parts_table "
+            "where sim_model = 'opamp' order by ipn"):
+        path = board / "parts" / f"{ipn}-{name}.json"
+        if not path.exists():
+            raise Bad(f"{ipn} {name}: sim_model opamp but no part file "
+                      f"{path.name}; datasheet-read first")
+        pins = json.loads(path.read_text()).get("pins") or []
+        mapped = opamp_pinmap(pins)
+        if mapped is None:
+            raise Bad(f"{ipn} {name}: pin names do not read as an op-amp's "
+                      "(in+, in-, out per channel, V+, V-): "
+                      + " ".join(str(p[1]) for p in pins))
+        chans, vplus, vminus = mapped
+        p = sim_params_of(params)
+        for key in ("gbw", "aol", "en", "rout"):
+            if key not in p:
+                raise Bad(f"{ipn} {name}: sim_params lacks {key}=")
+        pole = p["gbw"] / p["aol"]
+        rnoise = p["en"] ** 2 / FOUR_KT
+        sub = subckt_name(name)
+        numbers = [str(pin[0]) for pin in pins]
+        nodes = [f"n{n}" for n in numbers]
+        body += (f"\n* {name}, {ipn}: {len(chans)} channel(s), gbw {p['gbw']:g}"
+                 f" aol {p['aol']:g} en {p['en']:g} rout {p['rout']:g}\n"
+                 f".subckt {sub} {' '.join(nodes)}\n")
+        for key in sorted(chans):
+            c = chans[key]
+            tag = key or "1"
+            # the noise: a resistor to ground whose thermal noise, 4kTR
+            # = en^2, is added to in+ through a unity VCVS, so the signal
+            # path sees no resistance and .noise sees the source
+            body += (f"  Rn{tag} z{tag} 0 {rnoise:.6g}\n"
+                     f"  En{tag} x{tag} n{c['in+']} z{tag} 0 1\n"
+                     f"  X{tag} x{tag} n{c['in-']} n{vplus} n{vminus} "
+                     f"n{c['out']} bb_opamp POLE={pole:.6g} GAIN={p['aol']:g}"
+                     f" ROUT={p['rout']:g}\n")
+        body += ".ends\n"
+        models[ipn] = (sub, " ".join(f"{n}=n{n}" for n in numbers))
+    folder = board / "models"
+    folder.mkdir(exist_ok=True)
+    path = folder / f"{project}.sp"
+    if not path.exists() or path.read_text() != body:
+        path.write_text(body)
+    return models
+
+
+def active_sim(con):
+    """The one simulation instance, or None. Two is a refusal."""
+    rows = con.execute("select name, kind, directive from sim_table "
+                       "order by name").fetchall()
+    if not rows:
+        return None
+    if len(rows) > 1:
+        raise Bad("more than one simulation in sim_table: "
+                  + " ".join(r[0] for r in rows)
+                  + ". One is pushed at a time; `table-write sim drop` the "
+                  "others")
+    name, kind, directive = rows[0]
+    blocks = [b for (b,) in con.execute(
+        "select block from sim_net_table where name = ? and block != '' "
+        "order by block", (name,))]
+    sources = [(n, s) for n, s in con.execute(
+        "select net, source from sim_net_table where name = ? and net != ''"
+        " and source is not null order by net", (name,))]
+    return {"name": name, "kind": kind, "directive": directive or "",
+            "blocks": blocks, "sources": sources}
+
+
+def sim_inside(con, blocks):
+    """Every instance uuid under the block references by the parent chain,
+    the blocks included."""
+    roots = []
+    for b in blocks:
+        row = con.execute("select uuid from ref_table where ref = ?",
+                          (b,)).fetchone()
+        if row is None:
+            raise Bad(f"simulation block {b} names no instance")
+        roots.append(row[0])
+    seen, frontier = set(roots), list(roots)
+    while frontier:
+        marks = ",".join("?" * len(frontier))
+        nxt = [u for (u,) in con.execute(
+            f"select distinct uuid from ref_table where parent in ({marks})",
+            frontier) if u not in seen]
+        seen.update(nxt)
+        frontier = nxt
+    return seen
+
+
+def sim_fields_for(row, part, models, project):
+    """The Sim.* fields an instance inside the blocks carries, or None
+    with a reason when it has no model."""
+    model = part["sim_model"] or PASSIVE_CLASS.get(row["ipn"][0])
+    if model in ("R", "C", "L"):
+        value = part["sim_params"] or spice_value(part["value"])
+        if not value:
+            return None, f"value {part['value']!r} is not a spice value"
+        return {"Sim.Device": model, "Sim.Params": value}, ""
+    if model == "opamp":
+        if row["ipn"] not in models:
+            return None, "no model written"
+        sub, pins = models[row["ipn"]]
+        return {"Sim.Device": "SUBCKT",
+                "Sim.Library": f"${{KIPRJMOD}}/models/{project}.sp",
+                "Sim.Name": sub, "Sim.Pins": pins}, ""
+    return None, ""
+
+
+def push_sim_fields(con, board, project, root_src, rows, sim, models):
+    """Every placed instance: Sim.* fields and exclude_from_sim per the
+    active simulation. Returns ({file: symbols rewritten}, [skipped])."""
+    inside = sim_inside(con, sim["blocks"]) if sim else set()
+    parts = {}
+    for ipn, model, params, value, description in con.execute(
+            "select ipn, sim_model, sim_params, value, description "
+            "from parts_table"):
+        parts[ipn] = {"sim_model": model, "sim_params": params,
+                      "value": value_of(con, ipn, description)}
+    by_uuid = {r["uuid"]: r for r in rows}
+    placed, _ = read_pages(board, project, page_files(con, project, root_src))
+    by_file = {}
+    for u, (fname, page, sym) in placed.items():
+        if u in by_uuid:
+            by_file.setdefault(fname, set()).add(u)
+    changed, skipped = {}, []
+    for fname, wanted in sorted(by_file.items()):
+        path = board / fname
+        before = src = path.read_text()
+        edits = []
+        for start, end in symbol_blocks(src):
+            block = src[start:end]
+            u = read_symbol(block)["uuid"]
+            if u not in wanted:
+                continue
+            row = by_uuid[u]
+            part = parts[row["ipn"]]
+            new = block
+            fields, why = (sim_fields_for(row, part, models, project)
+                           if u in inside else (None, ""))
+            if fields:
+                for name in SIM_FIELDS:
+                    new = (set_property(new, name, fields[name])
+                           if name in fields else del_property(new, name))
+                new = set_exclude(new, False)
+            else:
+                if u in inside and why:
+                    skipped.append(f"{row['ref']}: {why}")
+                for name in SIM_FIELDS:
+                    new = del_property(new, name)
+                # the exporter writes a junk line, `J6 __J6`, for any
+                # symbol with no model and no exclusion (n2.2): with a
+                # simulation active, everything without fields is excluded
+                new = set_exclude(new, bool(sim))
+            if new != block:
+                edits.append((start, end, new))
+        if edits:
+            out, last = [], 0
+            for start, end, new in sorted(edits):
+                out.append(src[last:start]); out.append(new); last = end
+            out.append(src[last:])
+            path.write_text("".join(out))
+            run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                                  str(path)], capture_output=True, text=True)
+            if run.returncode != 0:
+                path.write_text(before)
+                raise Bad(f"kicad-cli could not normalize {path}: "
+                          + (run.stderr or run.stdout).strip())
+            changed[fname] = len(edits)
+    return changed, skipped
+
+
+def ensure_sim_symbols(board, project):
+    """VDC and VSIN in the project library, copied from Simulation_SPICE
+    once (section 3.3: nothing points outside the repository)."""
+    library = board / "lib" / f"{project}.kicad_sym"
+    src = library.read_text()
+    copied = []
+    for name in SIM_SYMBOLS:
+        if copy_part.top_level(src, name) is None:
+            copy_part.copy(library, project,
+                           {"library": "Simulation_SPICE", "symbol": name},
+                           name, None)
+            copied.append(name)
+    if copied:
+        normalize_lib(library)
+    return copied
+
+
+def source_sexp(project, path_uuid, ref, net, source, lib_id, x, y, u):
+    """One source symbol at (x, y), pin 1 up, and its two labels."""
+    kind, _, amount = source.partition(" ")
+    kind = kind.lower()
+    try:
+        amount = f"{float(amount):g}"
+    except ValueError:
+        raise Bad(f"source '{source}' on {net}: wants `dc <V>` or `ac <V>`")
+    if kind == "dc":
+        typ, params = "DC", f"dc={amount}"
+    elif kind == "ac":
+        typ, params = "SIN", f"dc=0 ampl={amount} f=1k ac={amount}"
+    else:
+        raise Bad(f"source '{source}' on {net}: wants `dc <V>` or `ac <V>`")
+    body = (
+        "\t(symbol\n"
+        f"\t\t(lib_id \"{lib_id}\")\n"
+        f"\t\t(at {x:.2f} {y:.2f} 0)\n"
+        "\t\t(unit 1)\n"
+        "\t\t(exclude_from_sim no)\n\t\t(in_bom no)\n\t\t(on_board no)\n"
+        "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
+        f"\t\t(uuid \"{u}\")\n"
+        + property_sexp("Reference", ref, f"{x + 2 * GRID:.2f}",
+                        f"{y - GRID / 2:.2f}", justify="left")
+        + property_sexp("Value", f"{net} {source}", f"{x + 2 * GRID:.2f}",
+                        f"{y + GRID / 2:.2f}", justify="left")
+        + property_sexp("Sim.Device", "V", f"{x:.2f}", f"{y:.2f}", hide=True)
+        + property_sexp("Sim.Type", typ, f"{x:.2f}", f"{y:.2f}", hide=True)
+        + property_sexp("Sim.Pins", "1=+ 2=-", f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
+        + property_sexp("Sim.Params", params, f"{x:.2f}", f"{y:.2f}",
+                        hide=True)
+        # pin uuids written here, so a redraw is byte-identical and a
+        # second push changes nothing
+        + f"\t\t(pin \"1\"\n\t\t\t(uuid \"{uid('simpin', u, '1')}\")\n\t\t)\n"
+        + f"\t\t(pin \"2\"\n\t\t\t(uuid \"{uid('simpin', u, '2')}\")\n\t\t)\n"
+        + "\t\t(instances\n"
+        f"\t\t\t(project \"{project}\"\n"
+        f"\t\t\t\t(path \"{path_uuid}\"\n"
+        f"\t\t\t\t\t(reference \"{ref}\")\n"
+        "\t\t\t\t\t(unit 1)\n"
+        "\t\t\t\t)\n\t\t\t)\n\t\t)\n"
+        "\t)\n"
+    )
+    return body
+
+
+def directive_sexp(text, x, y, u):
+    return (
+        f"\t(text \"{esc(text)}\"\n"
+        "\t\t(exclude_from_sim no)\n"
+        f"\t\t(at {x:.2f} {y:.2f} 0)\n"
+        f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
+        "\t\t\t(justify left bottom)\n\t\t)\n"
+        f"\t\t(uuid \"{u}\")\n"
+        "\t)\n"
+    )
+
+
+def remove_sim_fittings(src, project):
+    """Drop every source the tool drew, by lib_id and reference, the
+    labels at its pins, and the sim room's box, name and directive."""
+    gone = set()
+    for start, end in symbol_blocks(src):
+        sym = read_symbol(src[start:end])
+        if sym["lib_id"] in {f"{project}:{n}" for n in SIM_SYMBOLS} \
+                and SIM_REF.match(sym["props"].get("Reference", "")):
+            gone.add(sym["uuid"])
+            at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+)', src[start:end])
+            x, y = float(at.group(1)), float(at.group(2))
+            gone.add(uid("simlabel", sym["uuid"], "1"))
+            gone.add(uid("simlabel", sym["uuid"], "2"))
+    spans = []
+    for a, b in top_blocks(src, "(symbol"):
+        u = re.search(r'\n\t\t\(uuid "([^"]+)"\)', src[a:b])
+        if u and u.group(1) in gone:
+            spans.append((a, b))
+    for head in ("(rectangle", "(text"):
+        for a, b in top_blocks(src, head):
+            u = re.search(r'\(uuid "([^"]+)"\)', src[a:b])
+            if u and u.group(1).startswith(SIM_UUID_MARK):
+                spans.append((a, b))
+    for a, b in sorted(spans, reverse=True):
+        src = src[:a] + src[b:]
+    return remove_by_uuid(src, gone)
+
+
+SIM_UUID_MARK = "5133"   # the tool's sim-room fittings: uuids that start so
+
+
+def sim_uid(*parts):
+    return SIM_UUID_MARK + uid(*parts)[len(SIM_UUID_MARK):]
+
+
+def push_sim_fittings(con, board, project, root, root_src, rows, sim):
+    """The sim room on the block's page: a source per source row, its
+    labels, the directive. Every page loses what an earlier push drew;
+    the active instance's page gets it afresh. Returns {file: sources}."""
+    sheets = root_sheets(root_src)
+    starts = root_page_of(rows)
+    by_file = page_files(con, project, root_src)
+    page = None
+    if sim and sim["blocks"]:
+        row = con.execute("select page, path from ref_table where ref = ?",
+                          (sim["blocks"][0],)).fetchone()
+        page = (row[0] or "").strip() if row else None
+        if not page:
+            raise Bad(f"simulation block {sim['blocks'][0]} has no page")
+    changed = {}
+    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+        pg = by_file.get(path.name)
+        if pg is None:
+            continue
+        before = src = path.read_text()
+        src = remove_sim_fittings(src, project)
+        count = 0
+        if sim and pg == page and (sim["sources"] or sim["directive"]):
+            lib_ids = {f"{project}:{n}" for n in SIM_SYMBOLS}
+            blocks = library_blocks(board, project, lib_ids)
+            have = set(re.findall(r'\t\t\(symbol "([^"]+)"', src))
+            missing = "".join(indent_block(blocks[k], 1).rstrip() + "\n"
+                              for k in sorted(lib_ids) if k not in have)
+            if missing:
+                m = re.search(r"\(lib_symbols\n", src)
+                src = src[:m.end()] + missing + src[m.end():]
+            paper = paper_of(src)
+            width, height = PAPERS.get(paper, PAPERS["A"])
+            x0 = MARGIN + 2 * GRID
+            y0 = snap(lowest_used(src) + 10 * GRID)
+            path_uuid = kicad_path(root, sheets, starts, page, "")
+            body, x = "", x0 + 2 * GRID
+            for i, (net, source) in enumerate(sim["sources"], 1):
+                lib = f"{project}:{'VDC' if source.lower().startswith('dc') else 'VSIN'}"
+                u = sim_uid("simsrc", page, net)
+                sy = y0 + 4 * GRID
+                body += source_sexp(project, path_uuid, f"VS{i}", net, source,
+                                    lib, x, sy, u)
+                ends = pin_ends(blocks[lib], 1, x, sy, 0)
+                body += label_sexp(net, *ends["1"], "label",
+                                   uid("simlabel", u, "1"))
+                body += label_sexp("GND", *ends["2"], "label",
+                                   uid("simlabel", u, "2"))
+                x += 10 * GRID
+                count += 1
+            w = max(x - x0, 16 * GRID)
+            h = 9 * GRID
+            body += (
+                "\t(rectangle\n"
+                f"\t\t(start {x0:.2f} {y0:.2f})\n"
+                f"\t\t(end {x0 + w:.2f} {y0 + h:.2f})\n"
+                "\t\t(stroke\n\t\t\t(width 0.1)\n\t\t\t(type dash)\n\t\t)\n"
+                "\t\t(fill\n\t\t\t(type none)\n\t\t)\n"
+                f"\t\t(uuid \"{sim_uid('simbox', page)}\")\n"
+                "\t)\n"
+                + directive_sexp(f"sim {sim['name']} {sim['kind']}",
+                                 x0 + GRID / 2, y0 - GRID / 2,
+                                 sim_uid("simname", page))
+                + directive_sexp(sim["directive"], x0 + GRID,
+                                 y0 + h - GRID / 2,
+                                 sim_uid("simdirective", page)))
+            for size in PAPER_ORDER:
+                pw, ph = PAPERS[size]
+                if y0 + h + MARGIN <= ph and (pw, ph) >= (width, height):
+                    if size != paper:
+                        src = re.sub(r'\(paper "[^"]*"\)', f'(paper "{size}")',
+                                     src, count=1)
+                    break
+            close = src.rstrip().rfind(")")
+            src = src[:close] + body + src[close:]
+        if src != before:
+            path.write_text(src)
+            run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
+                                  str(path)], capture_output=True, text=True)
+            if run.returncode != 0:
+                path.write_text(before)
+                raise Bad(f"kicad-cli could not normalize {path}: "
+                          + (run.stderr or run.stdout).strip())
+            changed[path.name] = count
+    return changed
+
+
+def is_sim_fitting(project, sym):
+    """A source symbol the tool drew: not the record's, skipped by place."""
+    return (sym["lib_id"] in {f"{project}:{n}" for n in SIM_SYMBOLS}
+            and bool(SIM_REF.match(sym["props"].get("Reference", ""))))
+
+
 def push_board(board, project, root, root_src, rows):
     """Record to board: every footprint whose Reference the record holds
     takes that instance's sheet path, so Update PCB from Schematic finds
@@ -2157,6 +2634,28 @@ def main(argv):
                                      rows, model)
                 print(f"push  {sum(labels.values())} label(s) written on "
                       f"{len(labels)} sheet(s)")
+                # the simulation, T2.6d and T2.6e: the models file, the
+                # Sim.* fields, the sources and the directive
+                sim = active_sim(con)
+                models = write_models(con, board, project)
+                if models:
+                    print(f"models/{project}.sp  {len(models)} op-amp "
+                          "model(s): " + " ".join(models[k][0] for k in models))
+                ensure_sim_symbols(board, project)
+                fields, skipped = push_sim_fields(con, board, project,
+                                                  root_src, rows, sim, models)
+                fittings = push_sim_fittings(con, board, project, root,
+                                             root_src, rows, sim)
+                if sim:
+                    print(f"sim   {sim['name']} {sim['kind']}: "
+                          f"{sum(fields.values())} symbol(s) fielded on "
+                          f"{len(fields)} sheet(s), "
+                          f"{sum(fittings.values())} source(s) drawn")
+                else:
+                    print(f"sim   none: {sum(fields.values())} symbol(s) "
+                          "cleared")
+                for line in skipped:
+                    print(f"    not simulated  {line}")
                 if write_bus_aliases(board, project, model):
                     print(f"{project}.kicad_pro  bus aliases written")
                 fixed, unknown = push_board(board, project, root, root_src,
@@ -2203,7 +2702,7 @@ def main(argv):
                     f"{r['path']}/{r['uuid']}" if r["path"] else r["uuid"])
         entered, unresolved, conflicts, fixes = [], [], [], {}
         for u, (fname, page, sym) in sorted(placed.items()):
-            if u in known:
+            if u in known or is_sim_fitting(project, sym):
                 continue
             ipn = assign.get(u) or sym["props"].get("ipn", "").strip()
             if not ipn or ipn not in parts:

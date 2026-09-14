@@ -70,7 +70,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
 
@@ -110,10 +110,18 @@
 | 11 | `datasheet` | TEXT |  | Yes |
 | 12 | `checked` | TEXT |  |  |
 | 13 | `pinout_checked` | TEXT |  |  |
+| 14 | `sim_model` | TEXT |  | Yes |
+| 15 | `sim_params` | TEXT |  | Yes |
 
 - `checked` is the User's sign-off on the part. `pinout_checked` is the
   User's mark that the part file's pins were read against the datasheet.
   Both default to `no`. The tool never sets either.
+- `sim_model` is what the part is to the simulator: `R`, `C`, `L`,
+  `opamp`, or null for a part that is not simulated. `sim_params` are its
+  parameters: a passive's spice value, `1.13k`, derived from `value` when
+  null; an op-amp's `gbw=<Hz> aol=<V/V> en=<V/rtHz> rout=<Ohm>`, read
+  from the datasheet. No vendor model: an op-amp is KiCad's own
+  `kicad_builtin_opamp` with these parameters, T2.6d.
 
 **T2.4 — `ref_table`**
 
@@ -251,6 +259,45 @@
   is the tool's and is rewritten on every run; it keeps each page's sheet
   uuid and page number.
 
+**T2.6d — `sim_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `name` | TEXT | Key | |
+| 2 | `kind` | TEXT | | |
+| 3 | `directive` | TEXT | | Yes |
+
+- A simulation instance: what KiCad runs when the User presses Run. `kind`
+  is `ac`, `tran`, `dc` or `op`; `directive` is the spice line the sheet
+  carries as text, a default by kind until set. One instance is pushed
+  at a time: the directive is one per project.
+
+**T2.6e — `sim_net_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `name` | TEXT | Key | |
+| 2 | `block` | TEXT | Key | |
+| 3 | `net` | TEXT | Key | |
+| 4 | `source` | TEXT | | Yes |
+
+- What an instance covers. A block row names a block instance by its
+  reference, `net` `''`; the block's descendants by the parent chain are
+  the simulated parts. A source row names a boundary net, `block` `''`,
+  and the source `kicad-update` draws on it: `dc 3.3`, `ac 1`. A boundary
+  net is one a simulated part shares with a part outside the blocks.
+  `table-write sim add` fills the source rows: a rail named as a voltage
+  gets `dc`, a net an outside output pin drives gets `ac 1`, the rest are
+  reported with no source for the User to set. `''` not null, so the key
+  holds.
+- The models file, `models/<project>.sp`, is written by `kicad-update`
+  from `parts_table` rows whose `sim_model` is `opamp`: one subcircuit
+  per part, one `kicad_builtin_opamp` per channel with POLE = gbw / aol,
+  GAIN = aol, ROUT = rout, and a series resistor at each in+ sized so
+  4kTR = en², the noise. Node order is pin-number order; the pin map is
+  read from the part file's pin names, `IN_A+`, `IN_A-`, `OUT_A`, `V+`,
+  `V-`.
+
 ### 2.5 — The relations
 
 **T2.9 — The relations**
@@ -262,8 +309,10 @@
 | 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 4 | `net_table.uuid` | `ref_table.uuid` | Many-to-one | `table-write` removes the nets with a drawing's last row |
 | 5 | `bus_table.net` | `net_table.net` | Many-to-one, by name | none — a member with no pin yet is allowed |
+| 6 | `sim_net_table.name` | `sim_table.name` | Many-to-one | Cascade |
+| 7 | `sim_net_table.block` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the reference on add |
 
-- 1 to 3 are declared foreign keys. 4 cannot be declared: `ref_table`'s
+- 1 to 3 and 6 are declared foreign keys. 4 cannot be declared: `ref_table`'s
   key is `(uuid, path)` and a net belongs to the drawing, every path at
   once.
 - Every skill sets `PRAGMA foreign_keys = ON`.
@@ -331,6 +380,9 @@
 | 12c | `schematic.bus_aliases` | `<project>.kicad_pro` | `bus_table` |
 | 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
 | 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
+| 13 | `Sim.Device`, `Sim.Params`; `Sim.Library`, `Sim.Name`, `Sim.Pins` | the instance, every unit, inside the active simulation's blocks | `parts_table.sim_model`, `sim_params`, T2.3; an op-amp's subcircuit from `models/<project>.sp`, T2.6e. Outside the blocks the fields go |
+| 13a | `exclude_from_sim` | the instance | `no` inside the active simulation's blocks and on a part with fields; `yes` on everything else while a simulation is active; `no` everywhere with none |
+| 13b | source symbols `VS1` `VS2`, a label at each pin, the sim room and the directive text | the page of the first block | `sim_table`, `sim_net_table`. Tool fittings, `in_bom no`, `on_board no`, redrawn every push, gone when the instance is dropped |
 
 - `pinout_checked` stays in the record. It is not a project field and does
   not reach the library or the sheets.
@@ -398,6 +450,7 @@
 | 6 | `design/lib/` | symbols, footprints, `3d/` models |
 | 7 | `design/datasheets/` | manufacturer datasheets |
 | 8 | `design/parts/` | part files, `<IPN>-<name>.json` — datasheet facts and copy provenance: `pins`, `units`, `symbol_donor`, `pages` at stage 3; `package`, `package_dims`, `footprint_donor` at stage 5. Keys per `datasheet-read.md` T1 |
+| 8a | `design/models/` | `<project>.sp`, the simulation models, written by `kicad-update --push` from the record, T2.6e. Generated |
 | 9 | `design/out/` | generated exports |
 
 ### 3.2 — Assets
@@ -461,7 +514,7 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its six tables |
+| 1 | `board.db` and its eight tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/<project>.kicad_sym`, `lib/<project>.pretty/` |
 
 - The project folder names the project — its name is stored at first
@@ -523,7 +576,7 @@ One skill, one run — T4.2.
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 8 | `table-write` | Create or modify part; record a vendor price survey | Record row, vendor quote | `board.db` — `parts_table`, `ref_table`, `price_table` |
+| 8 | `table-write` | Create or modify part; record a vendor price survey; tag a simulation | Record row, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `sim_table`, `sim_net_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 
 ### 5.3 — Layout

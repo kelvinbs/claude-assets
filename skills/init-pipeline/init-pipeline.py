@@ -62,6 +62,10 @@ SCHEMA = {
             "datasheet     TEXT",
             "checked       TEXT NOT NULL DEFAULT 'no'",
             "pinout_checked TEXT NOT NULL DEFAULT 'no'",
+            # T2.3 rows 14, 15 — the simulation model: R C L opamp, and
+            # its parameters; a passive's from `value` when null
+            "sim_model     TEXT",
+            "sim_params    TEXT",
         ),
         # T2.4 — an instance is a symbol on a sheet, in one instance of
         # that sheet: (uuid, path). path is '' on a root page, else the
@@ -118,6 +122,23 @@ SCHEMA = {
         "bus_table": (
             "net           TEXT PRIMARY KEY NOT NULL",
             "bus           TEXT NOT NULL",
+        ),
+        # T2.6d — a simulation instance: what KiCad runs when the User
+        # presses Run. One row per instance; kind is ac tran dc op
+        "sim_table": (
+            "name          TEXT PRIMARY KEY NOT NULL",
+            "kind          TEXT NOT NULL",
+            "directive     TEXT",
+        ),
+        # T2.6e — what an instance covers: block rows, net ''; source
+        # rows, block ''. '' not null so the key holds
+        "sim_net_table": (
+            "name          TEXT NOT NULL REFERENCES sim_table(name)"
+            " ON DELETE CASCADE",
+            "block         TEXT NOT NULL DEFAULT ''",
+            "net           TEXT NOT NULL DEFAULT ''",
+            "source        TEXT",
+            "PRIMARY KEY (name, block, net)",
         ),
     },
 }

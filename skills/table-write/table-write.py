@@ -30,6 +30,7 @@ instances are rows like any other, drawn as sheet symbols.
 """
 
 import argparse
+import json
 import re
 import sqlite3
 import sys
@@ -65,7 +66,13 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
 FIELDS = ("description", "value", "note", "name", "mpn", "manufacturer",
-          "datasheet", "footprint")
+          "datasheet", "footprint", "sim_model", "sim_params")
+
+SIM_MODELS = ("R", "C", "L", "opamp")
+SIM_KINDS = {"ac": ".ac dec 100 1 10meg", "tran": ".tran 1u 10m",
+             "dc": ".op", "op": ".op",
+             # the output node and the input source are the User's to set
+             "noise": ".noise v(OUT) V1 dec 100 1 10meg"}
 
 
 class Bad(SystemExit):
@@ -278,6 +285,9 @@ def setf(con, args):
             changes[f] = check(f, v)
     if not changes:
         raise Bad("no field given")
+    if changes.get("sim_model") and changes["sim_model"] not in SIM_MODELS:
+        raise Bad(f"sim_model must be one of {' '.join(SIM_MODELS)}, "
+                  f"found '{changes['sim_model']}'")
     con.execute(f"update parts_table set {', '.join(f'{f} = ?' for f in changes)}"
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()
@@ -520,6 +530,183 @@ def bus(con, args):
     con.commit()
 
 
+# ------------------------------------------------------------- simulation
+
+RAIL = re.compile(r"^(-?\d+)V(\d*)(?:_.*)?$")
+
+
+def rail_volts(net):
+    """A net named as a voltage, `3V3`, `-5V0`, `5V0_CM5`, else None."""
+    m = RAIL.match(net)
+    if not m:
+        return None
+    whole, frac = m.group(1), m.group(2)
+    return float(f"{whole}.{frac or '0'}")
+
+
+def descendants(con, roots):
+    """Every instance uuid under the given instance uuids by the parent
+    chain, the roots included."""
+    seen = set(roots)
+    frontier = list(roots)
+    while frontier:
+        marks = ",".join("?" * len(frontier))
+        nxt = [u for (u,) in con.execute(
+            f"select distinct uuid from ref_table where parent in ({marks})",
+            frontier) if u not in seen]
+        seen.update(nxt)
+        frontier = nxt
+    return seen
+
+
+def pin_types(con, board):
+    """{uuid: {pin number: type}} from the part files, for every instance
+    whose part has one. A part with no file gives nothing."""
+    out = {}
+    files = {}
+    for u, ipn, name in con.execute(
+            "select distinct r.uuid, r.ipn, p.name from ref_table r "
+            "join parts_table p using(ipn)"):
+        if ipn not in files:
+            path = Path(board) / "parts" / f"{ipn}-{name}.json"
+            types = {}
+            if name and path.exists():
+                try:
+                    for pin in json.loads(path.read_text()).get("pins", []):
+                        types[str(pin[0])] = pin[2]
+                except (ValueError, IndexError, TypeError):
+                    types = {}
+            files[ipn] = types
+        if files[ipn]:
+            out[u] = files[ipn]
+    return out
+
+
+def sim_instance(con, name):
+    row = con.execute("select name, kind, directive from sim_table "
+                      "where name = ?", (name,)).fetchone()
+    if row is None:
+        raise Bad(f"no simulation named {name}")
+    return row
+
+
+def sim_boundary(con, board, blocks):
+    """The nets of the blocks' parts that also sit on a pin outside them:
+    [(net, source or None, why)]. A rail, a net named as a voltage, gets
+    `dc <V>`; a net an outside `output` pin drives gets `ac 1`; the rest
+    have no source and are named."""
+    roots = [instance_of(con, b)[0] for b in blocks]
+    inside = descendants(con, roots)
+    types = pin_types(con, board)
+    on_inside, on_outside = {}, {}
+    for u, pin, net in con.execute("select uuid, pin, net from net_table"):
+        side = on_inside if u in inside else on_outside
+        side.setdefault(net, []).append((u, pin))
+    out = []
+    for net in sorted(on_inside):
+        if net not in on_outside or net == "GND":
+            continue
+        volts = rail_volts(net)
+        if volts is not None:
+            out.append((net, f"dc {volts:g}", "rail"))
+            continue
+        driven = any(types.get(u, {}).get(str(pin)) in ("output", "power_out")
+                     for u, pin in on_outside[net])
+        if driven:
+            out.append((net, "ac 1", "driven from outside"))
+        else:
+            out.append((net, None, "no outside output pin; a load, or "
+                        "set a source"))
+    return out
+
+
+def sim_add(con, args):
+    kind = args.kind.lower()
+    if kind not in SIM_KINDS:
+        raise Bad(f"kind must be one of {' '.join(SIM_KINDS)}, "
+                  f"found '{args.kind}'")
+    if con.execute("select 1 from sim_table where name = ?",
+                   (args.name,)).fetchone():
+        raise Bad(f"simulation {args.name} exists. `sim drop` it first")
+    for b in args.block:
+        instance_of(con, b)
+    con.execute("insert into sim_table (name, kind, directive) "
+                "values (?, ?, ?)", (args.name, kind, SIM_KINDS[kind]))
+    for b in args.block:
+        con.execute("insert into sim_net_table (name, block, net, source) "
+                    "values (?, ?, '', null)", (args.name, b))
+    found = sim_boundary(con, args.board, args.block)
+    for net, source, _ in found:
+        con.execute("insert into sim_net_table (name, block, net, source) "
+                    "values (?, '', ?, ?)", (args.name, net, source))
+    con.commit()
+    print(f"{args.name}  {kind}  {SIM_KINDS[kind]}")
+    print(f"    blocks: {' '.join(args.block)}")
+    for net, source, why in found:
+        print(f"    {net:16s} {source or '—':10s} {why}")
+    if not found:
+        print("    no boundary net: nothing outside the blocks shares a net")
+
+
+def sim_set(con, args):
+    sim_instance(con, args.name)
+    if args.directive is not None:
+        con.execute("update sim_table set directive = ? where name = ?",
+                    (args.directive, args.name))
+        con.commit()
+        print(f"{args.name}  directive: {args.directive}")
+        return
+    if not args.net:
+        raise Bad("sim set wants <net> <source>, <net> --none, or "
+                  "--directive")
+    if args.none:
+        n = con.execute("delete from sim_net_table where name = ? and "
+                        "net = ?", (args.name, args.net)).rowcount
+        con.commit()
+        print(f"{args.name}  {args.net}: source cleared on {n} row(s)")
+        return
+    if not args.source:
+        raise Bad("sim set wants a source: `dc 3.3`, `ac 1`, or --none")
+    con.execute("insert into sim_net_table (name, block, net, source) "
+                "values (?, '', ?, ?) on conflict (name, block, net) "
+                "do update set source = excluded.source",
+                (args.name, args.net, args.source))
+    con.commit()
+    print(f"{args.name}  {args.net}: {args.source}")
+
+
+def sim_drop(con, args):
+    sim_instance(con, args.name)
+    n = con.execute("select count(*) from sim_net_table where name = ?",
+                    (args.name,)).fetchone()[0]
+    con.execute("delete from sim_table where name = ?", (args.name,))
+    con.commit()
+    print(f"{args.name}  dropped, {n} block and source row(s) with it")
+
+
+def sim_show(con, args):
+    rows = con.execute("select name, kind, directive from sim_table "
+                       "order by name").fetchall()
+    if not rows:
+        print("no simulation")
+        return
+    for name, kind, directive in rows:
+        print(f"{name}  {kind}  {directive or '—'}")
+        blocks = [b for (b,) in con.execute(
+            "select block from sim_net_table where name = ? and block != ''"
+            " order by block", (name,))]
+        print(f"    blocks: {' '.join(blocks) or '—'}")
+        for net, source in con.execute(
+                "select net, source from sim_net_table where name = ? "
+                "and net != '' order by net", (name,)):
+            print(f"    {net:16s} {source or '—'}")
+
+
+def sim(con, args):
+    {"add": sim_add, "set": sim_set, "drop": sim_drop,
+     "show": sim_show}[args.op](con, args)
+
+
 def show(con, args):
     where, vals = ("where ipn = ?", (args.ipn,)) if args.ipn else ("", ())
     rows = con.execute(
@@ -641,6 +828,25 @@ def main(argv):
     b.add_argument("--drop", action="store_true",
                    help="take the named nets out of any bus")
     b.set_defaults(run=bus)
+
+    sm = sub.add_parser("sim", help="a simulation instance: add, set, drop, "
+                        "show")
+    smsub = sm.add_subparsers(dest="op", required=True)
+    sa = smsub.add_parser("add", help="tag blocks for a simulation")
+    sa.add_argument("name")
+    sa.add_argument("kind", help="ac, tran, dc or op")
+    sa.add_argument("--block", action="append", required=True,
+                    help="reference of a block instance. Repeatable")
+    ss = smsub.add_parser("set", help="a source on a net, or the directive")
+    ss.add_argument("name")
+    ss.add_argument("net", nargs="?")
+    ss.add_argument("source", nargs="?", help="`dc 3.3`, `ac 1`")
+    ss.add_argument("--none", action="store_true", help="clear the source")
+    ss.add_argument("--directive", help="the spice line, `.ac dec 100 1 10meg`")
+    sd = smsub.add_parser("drop", help="remove a simulation instance")
+    sd.add_argument("name")
+    smsub.add_parser("show", help="every simulation instance")
+    sm.set_defaults(run=sim)
 
     w = sub.add_parser("show", help="print parts and their instances")
     w.add_argument("ipn", nargs="?")
