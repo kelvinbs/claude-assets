@@ -77,6 +77,11 @@ SCHEMA = {
             "unit          INTEGER",
             "path          TEXT NOT NULL DEFAULT ''",
             "parent_path   TEXT",
+            # the instance's place on its sheet, mm, y down, degrees;
+            # null until pulled or placed by hand
+            "x             REAL",
+            "y             REAL",
+            "rot           INTEGER",
             "PRIMARY KEY (uuid, path)",
             "FOREIGN KEY (parent, parent_path) REFERENCES ref_table(uuid, path)"
             " ON DELETE SET NULL",

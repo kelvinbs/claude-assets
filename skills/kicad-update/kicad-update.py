@@ -133,13 +133,15 @@ def instances(con):
     rows = []
     for uuid_, ipn, ref, page, room, unit, path, symbol, footprint, \
             description, datasheet, manufacturer, mpn, note, checked, \
-            name in con.execute(
+            name, x, y, rot in con.execute(
             "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, r.path, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
-            "       p.manufacturer, p.mpn, p.note, p.checked, p.name "
+            "       p.manufacturer, p.mpn, p.note, p.checked, p.name, "
+            "       r.x, r.y, r.rot "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "order by r.ipn, r.path, r.ref, r.unit"):
         rows.append({
+            "x": x, "y": y, "rot": rot or 0,
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(), "room": (room or "").strip(),
             "unit": unit or 1, "path": path or "",
@@ -240,13 +242,13 @@ def property_sexp(name, value, x, y, hide=False, justify=None):
     )
 
 
-def instance_sexp(project, path_uuid, row, x, y, bottom, right):
+def instance_sexp(project, path_uuid, row, x, y, bottom, right, rot=0):
     unit = row.get("unit") or 1
     first = unit == 1
     return (
         "\t(symbol\n"
         f"\t\t(lib_id \"{row['symbol']}\")\n"
-        f"\t\t(at {x:.2f} {y:.2f} 0)\n"
+        f"\t\t(at {x:.2f} {y:.2f} {int(rot) % 360})\n"
         f"\t\t(unit {unit})\n"
         "\t\t(exclude_from_sim no)\n\t\t(in_bom yes)\n\t\t(on_board yes)\n"
         "\t\t(dnp no)\n\t\t(fields_autoplaced yes)\n"
@@ -1317,6 +1319,47 @@ def push_board(board, project, root, root_src, rows):
     return count, sorted(set(unknown))
 
 
+def pull_positions(con, board, project, root_src):
+    """Pages to record: the place of every symbol and sheet symbol the
+    record knows, as it stands on its page. Returns (written, moved)."""
+    placed, placed_sheets = read_pages(board, project,
+                                       page_files(con, project, root_src))
+    known = {(u, p): (x, y, r) for u, p, x, y, r in con.execute(
+        "select uuid, path, x, y, rot from ref_table")}
+    by_uuid = {}
+    for (u, p), v in known.items():
+        by_uuid.setdefault(u, []).append((p, v))
+    written = moved = 0
+    def put(u, x, y, rot):
+        nonlocal written, moved
+        if u not in by_uuid:
+            return
+        for p, (ox, oy, orot) in by_uuid[u]:
+            if ox is None or abs(ox - x) > 0.01 or abs(oy - y) > 0.01 \
+                    or (orot or 0) != rot:
+                if ox is not None:
+                    moved += 1
+                con.execute("update ref_table set x = ?, y = ?, rot = ? "
+                            "where uuid = ? and path = ?", (x, y, rot, u, p))
+                written += 1
+    for u, (fname, page, sym) in placed.items():
+        pass
+    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+        src = path.read_text()
+        for a, b in symbol_blocks(src):
+            sym = read_symbol(src[a:b])
+            at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)', src[a:b])
+            if sym["uuid"] and at:
+                put(sym["uuid"], float(at.group(1)), float(at.group(2)),
+                    int(float(at.group(3))) % 360)
+        for a, b in sheet_blocks(src):
+            sh = read_sheet(src[a:b])
+            if sh["uuid"]:
+                put(sh["uuid"], sh["at"][0], sh["at"][1], 0)
+    con.commit()
+    return written, moved
+
+
 def write_bus_aliases(board, project, model):
     """The bus aliases into the project file, `schematic.bus_aliases`, the
     only key this tool touches there after init."""
@@ -1433,7 +1476,41 @@ def box_extent(items, down=False):
     return max(max(w for w, _, _ in items), math.sqrt(area * ASPECT))
 
 
-def boxes_of(rows, blocks, model=None):
+def family_templates(rows):
+    """The arrangement of every family whose parent has a place: keyed by
+    the parent's part, a list of (child part, dx, dy, rot) in child
+    reference order, offsets from the parent's origin. A first family
+    with a given parent part is the template; later ones do not replace
+    it."""
+    by_page = {}
+    for r in rows:
+        by_page.setdefault(r["page"], []).append(r)
+    out = {}
+    for page, rs in by_page.items():
+        by_ref = {}
+        for r in rs:
+            by_ref.setdefault(r["ref"], r)
+        for r in rs:
+            par = r.get("parent") or ""
+            p = by_ref.get(par)
+            if not p or p.get("x") is None or r.get("x") is None:
+                continue
+            if r.get("unit", 1) not in (None, 1) or p.get("unit", 1) not in (None, 1):
+                continue
+            key = p["ipn"]
+            fam = out.setdefault(key, {"page": page, "parent": par, "kids": []})
+            if fam["parent"] != par or fam["page"] != page:
+                continue
+            fam["kids"].append((r["ipn"], float(r["x"]) - float(p["x"]),
+                                float(r["y"]) - float(p["y"]),
+                                int(r.get("rot") or 0), number_of(r["ref"])))
+    for fam in out.values():
+        fam["kids"].sort(key=lambda k: k[4])
+    return {k: [kid[:4] for kid in v["kids"]] for k, v in out.items()
+            if v["kids"]}
+
+
+def boxes_of(rows, blocks, model=None, templates=None):
     """A box is a parent and everything under it, else a room, else the part
     on its own. A child that is itself a parent packs first and enters its
     parent's box as one item, so nesting needs no special case."""
@@ -1453,9 +1530,59 @@ def boxes_of(rows, blocks, model=None):
         if par and par in by_ref:
             kids.setdefault(par, []).append(ref)
 
+    def from_template(ref):
+        """The family laid from its template: parent at the origin, each
+        child at its offset, matched child to child by part in reference
+        order. Children the template does not name are packed beside.
+        None when there is no template for this parent's part."""
+        rows_here = by_ref.get(ref) or []
+        if not templates or not rows_here:
+            return None
+        parent = rows_here[0]
+        tmpl = templates.get(parent["ipn"])
+        if not tmpl:
+            return None
+        used, laid, rest = set(), [], []
+        for kid in sorted(kids.get(ref, []), key=number_of):
+            krow = (by_ref.get(kid) or [None])[0]
+            if krow is None or kids.get(kid):
+                rest.append(kid)
+                continue
+            hit = next((i for i, t in enumerate(tmpl)
+                        if i not in used and t[0] == krow["ipn"]), None)
+            if hit is None:
+                rest.append(kid)
+                continue
+            used.add(hit)
+            krow["rot"] = tmpl[hit][3]
+            laid.append((tmpl[hit][1], tmpl[hit][2], krow))
+        if not laid:
+            return None
+        # box-relative: flow adds half extents, so shift each by its own
+        pts = [(0.0, 0.0, parent)] + laid
+        ext = {id(r): geom(r, blocks, model)[:2] for _, _, r in pts}
+        pw, ph = ext[id(parent)]
+        rel = [(ox - (ext[id(r)][0] - pw), oy - (ext[id(r)][1] - ph), r)
+               for ox, oy, r in pts]
+        minx = min(x for x, _, _ in rel); miny = min(y for _, y, _ in rel)
+        flat = [(x - minx, y - miny, r) for x, y, r in rel]
+        w = max(x + 2 * ext[id(r)][0] for x, _, r in flat)
+        h = max(y + 2 * ext[id(r)][1] for _, y, r in flat)
+        for row in rows_here[1:]:            # other units of the parent
+            uw, uh = size_of(row, blocks, model)
+            flat.append((w + GAP, 0.0, row)); w += GAP + uw; h = max(h, uh)
+        for kid in rest:
+            kw, kh, inner = pack(kid)
+            flat.extend((w + GAP + dx, dy, r) for dx, dy, r in inner)
+            w += GAP + kw; h = max(h, kh)
+        return w, h, flat
+
     def pack(ref):
         """(width, height, [(dx, dy, row)]) for this reference and its
         descendants, laid out inside a box of its own."""
+        done = from_template(ref)
+        if done:
+            return done
         items = []
         for row in sorted(by_ref[ref], key=lambda r: r.get("unit") or 1):
             w, h = size_of(row, blocks, model)
@@ -1508,19 +1635,68 @@ def outline_sexp(drawn):
     )
 
 
-def flow(rows, blocks, project, ctx, width, start_y, height=None):
-    """Lay the sheet as boxes, not as text. A box is a parent and everything
-    under it, packed roughly square and sized by its contents. Boxes then
-    pack the page, largest first, and a box never splits across a wrap.
-    `ctx`: page, model, path_of, numbers."""
+def draw_one(row, x, y, rot, blocks, project, ctx):
+    """One drawing at a place on the page: a sheet symbol with its
+    fittings, or a symbol with its labels."""
     model = ctx["model"]
-    boxes = boxes_of(rows, blocks, model)
+    if row.get("sheet"):
+        pins = model.sheet_pins(row["sheet"])
+        sx, sy = snap(x), snap(y)
+        body = sheet_sexp(
+            project, ctx["path_of"](row["path"]), row["ref"],
+            f"{project}-{slug(row['sheet'])}.kicad_sch",
+            ctx["numbers"].get((row["uuid"], row["path"]), 0),
+            sx, sy, SHEET_W, pins, row["uuid"])
+        named = model.pins.get(row["uuid"]) or {}
+        body += pin_fittings_sexp(
+            row["uuid"], sx, sy, SHEET_W, pins, named,
+            {n: model.kind(net, ctx["page"]) for n, net in named.items()})
+        return body
+    half_w, half_h, bottom, right = geom(row, blocks, model)
+    body = instance_sexp(project, ctx["path_of"], row, x, y, bottom, right,
+                         rot)
+    body += labels_sexp(row, blocks[row["symbol"]], x, y, rot, model)
+    return body
+
+
+def flow(rows, blocks, project, ctx, width, start_y, height=None):
+    """Lay the sheet. A drawing with a place in the record is drawn there,
+    as it was pulled or arranged by hand. The rest are laid as boxes, not
+    as text: a box is a parent and everything under it, packed roughly
+    square and sized by its contents, from a template when its family has
+    one. Boxes pack the page below what has a place, largest first, and a
+    box never splits across a wrap. `ctx`: page, model, path_of, numbers,
+    templates."""
+    model = ctx["model"]
+    body, page_h, page_w = "", start_y, MARGIN + PORT_W
+    placed_rows = [r for r in rows if r.get("x") is not None
+                   and r.get("y") is not None]
+    free = [r for r in rows if r not in placed_rows]
+    low = start_y
+    for row in placed_rows:
+        x, y, rot = float(row["x"]), float(row["y"]), int(row.get("rot") or 0)
+        half_w, half_h, _, _ = geom(row, blocks, model)
+        body += draw_one(row, x, y, rot, blocks, project, ctx)
+        if row.get("sheet"):
+            page_h = max(page_h, y + 2 * half_h + GRID + MARGIN)
+            page_w = max(page_w, x + 2 * half_w + GRID + MARGIN + PORT_W)
+            low = max(low, y + 2 * half_h)
+        else:
+            page_h = max(page_h, y + half_h + GRID + MARGIN)
+            page_w = max(page_w, x + half_w + GRID + MARGIN + PORT_W)
+            low = max(low, y + half_h)
+    if placed_rows:
+        start_y = snap(low + 6 * GRID)
+        page_h = max(page_h, start_y)
+    if not free:
+        return body, page_h, page_w
+
+    boxes = boxes_of(free, blocks, model, ctx.get("templates"))
     boxes.sort(key=lambda b: -(b[0] * b[1]))
     items = [(w, h, flat) for w, h, flat in boxes]
     room = (height or width) - start_y - MARGIN
     placed, _, used_h = shelf(items, max(room, GRID), gap=BOX_GAP, down=True)
 
-    body, page_h, page_w = "", start_y, MARGIN + PORT_W
     for bx, by, flat in placed:
         drawn, refs = [], set()
         for dx, dy, row in flat:
@@ -1531,23 +1707,12 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
             # the port area sits at the right edge; a page is sized to
             # hold it beside the drawing
             page_w = max(page_w, x + half_w + GRID + MARGIN + PORT_W)
+            rot = int(row.get("rot") or 0)
             if row.get("sheet"):
-                pins = model.sheet_pins(row["sheet"])
-                sx, sy = snap(x - half_w), snap(y - half_h)
-                body += sheet_sexp(
-                    project, ctx["path_of"](row["path"]), row["ref"],
-                    f"{project}-{slug(row['sheet'])}.kicad_sch",
-                    ctx["numbers"].get((row["uuid"], row["path"]), 0),
-                    sx, sy, SHEET_W, pins, row["uuid"])
-                named = model.pins.get(row["uuid"]) or {}
-                body += pin_fittings_sexp(
-                    row["uuid"], sx, sy, SHEET_W, pins, named,
-                    {n: model.kind(net, ctx["page"])
-                     for n, net in named.items()})
+                body += draw_one(row, x - half_w, y - half_h, 0, blocks,
+                                 project, ctx)
             else:
-                body += instance_sexp(project, ctx["path_of"], row, x, y,
-                                      bottom, right)
-                body += labels_sexp(row, blocks[row["symbol"]], x, y, 0, model)
+                body += draw_one(row, x, y, rot, blocks, project, ctx)
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
@@ -1922,6 +2087,9 @@ def main(argv):
             else:
                 applied, reported = pull_fields(con, library, project)
                 print(f"pull  {len(applied)} field(s) into the record")
+                written, moved = pull_positions(con, board, project, root_src)
+                print(f"pull  {written} place(s) into the record, "
+                      f"{moved} moved since last pulled")
                 for ipn, field, held, have in applied:
                     print(f"    {ipn}  {field}  {held!r} -> {have!r}")
                 for ipn, field, held, have in reported:
@@ -2121,10 +2289,12 @@ def main(argv):
         numbers[(r["uuid"], r["path"])] = nxt
         nxt += 1
 
+    templates = family_templates(rows)
     touched = set(refreshed)
     for page in root_pages + sub_pages:
         on_page = [r for r in drawable if r["page"] == page]
         ctx = {"page": page, "model": model, "numbers": numbers,
+               "templates": templates,
                "path_of": lambda p, page=page: kicad_path(root, sheets,
                                                           starts, page, p)}
         name, new, kept = write_page(board, project, page, on_page, blocks,

@@ -128,6 +128,9 @@
 | 7 | `unit` | INTEGER | | Yes |
 | 8 | `path` | TEXT | Key | |
 | 9 | `parent_path` | TEXT | | Yes |
+| 10 | `x` | REAL | | Yes |
+| 11 | `y` | REAL | | Yes |
+| 12 | `rot` | INTEGER | | Yes |
 
 - An instance is `(uuid, path)`: the symbol drawn on a sheet, in one
   instance of that sheet. `uuid` is the symbol's uuid in the sheet file.
@@ -139,6 +142,10 @@
   sheet, each row with its own `ref`.
 - `parent` with `parent_path` names the parent instance. A parent in the
   same sub-sheet is matched instance for instance.
+- `x`, `y`, `rot` are the instance's place on its sheet: the symbol's
+  origin in mm, KiCad's axes, y down, and its rotation in degrees. Null
+  until pulled off the page. A drawing in a sub-sheet has one place on
+  every row of it. A sheet-symbol instance's place is its top-left.
 
 **T2.5 — `source` letters**
 
@@ -339,6 +346,14 @@
 
 - Order of rooms within a page is arbitrary — subject to re-entry,
   section 4.3.
+- A place, `x`, `y`, `rot`, wins over all of these: an instance that has
+  one is drawn there. The ranks order only what has none, packed below
+  what has a place. A family with no place takes the arrangement of a
+  family with the same parent part and child parts, child to child by
+  part in reference order: the family template.
+- `--pull` reads every place off the pages into the record; `--push`
+  never writes one. Arrange by hand in KiCad, pull, and the arrangement
+  is the record's.
 - A sub-sheet page is drawn once, in its own file, whatever the number of
   instances. The instances sit on the page that placed the class-`B` part,
   as sheet symbols. KiCad's multichannel tools carry one instance's layout
