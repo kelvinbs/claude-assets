@@ -236,7 +236,9 @@
 
 - A net is in at most one bus. Members keep their names; the bus is a
   group alias, `{BUS}`, written to the project file's
-  `schematic.bus_aliases` by `kicad-update`.
+  `bus_alias` block in every sheet file, written by `kicad-update`. The
+  project file's `schematic.bus_aliases` is emptied: it held a second copy
+  that went stale, and the KiCad GUI clears it on open.
 
 **T2.6c — What a net is on a sheet**
 
@@ -381,7 +383,7 @@
 | 12 | `label` or `hierarchical_label` | the drawing's pin end | `net_table.net`, kind per T2.6c |
 | 12a | sheet symbol, its pins, the stubs and labels on them | the page a sub-sheet instance sits on | `ref_table` rows of the class-`B` part; pins per T2.6c; labels from `net_table` |
 | 12b | bus breakout | each file a bus leaves | `bus_table` |
-| 12c | `schematic.bus_aliases` | `<project>.kicad_pro` | `bus_table` |
+| 12c | `bus_alias` blocks | every `*.kicad_sch` | `bus_table`. Written last in a run: `kicad-cli sch upgrade` drops the block |
 | 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
 | 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 | 13 | `Sim.Device`, `Sim.Params`; `Sim.Library`, `Sim.Name`, `Sim.Pins` | the instance, every unit, inside the active simulation's blocks | `parts_table.sim_model`, `sim_params`, T2.3; an op-amp's subcircuit from `models/<project>.sp`, T2.6e. Outside the blocks the fields go |
@@ -468,7 +470,7 @@
 | 3 | `lib/*.pretty` | Hand |
 | 4 | `lib/3d/` | Hand |
 | 5 | `datasheets/` | Hand |
-| 6 | `*.kicad_pro` | Generated once; `schematic.bus_aliases` rewritten by the tool |
+| 6 | `*.kicad_pro` | Generated once; `schematic.bus_aliases` kept empty by the tool — the aliases live in the sheets |
 | 7 | `*.kicad_sch` | Updated by the tool, which does not wire. The root is the tool's, rewritten every run |
 | 8 | `*.kicad_pcb` | Updated by the tool, which does not route |
 | 9 | Board setup — stackup, fabricator rules, DRC rules | Hand |

@@ -1882,20 +1882,50 @@ def pull_positions(con, board, project, root_src):
     return written, moved
 
 
+def bus_alias_sexp(model):
+    """The bus aliases as schematic blocks, `(bus_alias "NAME" (members
+    ...))`, in name order."""
+    out = ""
+    for bus, members in sorted(model.aliases().items()):
+        names = " ".join(f'"{esc(m)}"' for m in members)
+        out += (f'\t(bus_alias "{esc(bus)}"\n'
+                f"\t\t(members {names})\n"
+                "\t)\n")
+    return out
+
+
 def write_bus_aliases(board, project, model):
-    """The bus aliases into the project file, `schematic.bus_aliases`, the
-    only key this tool touches there after init."""
-    path = Path(board) / f"{project}.kicad_pro"
-    if not path.exists():
-        return False
-    data = json.loads(path.read_text())
-    want = model.aliases()
-    sch = data.setdefault("schematic", {})
-    if sch.get("bus_aliases") == want:
-        return False
-    sch["bus_aliases"] = want
-    path.write_text(json.dumps(data, indent=2) + "\n")
-    return True
+    """The bus aliases into every sheet file, after the paper line.
+
+    KiCad 10 keeps them in the schematic, not the project: the GUI clears
+    `schematic.bus_aliases` in the `.kicad_pro` on open and does not read
+    it, so a bus there never expands and every rail and ground stays
+    page-local (n2.6). This runs LAST in a run: `kicad-cli sch upgrade`
+    drops the token, so nothing may normalize a sheet after it."""
+    body = bus_alias_sexp(model)
+    changed = 0
+    for path in sorted(Path(board).glob(f"{project}*.kicad_sch")):
+        before = src = path.read_text()
+        for a, b in sorted(top_blocks(src, "(bus_alias"), reverse=True):
+            src = src[:a] + src[b:]
+        if body:
+            m = re.search(r'\n\t\(paper "[^"]*"\)\n', src)
+            if not m:
+                raise Bad(f"{path.name} carries no paper line")
+            src = src[:m.end()] + body + src[m.end():]
+        if src != before:
+            path.write_text(src)
+            changed += 1
+    # one home. The project key held a second copy that went stale and
+    # that the GUI clears anyway: emptied here so nothing reads it
+    pro = Path(board) / f"{project}.kicad_pro"
+    if pro.exists():
+        data = json.loads(pro.read_text())
+        sch = data.setdefault("schematic", {})
+        if sch.get("bus_aliases"):
+            sch["bus_aliases"] = {}
+            pro.write_text(json.dumps(data, indent=2) + "\n")
+    return changed
 
 
 def pull_fields(con, library, nickname):
@@ -2697,13 +2727,14 @@ def main(argv):
                           "cleared")
                 for line in skipped:
                     print(f"    not simulated  {line}")
-                if write_bus_aliases(board, project, model):
-                    print(f"{project}.kicad_pro  bus aliases written")
                 fixed, unknown = push_board(board, project, root, root_src,
                                             rows)
                 print(f"push  {fixed} footprint path(s) rewritten on the "
                       "board" + (f"; not in the record: {' '.join(unknown)}"
                                  if unknown else ""))
+                # last: normalizing a sheet after this drops the aliases
+                wrote = write_bus_aliases(board, project, model)
+                print(f"push  bus aliases written into {wrote} sheet(s)")
             else:
                 applied, reported = pull_fields(con, library, project)
                 print(f"pull  {len(applied)} field(s) into the record")
@@ -2898,8 +2929,6 @@ def main(argv):
     normalize(root_path)
     print(f"{project}.kicad_pro  {'written' if made else 'kept'}")
     print(f"{project}.kicad_sch  rewritten, {len(root_pages)} page(s)")
-    if write_bus_aliases(board, project, model):
-        print(f"{project}.kicad_pro  bus aliases written")
 
     # page numbers: root pages as the root says, sub-sheet instances after
     starts = root_page_of(rows)
@@ -2936,6 +2965,10 @@ def main(argv):
               f"{came_in} entered")
     for name in sorted(touched):
         normalize(board / name)
+
+    # last: normalizing a sheet after this drops the aliases
+    wrote = write_bus_aliases(board, project, model)
+    print(f"    bus aliases written into {wrote} sheet(s)")
 
     if entered:
         print(f"\n{len(entered)} symbol(s) entered in ref_table from the "

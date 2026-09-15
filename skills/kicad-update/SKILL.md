@@ -79,8 +79,13 @@ record names nets; it is not the netlist. A wire, a junction, two pins
 placed to touch: yours, in KiCad, and the tool never draws, moves or
 deletes one. KiCad's netlist is the design's.
 
-Bus aliases go to `schematic.bus_aliases` in `<project>.kicad_pro`, the one
-key the tool touches there after init.
+Bus aliases are a `bus_alias` block in every sheet file, written at the
+very end of a run. Nothing may normalize a sheet after them: `kicad-cli
+sch upgrade` drops the block. `schematic.bus_aliases` in
+`<project>.kicad_pro` is emptied — it was a second copy of the same fact,
+it went stale, and the KiCad GUI clears it on open. Without an alias a bus
+never expands: every member, `GND` and the rails included, stays local to
+its page and the netlist joins nothing.
 
 ## Simulation
 
@@ -176,8 +181,8 @@ wires are on these pages.
   pins follow the record.
 - The root is rewritten every run. A page keeps its sheet uuid and page
   number.
-- `<project>.kicad_pro` is written once; only `schematic.bus_aliases` is
-  kept current after that.
+- `<project>.kicad_pro` is written once, and its `schematic.bus_aliases`
+  emptied. The sheets carry the aliases.
 
 Close the editor before running. KiCad holds the file in memory and will
 write it back over anything added underneath it.
