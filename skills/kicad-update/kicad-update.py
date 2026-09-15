@@ -1502,14 +1502,21 @@ def sim_inside(con, blocks):
         if row is None:
             raise Bad(f"simulation block {b} names no instance")
         roots.append(row[0])
-    seen, frontier = set(roots), list(roots)
+    # the chain crosses rooms: a part's parent is the room it sits in, and
+    # a room's parent is a part, a unit or another room - T2.4a. Rooms are
+    # walked through but are not instances, so they never join the result
+    seen, rooms, frontier = set(roots), set(), list(roots)
     while frontier:
         marks = ",".join("?" * len(frontier))
-        nxt = [u for (u,) in con.execute(
+        kids = [u for (u,) in con.execute(
             f"select distinct uuid from ref_table where parent in ({marks})",
             frontier) if u not in seen]
-        seen.update(nxt)
-        frontier = nxt
+        kid_rooms = [u for (u,) in con.execute(
+            f"select distinct uuid from room_table where parent in ({marks})",
+            frontier) if u not in rooms]
+        seen.update(kids)
+        rooms.update(kid_rooms)
+        frontier = kids + kid_rooms
     return seen
 
 
