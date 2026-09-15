@@ -35,7 +35,7 @@
 - The structure — enforced and immutable:
   - The stages — T4.1
   - The seven skills — T5.1
-  - The four tables with their keys — sections 2.3, 2.4 and 2.9
+  - The tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
 - The tool is stateless.
 - A field may be added to any table at runtime. Other schema change is a
@@ -611,8 +611,8 @@ One skill, one run — T4.2.
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 8 | `table-write` | Create or modify part; record a vendor price survey; tag a simulation | Record row, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `sim_table`, `sim_net_table` |
-| 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
+| 8 | `table-write` | Create or modify part; put an instance in a room; record a vendor price survey; tag a simulation | Record row, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `room_table`, `price_table`, `sim_table`, `sim_net_table` |
+| 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db` — including `room_table` for the boxes, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 
 ### 5.3 — Layout
 
