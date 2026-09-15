@@ -125,7 +125,10 @@ nets go with its last row.
 ## net
 
 Names the net on one pin of one drawing: one `net_table` row, upsert on
-the drawing and pin. The drawing is named by any of its references.
+the drawing and pin. The drawing is named by any of its references. On a
+multi-unit package the pin picks the unit: the part file's `units` says
+which unit draws it, and the row goes on that unit's drawing. A reference
+names the package, so `net U14 5` reaches U14B without naming it.
 `--none` clears it. The sheet takes a label at that pin on the next
 `kicad-update` place or push — local or hierarchical per T2.6c, never
 global — and loses it on the push after the row goes. On a sub-sheet
@@ -182,6 +185,9 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 ## What it refuses
 
 - A class letter that is not in T2.10
+- A pin no unit of the part draws, and a multi-unit part whose part file
+  has no `units` — the unit cannot be known and a guess writes a row on a
+  drawing that has no such pin
 - A `sim_model` not `R`, `C`, `L`, `opamp` or `rnet`; a `sim add` kind not `ac`,
   `tran`, `dc` or `op`; a `--block` that names no instance; a `sim` name
   already taken, or one that names no instance on `set` and `drop`

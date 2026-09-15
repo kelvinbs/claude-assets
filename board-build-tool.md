@@ -209,7 +209,9 @@
 | 3 | `net` | TEXT | | |
 
 - One row per drawn pin that carries a net name. A pin with no row
-  carries no label. The drawing, not the part: two drawings of one part
+  carries no label. A pin belongs to the unit that draws it: on a
+  multi-unit package the row sits on that unit's `uuid`, per the part
+  file's `units`. The drawing, not the part: two drawings of one part
   sit on different nets. A drawing in a sub-sheet has one set of nets for
   every instance of the sheet — a label is drawn once in the file.
 - A sheet instance has pins too: the nets its sub-sheet exports, named by

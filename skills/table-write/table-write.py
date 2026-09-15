@@ -454,11 +454,52 @@ def price(con, args):
           f" {len(breaks)} breaks recorded")
 
 
+def unit_of_pin(con, board, ref, pin):
+    """The uuid of the drawing that carries this pin. A reference names a
+    package; a multi-unit package is several drawings under it, and a pin
+    belongs to the one that draws it (T2.6a). The part file's `units`
+    says which; with no `units` the part is one drawing."""
+    rows = con.execute(
+        "select r.uuid, r.unit, r.ipn, p.name from ref_table r "
+        "join parts_table p using(ipn) where r.ref = ? order by r.unit",
+        (ref,)).fetchall()
+    if not rows:
+        raise Bad(f"{ref} names no instance")
+    if len(rows) == 1:
+        return rows[0][0]
+    ipn, name = rows[0][2], rows[0][3]
+    path = Path(board) / "parts" / f"{ipn}-{name}.json"
+    if not path.exists():
+        raise Bad(f"{ref} is drawn in {len(rows)} units and its part file "
+                  f"{path.name} is missing, so the unit that carries pin "
+                  f"{pin} cannot be known. datasheet-read first")
+    data = json.loads(path.read_text())
+    units = data.get("units")
+    if not units:
+        pins = {str(x[0]) for x in data.get("pins", [])}
+        if str(pin) not in pins:
+            raise Bad(f"{ref} has no pin {pin}")
+        raise Bad(f"{ref} is drawn in {len(rows)} units and {path.name} has "
+                  "no `units` key, so the unit that carries pin "
+                  f"{pin} cannot be known. datasheet-read first")
+    by_unit = {r[1] or 1: r[0] for r in rows}
+    for n, numbers in (units.items() if isinstance(units, dict)
+                       else enumerate(units, 1)):
+        if str(pin) in {str(x) for x in numbers}:
+            n = int(n)
+            if n not in by_unit:
+                raise Bad(f"{ref} has no unit {n} in the record, and pin "
+                          f"{pin} belongs to it")
+            return by_unit[n]
+    raise Bad(f"{ref} has no pin {pin}: {path.name} gives it to no unit")
+
+
 def net(con, args):
     """Name the net on one pin of one instance, or clear it. Upsert on
-    (uuid, pin). The sheet takes a global label at that pin on the next
-    place or push."""
-    u = parent_uuid(con, args.ref)
+    (uuid, pin). The pin picks the drawing: on a multi-unit package the
+    unit that carries it, per the part file (T2.6a). The sheet takes a
+    label at that pin on the next place or push."""
+    u = unit_of_pin(con, args.board, args.ref, args.pin)
     if args.none:
         n = con.execute("delete from net_table where uuid = ? and pin = ?",
                         (u, args.pin)).rowcount
