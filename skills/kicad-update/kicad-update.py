@@ -1442,6 +1442,13 @@ def write_models(con, board, project):
                  f".subckt {sub} {' '.join(f'n{n}' for n in numbers)}\n")
         for i, (a, b) in enumerate(pairs, 1):
             body += f"  R{i} n{a} n{b} {p['r']}\n"
+        # a pin in no pair leaks to ground through 1 G: KiCad's simulator
+        # adds `.probe alli`, a current probe on every terminal, and a
+        # floating subcircuit pin then makes the matrix singular (n2.5)
+        used = {a for a, _ in pairs} | {b for _, b in pairs}
+        for n in numbers:
+            if n not in used:
+                body += f"  Rx{n} n{n} 0 1G\n"
         body += ".ends\n"
         models[ipn] = (sub, " ".join(f"{n}=n{n}" for n in numbers))
     folder = board / "models"
