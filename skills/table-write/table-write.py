@@ -22,7 +22,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
 It adds what is missing and leaves what is there. An instance is removed only
 by naming its reference, one at a time.
 
-An instance is (uuid, path) — T2.4. On a root page the path is ''. In a
+A node is one id — T2.4. A drawing in a sub-sheet is one node per
 sub-sheet it is the chain of sheet-instance uuids down to that sheet, so
 one symbol drawn once in a reused sheet is one row per instance of the
 sheet, each with its own reference. A sub-sheet is a part of class B; its
@@ -366,18 +366,11 @@ def reparent(con, args):
     else:
         if not args.under:
             raise Bad("give --under <ref> or --none")
+        # A27: no cycle check here. `parent` is written by this verb, by
+        # `room` twice, and by `add` on insert; a guard on one of the three
+        # protects nothing. A ring is caught where it bites, by the bounded
+        # walks of A28
         new = parent_uuid(con, args.under)
-        walk = new
-        while walk is not None:
-            if walk == child:
-                raise Bad(f"{args.ref} under {args.under} closes a loop")
-            # a parent may be a room as well as an instance, T2.4a, so the
-            # walk follows whichever table holds it and stops at neither
-            got = con.execute("select parent from ref_table where uuid = ?",
-                              (walk,)).fetchone()
-            if got is None:
-                got = None
-            walk = got[0] if got else None
     # every node under the reference: every unit of a package, every
     # instance of a sub-sheet
     for (u,) in con.execute("select id from ref_table where ref = ? "
@@ -398,42 +391,40 @@ def ref_of(con, u):
 
 
 def drop(con, args):
-    """Remove one instance by reference. A sub-sheet instance takes the
-    rows drawn under it. A symbol in a sub-sheet is one drawing, so its
-    rows go together. Nets go with a symbol's last row."""
-    rows = con.execute("select distinct ipn, id from ref_table "
-                       "where ref = ? order by uuid", (args.ref,)).fetchall()
+    """Remove one instance by reference: every node the reference names —
+    every unit of a package, every instance of a sub-sheet. A sub-sheet
+    instance takes everything under it. Nets go with the node."""
+    rows = con.execute("select ipn, id from ref_table where ref = ? "
+                       "and kind = 'part' order by id",
+                       (args.ref,)).fetchall()
     if not rows:
         raise Bad(f"{args.ref} is not in ref_table")
-    # a multi-unit package is one row per unit, each its own uuid, all
-    # under the one reference: the reference goes as a whole
-    for ipn, u, path in rows:
-        if ipn.startswith("B"):
-            inst = f"{path}/{u}" if path else u
-            n = con.execute("delete from ref_table where path = ? "
-                            "or path like ?", (inst, inst + "/%")).rowcount
-            if n:
-                print(f"{args.ref}  {n} row(s) under it removed")
-            con.execute("delete from ref_table where id = ?",
-                        (u, path))
-        elif path:
-            refs = [r[0] for r in con.execute(
-                "select ref from ref_table where id = ? order by ref", (u,))]
-            con.execute("delete from ref_table where id = ?", (u,))
-            print(f"{args.ref}  one drawing in a sub-sheet: {' '.join(refs)} "
-                  "removed together")
-        else:
-            con.execute("delete from ref_table where id = ?",
-                        (u,))
-    if len(rows) > 1:
-        print(f"{args.ref}  {len(rows)} unit(s) removed together")
     ipn = rows[0][0]
-    for (gone,) in con.execute(
-            "select distinct id from net_table where id not in "
-            "(select id from ref_table)").fetchall():
-        con.execute("delete from net_table where id = ?", (gone,))
+    gone = 0
+    for _, nid in rows:
+        if ipn.startswith("B"):
+            # a sheet instance carries a subtree: take it whole
+            todo, sub, seen = [nid], [], {nid}
+            while todo:
+                x = todo.pop()
+                kids = [k for (k,) in con.execute(
+                    "select id from ref_table where parent = ?", (x,))
+                    if k not in seen]
+                seen.update(kids)
+                sub.extend(kids); todo.extend(kids)
+            for k in sub:
+                con.execute("delete from net_table where id = ?", (k,))
+                con.execute("delete from ref_table where id = ?", (k,))
+            if sub:
+                print(f"{args.ref}  {len(sub)} row(s) under it removed")
+        con.execute("delete from net_table where id = ?", (nid,))
+        con.execute("delete from ref_table where id = ?", (nid,))
+        gone += 1
     con.commit()
-    print(f"{args.ref}  removed from {ipn}")
+    print(f"{args.ref}  removed from {ipn}"
+          + (f", {gone} node(s)" if gone > 1 else ""))
+
+
 def price(con, args):
     """Record a vendor's price survey: one row per break. Upsert, so a
     re-survey overwrites the tier it re-quotes and leaves the rest."""
@@ -508,7 +499,7 @@ def unit_of_pin(con, board, ref, pin):
 
 def net(con, args):
     """Name the net on one pin of one instance, or clear it. Upsert on
-    (uuid, pin). The pin picks the drawing: on a multi-unit package the
+    (id, pin). The pin picks the drawing: on a multi-unit package the
     unit that carries it, per the part file (T2.6a). The sheet takes a
     label at that pin on the next place or push."""
     u = unit_of_pin(con, args.board, args.ref, args.pin)
@@ -522,8 +513,8 @@ def net(con, args):
     if not args.name:
         raise Bad("net wants a name, or --none")
     con.execute(
-        "insert into net_table (uuid, pin, net) values (?,?,?)"
-        " on conflict(uuid, pin) do update set net = excluded.net",
+        "insert into net_table (id, pin, net) values (?,?,?)"
+        " on conflict(id, pin) do update set net = excluded.net",
         (u, args.pin, args.name))
     con.commit()
     print(f"{args.ref}  pin {args.pin}: {args.name}")
@@ -586,14 +577,14 @@ def room(con, args):
 
 
 def resolve_holder(con, spec):
-    """`U15`, `U15.2` or a room name: the (uuid, path) a parent names. A
-    unit is named with a dot, since a uuid names one row - T2.4."""
+    """`U15`, `U15.2` or a room name: the id a parent names. A unit is
+    named with a dot, since one id names one node - T2.4."""
     ref, _, unit = spec.partition(".")
-    q = ("select uuid, path from ref_table where ref = ?"
+    q = ("select id from ref_table where kind = 'part' and ref = ?"
          + (" and unit = ?" if unit else ""))
     got = con.execute(q, (ref, int(unit)) if unit else (ref,)).fetchone()
     if got:
-        return (got[0], got[1] or "")
+        return got[0]
     got = con.execute("select id from ref_table where kind = 'room' "
                       "and name = ?", (spec,)).fetchone()
     if got:

@@ -117,10 +117,11 @@ SCHEMA = {
         # No declared key to ref_table, whose key is (uuid, path) —
         # table-write removes the rows when the symbol's last row goes
         "net_table": (
-            "id            TEXT NOT NULL",
+            "id            TEXT NOT NULL REFERENCES ref_table(id)"
+            " ON DELETE CASCADE",
             "pin           TEXT NOT NULL",
             "net           TEXT NOT NULL",
-            "PRIMARY KEY (uuid, pin)",
+            "PRIMARY KEY (id, pin)",
         ),
         # T2.6b — the buses. A net is in at most one bus; the bus alias
         # goes to the project file and the members keep their names

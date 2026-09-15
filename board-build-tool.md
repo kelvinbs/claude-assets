@@ -209,16 +209,16 @@
 
 | # | Column | Type | Key | Null |
 |---|---|---|---|---|
-| 1 | `uuid` | TEXT | Key | |
+| 1 | `id` | TEXT | Key | |
 | 2 | `pin` | TEXT | Key | |
 | 3 | `net` | TEXT | | |
 
 - One row per drawn pin that carries a net name. A pin with no row
   carries no label. A pin belongs to the unit that draws it: on a
-  multi-unit package the row sits on that unit's `uuid`, per the part
-  file's `units`. The drawing, not the part: two drawings of one part
-  sit on different nets. A drawing in a sub-sheet has one set of nets for
-  every instance of the sheet — a label is drawn once in the file.
+  multi-unit package the row sits on that unit's node, per the part
+  file's `units`. The node, not the part: two nodes of one part sit on
+  different nets. A drawing in a sub-sheet is one node per instance of
+  the sheet, so it carries one set of nets per instance.
 - A sheet instance has pins too: the nets its sub-sheet exports, named by
   the pin. A row on a sheet instance names what the pin joins on the page
   it sits on. A bus pin is named `{BUS}`.
@@ -325,9 +325,6 @@
 | 6 | `sim_net_table.name` | `sim_table.name` | Many-to-one | Cascade |
 | 7 | `sim_net_table.block` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the reference on add |
 
-- 1, 2, 3, 4 and 6 are declared foreign keys. Relation 2 is declarable again now that a room is a row of the same table. 4 cannot be declared: `ref_table`'s
-  key is `(uuid, path)` and a net belongs to the drawing, every path at
-  once.
 - Every skill sets `PRAGMA foreign_keys = ON`.
 
 ### 2.6 — The IPN
@@ -413,7 +410,7 @@
 | # | Rank | Dimension | Schematic | Board |
 |---|---|---|---|---|
 | 1 | 1 | `page` | Selects the file — a root page, or a sub-sheet | — |
-| 2 | 1a | `path` | Which instance of a sub-sheet. Derived, never chosen: every instance of the sheet | — |
+| 2 | 1a | `parent` | Which instance of a sub-sheet, walked from the node's parents. Derived, never stored | — |
 | 3 | 2 | `room` | Block of the sheet | Region of the board |
 | 4 | 3 | `parent` | Groups a parent with its children | Groups a parent with its children |
 

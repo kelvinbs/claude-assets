@@ -36,7 +36,7 @@ the parts on the page so there is something to wire.
 ## What gets drawn
 
 A drawing of `ref_table` that carries a `page`, whose part carries a
-`symbol`. A drawing is one uuid; in a sub-sheet it stands for one row per
+`symbol`. A drawing is one node; in a sub-sheet it stands for one row per
 instance of the sheet, and its per-instance block lists every path with
 that row's reference. Everything else is reported and left:
 
@@ -49,7 +49,7 @@ All are counted at the end of the run. None stops it.
 
 ## The UUID
 
-`ref_table.uuid` is the symbol's UUID in the sheet, per T2.4. With `path`
+`ref_table.sym_uuid` is the symbol's UUID in the sheet, per T2.4; `id` is the record's own key. With `path`
 it is what makes the symbol on the page and the row in the table the same
 thing on every run, and what this tool follows from the footprint back to
 the instance.
@@ -196,7 +196,7 @@ Each run reads every page back and settles the difference both ways.
 | Found | Done |
 |---|---|
 | Instance in the record, not on its page | Placed — the forward direction above |
-| Symbol on a page, uuid not in the record, `ipn` field names a part | Entered in `ref_table` under the symbol's own uuid, with its `Reference` and page — one row per instance of the sheet when the page is a sub-sheet. The field values are then rewritten from the record |
+| Symbol on a page, `sym_uuid` not in the record, `ipn` field names a part | Entered in `ref_table` under the symbol's own uuid, with its `Reference` and page — one row per instance of the sheet when the page is a sub-sheet. The field values are then rewritten from the record |
 | Symbol on a page, no `ipn` field, or one naming no part | Reported, left as is. The LLM names the part from the symbol and its `Value`, creates it with `table-write` if it is new, and reruns with `--assign <uuid>=<ipn>`; the script writes the `ipn` field and enters the row |
 | Symbol on a page whose `Reference` is held by another instance | Reported as a conflict, left as is. The User renames one |
 | Symbol on both sides, a field differs | left alone. Fields flow to instances by Update Symbols from Library, not by this tool |

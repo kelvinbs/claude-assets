@@ -112,8 +112,13 @@ def sheet_path_of(nid, sheet_ids):
     """The KiCad sheet path of a node: the sym_uuids of its
     sheet-instance ancestors, root first, '/'-joined. '' on a root
     page. T2.4 - walked, never stored."""
-    chain, walk = [], PARENT_OF.get(nid)
+    chain, walk, seen = [], PARENT_OF.get(nid), {nid}
     while walk:
+        # A28: bounded. A ring has no root, so an unbounded walk spins with
+        # no error at all; this raises at once and names where it closed
+        if walk in seen:
+            raise Bad(f"parent chain closes a loop at {walk}")
+        seen.add(walk)
         if walk in sheet_ids:
             chain.append(SYM_OF.get(walk) or walk)
         walk = PARENT_OF.get(walk)

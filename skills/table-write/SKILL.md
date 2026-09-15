@@ -63,7 +63,7 @@ read six months later.
 
 `--parent` names the instance this one serves — the op-amp instance a
 feedback resistor closes the loop around. Parenthood is a property of use,
-so it is a reference, resolves to that instance's `uuid`, and goes on the
+so it is a reference, resolves to that instance's `id`, and goes on the
 `ref_table` rows with `--page` and `--room`. `show <ipn>` lists an
 instance's children.
 

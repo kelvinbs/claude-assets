@@ -43,7 +43,7 @@ place they are written as DDL. A column added to those tables is added
 there in the same commit.
 
 Keys carry the constraint the document states: `ipn` on `parts_table`,
-`(uuid, path)` on `ref_table`.
+`id` on `ref_table`.
 
 Every declarable relation of T2.9 is declared.
 `parent` sits on `ref_table`: parenthood is a property of use.
