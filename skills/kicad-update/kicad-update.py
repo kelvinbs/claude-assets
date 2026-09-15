@@ -135,10 +135,10 @@ def instances(con):
     and that is what the record keys on."""
     global ROOM_ROWS
     ROOM_ROWS = [dict(zip(("uuid", "path", "name", "parent", "parent_path",
-                           "page"), r))
+                           "page", "corner"), r))
                  for r in con.execute(
-                     "select uuid, path, name, parent, parent_path, page"
-                     " from room_table")] if con.execute(
+                     "select uuid, path, name, parent, parent_path, page,"
+                     " corner from room_table")] if con.execute(
         "select count(*) from sqlite_master where type='table'"
         " and name='room_table'").fetchone()[0] else []
     rows = []
@@ -2096,6 +2096,7 @@ def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
     for r in (rooms_rows or []):
         node[("r", r["uuid"], r.get("path") or "")] = {
             "kind": "room", "name": r["name"], "rows": [], "parent": None,
+            "row": r,
             "pkey": (r.get("parent") or "", r.get("parent_path") or "")}
 
     def id_of(pkey):
@@ -2153,15 +2154,15 @@ def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
             else:
                 kflat, krooms = payload
                 flat.extend((x + dx, y + dy, r) for dx, dy, r in kflat)
-                out_rooms.extend((rx + x, ry + y, rw, rh, nm)
-                                 for rx, ry, rw, rh, nm in krooms)
+                out_rooms.extend((rx + x, ry + y, rw, rh, nd)
+                                 for rx, ry, rw, rh, nd in krooms)
         if n["kind"] == "room":
             pad = 2 * GRID
             flat = [(x + pad, y + pad, r) for x, y, r in flat]
-            out_rooms = [(rx + pad, ry + pad, rw, rh, nm)
-                         for rx, ry, rw, rh, nm in out_rooms]
+            out_rooms = [(rx + pad, ry + pad, rw, rh, nd)
+                         for rx, ry, rw, rh, nd in out_rooms]
             w, h = w + 2 * pad, h + 2 * pad
-            out_rooms.insert(0, (0.0, 0.0, w, h, n["name"]))
+            out_rooms.insert(0, (0.0, 0.0, w, h, n))
         return w, h, flat, out_rooms
 
     out = []
@@ -2173,24 +2174,41 @@ def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
     return out
 
 
-def room_sexp(x, y, w, h, name):
-    """A room's box inside its block's, with the room's name at the
-    corner."""
+CORNERS = {
+    # corner: which box corner the label anchors to, and how it justifies
+    "nw": (0, 0, -1, "left bottom"),
+    "ne": (1, 0, -1, "right bottom"),
+    "sw": (0, 1, +1, "left top"),
+    "se": (1, 1, +1, "right top"),
+}
+
+
+def room_sexp(room, x, y, w, h):
+    """A room's box, and its name placed at the corner the room names.
+    Both objects take their uuid from the room's own, so a rename or a
+    move leaves the same object on the sheet - T2.4a."""
     x0, y0 = snap(x), snap(y)
     x1, y1 = snap(x + w), snap(y + h)
+    name = room["name"]
+    row = room.get("row") or {}
+    ox, oy, dy, just = CORNERS.get((row.get("corner") or "nw").lower(),
+                                   CORNERS["nw"])
+    tx = (x1 - GRID / 2) if ox else (x0 + GRID / 2)
+    ty = (y1 if oy else y0) + dy * GRID / 2
+    ru = row.get("uuid") or uid("roombox", name, f"{x0:.2f}", f"{y0:.2f}")
     return (
         "\t(rectangle\n"
         f"\t\t(start {x0:.2f} {y0:.2f})\n"
         f"\t\t(end {x1:.2f} {y1:.2f})\n"
         "\t\t(stroke\n\t\t\t(width 0.1)\n\t\t\t(type dash)\n\t\t)\n"
         "\t\t(fill\n\t\t\t(type none)\n\t\t)\n"
-        f"\t\t(uuid \"{uid('roombox', name, f'{x0:.2f}', f'{y0:.2f}')}\")\n"
+        f"\t\t(uuid \"{uid('roombox', ru)}\")\n"
         "\t)\n"
         f"\t(text \"{esc(name)}\"\n"
-        f"\t\t(at {x0 + GRID / 2:.2f} {y0 - GRID / 2:.2f} 0)\n"
+        f"\t\t(at {tx:.2f} {ty:.2f} 0)\n"
         f"\t\t(effects\n\t\t\t(font\n\t\t\t\t(size {FONT} {FONT})\n\t\t\t)\n"
-        "\t\t\t(justify left bottom)\n\t\t)\n"
-        f"\t\t(uuid \"{uid('roomname', name, f'{x0:.2f}', f'{y0:.2f}')}\")\n"
+        f"\t\t\t(justify {just})\n\t\t)\n"
+        f"\t\t(uuid \"{uid('roomname', ru)}\")\n"
         "\t)\n"
     )
 
@@ -2281,8 +2299,8 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
     for bx, by, (flat, rooms) in placed:
         drawn, refs = [], set()
         for rx, ry, rw, rh, room in rooms:
-            body += room_sexp(MARGIN + bx + rx, start_y + by + ry + GRID,
-                              rw, rh, room)
+            body += room_sexp(room, MARGIN + bx + rx,
+                              start_y + by + ry + GRID, rw, rh)
         for dx, dy, row in flat:
             half_w, half_h, bottom, right = geom(row, blocks, model)
             x = snap(MARGIN + bx + dx + half_w)

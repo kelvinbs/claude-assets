@@ -168,6 +168,7 @@
 | 4 | `parent` | TEXT | | Yes |
 | 5 | `parent_path` | TEXT | | Yes |
 | 6 | `page` | TEXT | | Yes |
+| 7 | `corner` | TEXT | | Yes |
 
 - A room is a node beside the instance, with the same key and the same
   parent field. A room's parent is a room, an instance, or one unit of a
@@ -179,6 +180,10 @@
 - A room carries no `ipn` and no nets. T2.9 relation 4 is untouched by it.
 - `ref_table.parent` may name a room, so it carries no declared foreign
   key. The tools check it, as relations 4, 5 and 7 already are.
+- `corner` is which corner of its box the room's name is placed at: `nw`,
+  `ne`, `sw`, `se`. Null is `nw`. The name is an object the placer places,
+  and both it and the box take their uuid from the room's own, so a rename
+  or a move leaves the same object on the sheet.
 
 **T2.5 — `source` letters**
 

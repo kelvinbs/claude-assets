@@ -239,6 +239,12 @@ A room's parent may be one unit of a package, since a uuid names one row.
 That is how the `+`, `−` and output parts of one channel of a quad sit in
 their own boxes while the quad stays one box.
 
+The room's name is placed by the placer, not decorated onto the box: it
+goes at the corner `room_table.corner` names — `nw`, `ne`, `sw`, `se`,
+null meaning `nw` — and the box and the name both take their uuid from
+the room's own, so a rename or a move leaves the same object on the
+sheet.
+
 ## Units
 
 A multi-unit package is one instance. The record holds one row per unit —

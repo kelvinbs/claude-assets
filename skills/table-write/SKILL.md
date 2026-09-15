@@ -147,6 +147,10 @@ instance back under its room's own parent.
 The room is found or created on the instance's page under that parent,
 so naming the same room twice puts both instances in it.
 
+`--corner nw|ne|sw|se` says which corner of the box the room's name is
+placed at. Null is `nw`. It is a property of the room, so two rooms on
+one package may label away from each other.
+
 ## sim
 
 A simulation instance, T2.6d and T2.6e: what KiCad runs when the User

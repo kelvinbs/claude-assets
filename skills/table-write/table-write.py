@@ -16,7 +16,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
-    table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
+    table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] [--corner nw|ne|sw|se] | --none
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -558,12 +558,15 @@ def room(con, args):
                            hold[1] or None)).fetchone()
         if got:
             ru, rp = got
+            if args.corner:
+                con.execute("update room_table set corner = ? where uuid = ? "
+                            "and path = ?", (args.corner, ru, rp))
         else:
             ru, rp = str(_u.uuid4()), ""
             con.execute("insert into room_table (uuid, path, name, parent, "
-                        "parent_path, page) values (?,?,?,?,?,?)",
+                        "parent_path, page, corner) values (?,?,?,?,?,?,?)",
                         (ru, rp, name, hold[0] or None, hold[1] or None,
-                         page))
+                         page, args.corner))
         con.execute("update ref_table set parent = ?, parent_path = ? "
                     "where uuid = ? and path = ?", (ru, rp, u, pth))
         n += 1
@@ -914,6 +917,8 @@ def main(argv):
     rm.add_argument("ref")
     rm.add_argument("name", nargs="?")
     rm.add_argument("--under", help="the room, instance or unit this room sits in")
+    rm.add_argument("--corner", choices=("nw", "ne", "sw", "se"),
+                    help="which corner of the box the name is placed at")
     rm.add_argument("--none", action="store_true", help="out of its room")
     rm.set_defaults(run=room)
 

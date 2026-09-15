@@ -103,6 +103,9 @@ SCHEMA = {
             "parent        TEXT",
             "parent_path   TEXT",
             "page          TEXT",
+            # which corner of its box the name is placed at: nw, ne, sw, se.
+            # Null is nw. The placer reads it; the drawing code has no say
+            "corner        TEXT",
             "PRIMARY KEY (uuid, path)",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of
