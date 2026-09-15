@@ -105,6 +105,19 @@ def slug(name):
 # ------------------------------------------------------------------ the record
 
 ROOM_ROWS = []
+PARENT_OF, SYM_OF, KIND_OF = {}, {}, {}
+
+
+def sheet_path_of(nid, sheet_ids):
+    """The KiCad sheet path of a node: the sym_uuids of its
+    sheet-instance ancestors, root first, '/'-joined. '' on a root
+    page. T2.4 - walked, never stored."""
+    chain, walk = [], PARENT_OF.get(nid)
+    while walk:
+        if walk in sheet_ids:
+            chain.append(SYM_OF.get(walk) or walk)
+        walk = PARENT_OF.get(walk)
+    return "/".join(reversed(chain))
 
 
 def connect(board):
@@ -134,28 +147,39 @@ def instances(con):
     `Value` is parts_table.value. The IPN is on the row in its own field,
     and that is what the record keys on."""
     global ROOM_ROWS
-    ROOM_ROWS = [dict(zip(("uuid", "path", "name", "parent", "parent_path",
-                           "page", "corner"), r))
+    ROOM_ROWS = [dict(zip(("id", "sym_uuid", "name", "parent", "page",
+                           "corner"), r))
                  for r in con.execute(
-                     "select uuid, path, name, parent, parent_path, page,"
-                     " corner from room_table")] if con.execute(
-        "select count(*) from sqlite_master where type='table'"
-        " and name='room_table'").fetchone()[0] else []
+                     "select id, sym_uuid, name, parent, page, corner "
+                     "from ref_table where kind = 'room'")]
+    # T2.4: the record holds the tree. A node's sheet path is the chain of
+    # its sheet-instance parents from the root, so it is walked, not stored
+    global PARENT_OF, SYM_OF, KIND_OF
+    PARENT_OF, SYM_OF, KIND_OF = {}, {}, {}
+    for i, sy, pa, ki in con.execute(
+            "select id, sym_uuid, parent, kind from ref_table"):
+        PARENT_OF[i], SYM_OF[i], KIND_OF[i] = pa, sy, ki
+    sheet_ids = {i for i, sym in con.execute(
+        "select r.id, p.symbol from ref_table r join parts_table p "
+        "on p.ipn = r.ipn where r.kind = 'part'")
+        if (sym or "").startswith("sheet:")}
     rows = []
-    for uuid_, ipn, ref, page, unit, path, symbol, footprint, \
+    for nid, sym_uuid, ipn, ref, page, unit, symbol, footprint, \
             description, datasheet, manufacturer, mpn, note, checked, \
             name, x, y, rot, placed in con.execute(
-            "select r.uuid, r.ipn, r.ref, r.page, r.unit, r.path, "
+            "select r.id, r.sym_uuid, r.ipn, r.ref, r.page, r.unit, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
             "       p.manufacturer, p.mpn, p.note, p.checked, p.name, "
             "       r.x, r.y, r.rot, r.placed "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
-            "order by r.ipn, r.path, r.ref, r.unit"):
+            "where r.kind = 'part' "
+            "order by r.ipn, r.ref, r.unit"):
         rows.append({
             "x": x, "y": y, "rot": rot or 0, "placed": placed or "",
-            "uuid": uuid_, "ipn": ipn, "ref": ref or "",
+            "id": nid, "uuid": sym_uuid or nid, "ipn": ipn, "ref": ref or "",
             "page": (page or "").strip(),
-            "unit": unit or 1, "path": path or "",
+            "unit": unit or 1,
+            "path": sheet_path_of(nid, sheet_ids),
             "symbol": symbol, "footprint": footprint or "",
             "value": value_of(con, ipn, description),
             "description": description or "", "datasheet": datasheet or "",
@@ -167,16 +191,13 @@ def instances(con):
     # T2.11: `parent` reaches the sheet as the parent instance's reference,
     # not its uuid. A reference is what an engineer reads on a page. A
     # drawing shared by several instances names every parent, in order
-    ref_of = {(r["uuid"], r["path"]): r["ref"] for r in rows}
-    parent_of = {(u, p or ""): (pu, pp or "") for u, p, pu, pp in con.execute(
-        "select uuid, path, parent, parent_path from ref_table "
-        "where parent is not null")}
+    ref_of = {r["id"]: r["ref"] for r in rows}
     for r in rows:
-        pkey = parent_of.get((r["uuid"], r["path"]), None)
-        r["parent"] = ref_of.get(pkey, "")
+        pid = PARENT_OF.get(r["id"])
+        r["parent"] = ref_of.get(pid, "")
         r["parent_field"] = r["parent"]
-        # a uuid names one row - one unit, or one room. T2.4
-        r["parent_key"] = pkey or ("", "")
+        # one id names one node - one unit, or one room. T2.4
+        r["parent_key"] = pid or ""
     by_uuid = {}
     for r in rows:
         by_uuid.setdefault(r["uuid"], []).append(r)
@@ -310,10 +331,11 @@ def instances_sexp(project, row, path_of):
 
 
 def nets_of(con):
-    """net_table as {symbol uuid: {pin: net}}."""
+    """net_table as {node id: {pin: net}}. A net belongs to the node, and
+    a drawing in a sub-sheet is one node per instance - T2.4."""
     out = {}
-    for u, pin, net in con.execute("select uuid, pin, net from net_table"):
-        out.setdefault(u, {})[pin] = net
+    for i, pin, net in con.execute("select id, pin, net from net_table"):
+        out.setdefault(i, {})[pin] = net
     return out
 
 
@@ -336,7 +358,7 @@ class Nets:
         self.members = {}
         for net, bus in self.bus_of.items():
             self.members.setdefault(bus, []).append(net)
-        page_of = {r["uuid"]: r["page"] for r in rows}
+        page_of = {r["id"]: r["page"] for r in rows}
         self.sheet_pages = {r["sheet"] for r in rows if r["sheet"]}
         # what sits under a page: the sub-sheets instanced on it, and
         # theirs. A net shared only inside that subtree does not leave
@@ -360,12 +382,12 @@ class Nets:
         self.by_ref = {}
         for r in rows:
             self.by_ref.setdefault((r["page"], r["ref"]), {}).update(
-                self.pins.get(r["uuid"], {}))
+                self.pins.get(r["id"], {}))
         self.files, self.bus_files, self.declared = {}, {}, {}
         for r in rows:
             if not r["sheet"]:
                 continue
-            for pin in self.pins.get(r["uuid"], {}):
+            for pin in self.pins.get(r["id"], {}):
                 self.declared.setdefault(r["sheet"], set()).add(pin)
         for u, pins in self.pins.items():
             page = page_of.get(u)
@@ -384,7 +406,7 @@ class Nets:
         """{pin: net} for a drawing: every net named on any unit row of
         its reference on its page."""
         return self.by_ref.get((row["page"], row["ref"])) \
-            or self.pins.get(row["uuid"]) or {}
+            or self.pins.get(row["id"]) or {}
 
     def outside(self, files, page):
         """Whether something on `page` is also somewhere outside the page
@@ -1190,7 +1212,9 @@ def push_labels(con, board, project, root, root_src, rows, model):
             if new != block:
                 edits.append((start, end, new))
             x, y = sh["at"]
-            named = model.pins.get(u) or {}
+            # `u` is the sheet symbol's own uuid on the page; the record
+            # keys its nets by the node's id - T2.4
+            named = model.pins.get(row["id"]) or {}
             fresh += pin_fittings_sexp(
                 u, x, y, sh["size"][0], pins, named,
                 {n: model.kind(net, page) for n, net in named.items()})
@@ -1493,31 +1517,26 @@ def active_sim(con):
 
 
 def sim_inside(con, blocks):
-    """Every instance uuid under the block references by the parent chain,
-    the blocks included."""
+    """Every part id under the block references, walking `parent`. The chain
+    crosses rooms; rooms are walked through but are not instances."""
     roots = []
-    for b in blocks:
-        row = con.execute("select uuid from ref_table where ref = ?",
-                          (b,)).fetchone()
+    for bl in blocks:
+        row = con.execute("select id from ref_table where ref = ? "
+                          "and kind = 'part'", (bl,)).fetchone()
         if row is None:
-            raise Bad(f"simulation block {b} names no instance")
+            raise Bad(f"simulation block {bl} names no instance")
         roots.append(row[0])
-    # the chain crosses rooms: a part's parent is the room it sits in, and
-    # a room's parent is a part, a unit or another room - T2.4a. Rooms are
-    # walked through but are not instances, so they never join the result
-    seen, rooms, frontier = set(roots), set(), list(roots)
+    seen, frontier = set(roots), list(roots)
     while frontier:
         marks = ",".join("?" * len(frontier))
-        kids = [u for (u,) in con.execute(
-            f"select distinct uuid from ref_table where parent in ({marks})",
-            frontier) if u not in seen]
-        kid_rooms = [u for (u,) in con.execute(
-            f"select distinct uuid from room_table where parent in ({marks})",
-            frontier) if u not in rooms]
+        kids = [i for (i,) in con.execute(
+            f"select id from ref_table where parent in ({marks})",
+            frontier) if i not in seen]
         seen.update(kids)
-        rooms.update(kid_rooms)
-        frontier = kids + kid_rooms
-    return seen
+        frontier = kids
+    parts = {i for (i,) in con.execute(
+        "select id from ref_table where kind = 'part'")}
+    return seen & parts
 
 
 def sim_fields_for(row, part, models, project):
@@ -1568,15 +1587,16 @@ def push_sim_fields(con, board, project, root_src, rows, sim, models):
             row = by_uuid[u]
             part = parts[row["ipn"]]
             new = block
+            in_sim = row.get("id") in inside
             fields, why = (sim_fields_for(row, part, models, project)
-                           if u in inside else (None, ""))
+                           if in_sim else (None, ""))
             if fields:
                 for name in SIM_FIELDS:
                     new = (set_property(new, name, fields[name])
                            if name in fields else del_property(new, name))
                 new = set_exclude(new, False)
             else:
-                if u in inside and why:
+                if in_sim and why:
                     skipped.append(f"{row['ref']}: {why}")
                 for name in SIM_FIELDS:
                     new = del_property(new, name)
@@ -1722,7 +1742,8 @@ def push_sim_fittings(con, board, project, root, root_src, rows, sim):
     by_file = page_files(con, project, root_src)
     page = None
     if sim and sim["blocks"]:
-        row = con.execute("select page, path from ref_table where ref = ?",
+        row = con.execute("select page, '' from ref_table where ref = ? "
+                          "and kind = 'part'",
                           (sim["blocks"][0],)).fetchone()
         page = (row[0] or "").strip() if row else None
         if not page:
@@ -1862,7 +1883,7 @@ def pull_positions(con, board, project, root_src):
     placed, placed_sheets = read_pages(board, project,
                                        page_files(con, project, root_src))
     known = {(u, p): (x, y, r) for u, p, x, y, r in con.execute(
-        "select uuid, path, x, y, rot from ref_table")}
+        "select id, path, x, y, rot from ref_table")}
     hand = 0
     by_uuid = {}
     for (u, p), v in known.items():
@@ -2095,30 +2116,29 @@ def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
     key_ref = {}
     for ref, rs in by_ref.items():
         for r in rs:
-            key_ref[(r["uuid"], r.get("path") or "")] = ref
+            key_ref[r["id"]] = ref
     node = {}          # id -> {"kind", "name", "rows", "parent"}
     for ref, rs in by_ref.items():
         node[("p", ref)] = {"kind": "part", "name": ref, "rows": rs,
                             "parent": None}
     for r in (rooms_rows or []):
-        node[("r", r["uuid"], r.get("path") or "")] = {
+        node[("r", r["id"])] = {
             "kind": "room", "name": r["name"], "rows": [], "parent": None,
             "row": r,
-            "pkey": (r.get("parent") or "", r.get("parent_path") or "")}
+            "pkey": r.get("parent") or ""}
 
     def id_of(pkey):
-        """The node a parent key names: a room if one holds it, else the
+        """The node one id names: a room if one holds it, else the
         reference of the part instance it names."""
-        if not pkey or not pkey[0]:
+        if not pkey:
             return None
-        rid = ("r", pkey[0], pkey[1] or "")
-        if rid in node:
-            return rid
-        ref = key_ref.get((pkey[0], pkey[1] or ""))
+        if ("r", pkey) in node:
+            return ("r", pkey)
+        ref = key_ref.get(pkey)
         return ("p", ref) if ref else None
 
     for ref, rs in by_ref.items():
-        pk = rs[0].get("parent_key") or ("", "")
+        pk = rs[0].get("parent_key") or ""
         nid = id_of(pk)
         if nid is None and rs[0].get("parent"):
             nid = ("p", rs[0]["parent"]) if ("p", rs[0]["parent"]) in node \
@@ -2249,9 +2269,9 @@ def draw_one(row, x, y, rot, blocks, project, ctx):
         body = sheet_sexp(
             project, ctx["path_of"](row["path"]), row["ref"],
             f"{project}-{slug(row['sheet'])}.kicad_sch",
-            ctx["numbers"].get((row["uuid"], row["path"]), 0),
+            ctx["numbers"].get(row["id"], 0),
             sx, sy, SHEET_W, pins, row["uuid"])
-        named = model.pins.get(row["uuid"]) or {}
+        named = model.pins.get(row["id"]) or {}
         body += pin_fittings_sexp(
             row["uuid"], sx, sy, SHEET_W, pins, named,
             {n: model.kind(net, ctx["page"]) for n, net in named.items()})
@@ -2750,7 +2770,7 @@ def main(argv):
         known = {r["uuid"] for r in rows}
         parts = {r[0] for r in con.execute("select ipn from parts_table")}
         refs = {r[0]: r[1] for r in con.execute(
-            "select ref, uuid from ref_table where ref is not null")}
+            "select ref, id from ref_table where ref is not null")}
         sub_paths = {}   # sub-sheet page -> its instance paths
         for r in rows:
             if r["sheet"]:
@@ -2779,7 +2799,7 @@ def main(argv):
                     prefix = re.match(r"^[A-Za-z]+", ref or "U")
                     use = next_ref_free(con, prefix.group(0) if prefix
                                         else "U", set(refs))
-                con.execute("insert into ref_table (uuid, ipn, parent, ref, "
+                con.execute("insert into ref_table (id, ipn, parent, ref, "
                             "page, unit, path) values (?, ?, null, ?, ?, "
                             "null, ?)", (u, ipn, use, page, path))
                 refs[use] = u
@@ -2820,29 +2840,23 @@ def main(argv):
                 continue
             con.execute("update ref_table set unit = 1 where ipn = ? "
                         "and unit is null", (ipn,))
-            for (u1,) in con.execute(
-                    "select distinct uuid from ref_table where ipn = ? "
-                    "and unit = 1", (ipn,)).fetchall():
-                first = con.execute(
-                    "select ref, page, path, parent, parent_path "
-                    "from ref_table where uuid = ? and unit = 1",
-                    (u1,)).fetchall()
+            for i1, ref, page, parent, sym in con.execute(
+                    "select id, ref, page, parent, sym_uuid from ref_table "
+                    "where ipn = ? and unit = 1 and kind = 'part'",
+                    (ipn,)).fetchall():
                 for unit in range(2, units + 1):
                     have = con.execute(
-                        "select 1 from ref_table r join ref_table r1 "
-                        "on r1.ref = r.ref and r1.uuid = ? where r.unit = ?",
-                        (u1, unit)).fetchone()
+                        "select 1 from ref_table where ref = ? and unit = ? "
+                        "and kind = 'part'", (ref, unit)).fetchone()
                     if have:
                         continue
-                    nu = str(uuid.uuid4())
-                    for ref, page, path, parent, ppath in first:
-                        con.execute(
-                            "insert into ref_table (uuid, ipn, parent, "
-                            "parent_path, ref, page, unit, path) "
-                            "values (?,?,?,?,?,?,?,?)",
-                            (nu, ipn, parent, ppath, ref, page, unit,
-                             path))
-                        minted += 1
+                    con.execute(
+                        "insert into ref_table (id, sym_uuid, kind, ipn, "
+                        "parent, ref, page, unit) "
+                        "values (?,?,'part',?,?,?,?,?)",
+                        (str(uuid.uuid4()), sym, ipn, parent, ref, page,
+                         unit))
+                    minted += 1
         con.commit()
         if minted:
             rows = instances(con)
@@ -2919,7 +2933,7 @@ def main(argv):
     numbers, nxt = {}, max([n for _, n in sheets.values()] + [1]) + 1
     for r in sorted((r for r in rows if r["sheet"]),
                     key=lambda r: (r["page"], r["path"], r["ref"])):
-        numbers[(r["uuid"], r["path"])] = nxt
+        numbers[r["id"]] = nxt
         nxt += 1
 
     templates = family_templates(rows)

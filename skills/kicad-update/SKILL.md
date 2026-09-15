@@ -228,27 +228,24 @@ the proof the two sides agree.
 
 ## Rooms
 
-A room is a row in `room_table`, T2.4a, not a string on an instance. It
-has a uuid and a parent, and an instance's parent is the room it sits in,
-so rooms nest to any depth. The packer builds one node list from
-`ref_table` and `room_table` together and walks parents: a room wraps its
-children in a named box, a part draws its symbol. Nothing asks whether a
-child is family or a room.
+A room is a row of `ref_table` with `kind = 'room'`, T2.4 — the same table
+as a part instance, the same `id`, the same `parent`. An instance's parent
+is the room it sits in; a room's parent is a room, an instance, or one
+unit of a package. Rooms nest to any depth because nothing distinguishes
+the two.
 
-A room's parent may be one unit of a package, since a uuid names one row.
-That is how the `+`, `−` and output parts of one channel of a quad sit in
-their own boxes while the quad stays one box.
+The packer walks `parent`: a room wraps its children in a named box, a
+part draws its symbol. Nothing asks whether a child is family or a room.
 
-The room's name is placed by the placer, not decorated onto the box: it
-goes at the corner `room_table.corner` names — `nw`, `ne`, `sw`, `se`,
-null meaning `nw` — and the box and the name both take their uuid from
-the room's own, so a rename or a move leaves the same object on the
-sheet.
+A room's name is placed by the placer at the corner `corner` names — `nw`,
+`ne`, `sw`, `se`, null meaning `nw` — and the box and the name both take
+their uuid from the room's `id`, so a rename or a move leaves the same
+object on the sheet.
 
 ## Units
 
-A multi-unit package is one instance. The record holds one row per unit —
-same reference, own uuid, `unit` from 1 (T2.4). Where the symbol has more
+A multi-unit package is one instance. The record holds one node per unit —
+same reference, own `id`, `unit` from 1 (T2.4). Where the symbol has more
 units than the record has rows, place mints the missing rows in the
 record, then draws every unit — U15A, U15B, and the power unit — side by
 side. Fields ride on unit 1; the other units show the reference alone. No

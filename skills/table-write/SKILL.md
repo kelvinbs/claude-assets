@@ -138,7 +138,8 @@ instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 ## room
 
 Puts an instance in a room: `room R3 minus --under U15.2`. A room is a
-row of its own, T2.4a, with a uuid and a parent, so rooms nest. `--under`
+row of `ref_table` with `kind = 'room'`, T2.4, with its own `id` and a
+parent, so rooms nest. `--under`
 names what the room sits in — a room, an instance, or one unit of a
 package, written `U15.2`. Without it the room takes the parent the
 instance has today, so nothing moves but the level. `--none` puts the

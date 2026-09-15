@@ -71,15 +71,21 @@ SCHEMA = {
         # that sheet: (uuid, path). path is '' on a root page, else the
         # chain of sub-sheet instance uuids down to the symbol's sheet
         "ref_table": (
-            "uuid          TEXT NOT NULL",
-            "ipn           TEXT NOT NULL REFERENCES parts_table(ipn)"
+            # T2.4 — one node, one id. A row is a part or a room, told
+            # apart by `kind`; `parent` names one node and nothing else.
+            # The sheet path is the chain of sheet-instance parents from
+            # the root, so it is walked, never stored
+            "id            TEXT NOT NULL",
+            "sym_uuid      TEXT",
+            "kind          TEXT NOT NULL DEFAULT 'part'",
+            "name          TEXT",
+            "ipn           TEXT REFERENCES parts_table(ipn)"
             " ON DELETE RESTRICT",
-            "parent        TEXT",
+            "parent        TEXT REFERENCES ref_table(id)"
+            " ON DELETE SET NULL",
             "ref           TEXT",
             "page          TEXT",
             "unit          INTEGER",
-            "path          TEXT NOT NULL DEFAULT ''",
-            "parent_path   TEXT",
             # the instance's place on its sheet, mm, y down, degrees;
             # null until pulled or placed by hand
             "x             REAL",
@@ -87,26 +93,9 @@ SCHEMA = {
             "rot           INTEGER",
             # who set the place: tool, the packer; hand, a pull found it moved
             "placed        TEXT",
-            "PRIMARY KEY (uuid, path)",
-            # no declared key on parent: it may name a room as well as an
-            # instance, so the tools check it, as T2.9 relations 4, 5 and 7
-            # already are
-        ),
-        # T2.4a — a room. One node kind beside the instance, same key, same
-        # parent field. A room's parent is a room, an instance or a unit;
-        # an instance's parent is the room it sits in. Rooms nest because
-        # nothing here distinguishes the two
-        "room_table": (
-            "uuid          TEXT NOT NULL",
-            "path          TEXT NOT NULL DEFAULT ''",
-            "name          TEXT NOT NULL",
-            "parent        TEXT",
-            "parent_path   TEXT",
-            "page          TEXT",
-            # which corner of its box the name is placed at: nw, ne, sw, se.
-            # Null is nw. The placer reads it; the drawing code has no say
+            # which corner of its box a room's name is placed at
             "corner        TEXT",
-            "PRIMARY KEY (uuid, path)",
+            "PRIMARY KEY (id)",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of
         # any size reads off it and the survey is done once
@@ -128,7 +117,7 @@ SCHEMA = {
         # No declared key to ref_table, whose key is (uuid, path) —
         # table-write removes the rows when the symbol's last row goes
         "net_table": (
-            "uuid          TEXT NOT NULL",
+            "id            TEXT NOT NULL",
             "pin           TEXT NOT NULL",
             "net           TEXT NOT NULL",
             "PRIMARY KEY (uuid, pin)",
@@ -175,7 +164,7 @@ def columns_of(spec):
 
 # A table whose key changed is rebuilt, rows carried over. Detected by a
 # column the old shape lacks
-REBUILT = {"ref_table": "path", "net_table": None}
+REBUILT = {"net_table": None}
 
 
 def rebuild(con, table, spec, found):
