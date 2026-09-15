@@ -2773,7 +2773,7 @@ def main(argv):
                     use = next_ref_free(con, prefix.group(0) if prefix
                                         else "U", set(refs))
                 con.execute("insert into ref_table (uuid, ipn, parent, ref, "
-                            "page, path) values (?, ?, null, ?, ?, "
+                            "page, unit, path) values (?, ?, null, ?, ?, "
                             "null, ?)", (u, ipn, use, page, path))
                 refs[use] = u
                 if i == 0:

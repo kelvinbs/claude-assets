@@ -359,8 +359,14 @@ def reparent(con, args):
         while walk is not None:
             if walk == child:
                 raise Bad(f"{args.ref} under {args.under} closes a loop")
-            walk = con.execute("select parent from ref_table where uuid = ?",
-                               (walk,)).fetchone()[0]
+            # a parent may be a room as well as an instance, T2.4a, so the
+            # walk follows whichever table holds it and stops at neither
+            got = con.execute("select parent from ref_table where uuid = ?",
+                              (walk,)).fetchone()
+            if got is None:
+                got = con.execute("select parent from room_table "
+                                  "where uuid = ?", (walk,)).fetchone()
+            walk = got[0] if got else None
     page = con.execute("select page from ref_table where ref = ?",
                        (args.ref,)).fetchone()[0]
     # every row under the reference: every unit of a package, every path
