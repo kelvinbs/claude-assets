@@ -226,6 +226,19 @@ page mismatches, instances with no page, instances with no symbol. A
 second run straight after the first reports zeros and empty lists; that is
 the proof the two sides agree.
 
+## Rooms
+
+A room is a row in `room_table`, T2.4a, not a string on an instance. It
+has a uuid and a parent, and an instance's parent is the room it sits in,
+so rooms nest to any depth. The packer builds one node list from
+`ref_table` and `room_table` together and walks parents: a room wraps its
+children in a named box, a part draws its symbol. Nothing asks whether a
+child is family or a room.
+
+A room's parent may be one unit of a package, since a uuid names one row.
+That is how the `+`, `−` and output parts of one channel of a quad sit in
+their own boxes while the quad stays one box.
+
 ## Units
 
 A multi-unit package is one instance. The record holds one row per unit —

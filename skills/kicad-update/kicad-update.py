@@ -104,6 +104,9 @@ def slug(name):
 
 # ------------------------------------------------------------------ the record
 
+ROOM_ROWS = []
+
+
 def connect(board):
     path = Path(board) / "board.db"
     if not path.exists():
@@ -130,11 +133,19 @@ def instances(con):
 
     `Value` is parts_table.value. The IPN is on the row in its own field,
     and that is what the record keys on."""
+    global ROOM_ROWS
+    ROOM_ROWS = [dict(zip(("uuid", "path", "name", "parent", "parent_path",
+                           "page"), r))
+                 for r in con.execute(
+                     "select uuid, path, name, parent, parent_path, page"
+                     " from room_table")] if con.execute(
+        "select count(*) from sqlite_master where type='table'"
+        " and name='room_table'").fetchone()[0] else []
     rows = []
-    for uuid_, ipn, ref, page, room, unit, path, symbol, footprint, \
+    for uuid_, ipn, ref, page, unit, path, symbol, footprint, \
             description, datasheet, manufacturer, mpn, note, checked, \
             name, x, y, rot, placed in con.execute(
-            "select r.uuid, r.ipn, r.ref, r.page, r.room, r.unit, r.path, "
+            "select r.uuid, r.ipn, r.ref, r.page, r.unit, r.path, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
             "       p.manufacturer, p.mpn, p.note, p.checked, p.name, "
             "       r.x, r.y, r.rot, r.placed "
@@ -143,14 +154,14 @@ def instances(con):
         rows.append({
             "x": x, "y": y, "rot": rot or 0, "placed": placed or "",
             "uuid": uuid_, "ipn": ipn, "ref": ref or "",
-            "page": (page or "").strip(), "room": (room or "").strip(),
+            "page": (page or "").strip(),
             "unit": unit or 1, "path": path or "",
             "symbol": symbol, "footprint": footprint or "",
             "value": value_of(con, ipn, description),
             "description": description or "", "datasheet": datasheet or "",
             "manufacturer": manufacturer or "", "mpn": mpn or "",
             "note": note or "", "checked": checked or "no",
-            "parent": "", "room_field": (room or "").strip(),
+            "parent": "",
             "sheet": name if (symbol or "").startswith("sheet:") else "",
         })
     # T2.11: `parent` reaches the sheet as the parent instance's reference,
@@ -161,9 +172,11 @@ def instances(con):
         "select uuid, path, parent, parent_path from ref_table "
         "where parent is not null")}
     for r in rows:
-        r["parent"] = ref_of.get(parent_of.get((r["uuid"], r["path"]),
-                                               None), "")
+        pkey = parent_of.get((r["uuid"], r["path"]), None)
+        r["parent"] = ref_of.get(pkey, "")
         r["parent_field"] = r["parent"]
+        # a uuid names one row - one unit, or one room. T2.4
+        r["parent_key"] = pkey or ("", "")
     by_uuid = {}
     for r in rows:
         by_uuid.setdefault(r["uuid"], []).append(r)
@@ -221,7 +234,7 @@ def order_of(row):
     number = number_of(row["ref"])
     unit = row.get("unit") or 1
     parent = row.get("parent") or ""
-    if row["room"]:
+    if row.get("room"):
         return (0, row["room"], parent, number_of(parent), number, unit)
     if parent:
         return (1, "", parent, number_of(parent), number, unit)
@@ -270,8 +283,6 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right, rot=0):
         + property_sexp("note", row["note"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("parent", row["parent_field"], f"{x:.2f}", f"{y:.2f}",
-                        hide=True)
-        + property_sexp("room", row["room_field"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
         + property_sexp("checked", row["checked"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
@@ -1055,7 +1066,7 @@ INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
                    ("Description", "description"), ("Datasheet", "datasheet"),
                    ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
                    ("note", "note"), ("parent", "parent_field"),
-                   ("room", "room_field"), ("checked", "checked"))
+                   ("checked", "checked"))
 
 
 def push_instances(con, board, project, root, root_src, rows):
@@ -2064,154 +2075,101 @@ def family_templates(rows):
             if v["kids"]}
 
 
-def boxes_of(rows, blocks, model=None, templates=None):
-    """A box is a parent and everything under it, else a room, else the part
-    on its own. A child that is itself a parent packs first and enters its
-    parent's box as one item, so nesting needs no special case."""
+def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
+    """One node list, one walk. A node is a part instance or a room; both
+    carry `(uuid, path)` and a parent that may be either. A room draws a
+    named box around its children; a part draws its symbol. Nothing asks
+    whether a child is family or a room, and a multi-unit package stays
+    one node with its units side by side - kicad-update SKILL, Units."""
+    # part nodes, one per reference, its unit rows together
     by_ref = {}
     for row in rows:
         by_ref.setdefault(row["ref"], []).append(row)
-    parent_of = {ref: (rs[0].get("parent") or "") for ref, rs in by_ref.items()}
-    # A parent that draws nothing - a functional block, whose part carries no
-    # symbol - never reaches this function as a row. It is still a box: it
-    # holds no drawing of its own and its children pack inside it.
-    for par in list(parent_of.values()):
-        if par and par not in by_ref:
-            by_ref.setdefault(par, [])
-            parent_of.setdefault(par, "")
+    key_ref = {}
+    for ref, rs in by_ref.items():
+        for r in rs:
+            key_ref[(r["uuid"], r.get("path") or "")] = ref
+    node = {}          # id -> {"kind", "name", "rows", "parent"}
+    for ref, rs in by_ref.items():
+        node[("p", ref)] = {"kind": "part", "name": ref, "rows": rs,
+                            "parent": None}
+    for r in (rooms_rows or []):
+        node[("r", r["uuid"], r.get("path") or "")] = {
+            "kind": "room", "name": r["name"], "rows": [], "parent": None,
+            "pkey": (r.get("parent") or "", r.get("parent_path") or "")}
+
+    def id_of(pkey):
+        """The node a parent key names: a room if one holds it, else the
+        reference of the part instance it names."""
+        if not pkey or not pkey[0]:
+            return None
+        rid = ("r", pkey[0], pkey[1] or "")
+        if rid in node:
+            return rid
+        ref = key_ref.get((pkey[0], pkey[1] or ""))
+        return ("p", ref) if ref else None
+
+    for ref, rs in by_ref.items():
+        pk = rs[0].get("parent_key") or ("", "")
+        nid = id_of(pk)
+        if nid is None and rs[0].get("parent"):
+            nid = ("p", rs[0]["parent"]) if ("p", rs[0]["parent"]) in node \
+                else None
+        node[("p", ref)]["parent"] = nid
+    for nid, n in node.items():
+        if n["kind"] == "room":
+            n["parent"] = id_of(n.pop("pkey"))
+    # a parent the record names but nothing draws is still a box
+    for nid, n in list(node.items()):
+        if n["parent"] and n["parent"] not in node:
+            n["parent"] = None
     kids = {}
-    for ref, par in parent_of.items():
-        if par and par in by_ref:
-            kids.setdefault(par, []).append(ref)
+    for nid, n in node.items():
+        if n["parent"]:
+            kids.setdefault(n["parent"], []).append(nid)
 
-    def from_template(ref):
-        """The family laid from its template: parent at the origin, each
-        child at its offset, matched child to child by part in reference
-        order. Children the template does not name are packed beside.
-        None when there is no template for this parent's part."""
-        rows_here = by_ref.get(ref) or []
-        if not templates or not rows_here:
-            return None
-        parent = rows_here[0]
-        tmpl = templates.get(parent["ipn"])
-        if not tmpl:
-            return None
-        used, laid, rest = set(), [], []
-        for kid in sorted(kids.get(ref, []), key=number_of):
-            krow = (by_ref.get(kid) or [None])[0]
-            if krow is None or kids.get(kid):
-                rest.append(kid)
-                continue
-            hit = next((i for i, t in enumerate(tmpl)
-                        if i not in used and t[0] == krow["ipn"]), None)
-            if hit is None:
-                rest.append(kid)
-                continue
-            used.add(hit)
-            krow["rot"] = tmpl[hit][3]
-            laid.append((tmpl[hit][1], tmpl[hit][2], krow))
-        if not laid:
-            return None
-        # box-relative: flow adds half extents, so shift each by its own
-        pts = [(0.0, 0.0, parent)] + laid
-        ext = {id(r): geom(r, blocks, model)[:2] for _, _, r in pts}
-        pw, ph = ext[id(parent)]
-        rel = [(ox - (ext[id(r)][0] - pw), oy - (ext[id(r)][1] - ph), r)
-               for ox, oy, r in pts]
-        minx = min(x for x, _, _ in rel); miny = min(y for _, y, _ in rel)
-        flat = [(x - minx, y - miny, r) for x, y, r in rel]
-        w = max(x + 2 * ext[id(r)][0] for x, _, r in flat)
-        h = max(y + 2 * ext[id(r)][1] for _, y, r in flat)
-        for row in rows_here[1:]:            # other units of the parent
-            uw, uh = size_of(row, blocks, model)
-            flat.append((w + GAP, 0.0, row)); w += GAP + uw; h = max(h, uh)
-        rooms = []
-        for kid in rest:
-            kw, kh, inner, krooms = pack(kid)
-            flat.extend((w + GAP + dx, dy, r) for dx, dy, r in inner)
-            rooms.extend((w + GAP + rx, ry, rw, rh, name)
-                         for rx, ry, rw, rh, name in krooms)
-            w += GAP + kw; h = max(h, kh)
-        return w, h, flat, rooms
+    def order_key(nid):
+        n = node[nid]
+        if n["rows"]:
+            return order_of(n["rows"][0])
+        return (0, n["name"], "", 0, 0, 0)
 
-    def shifted(rooms, dx, dy):
-        return [(rx + dx, ry + dy, rw, rh, name)
-                for rx, ry, rw, rh, name in rooms]
-
-    def pack(ref):
-        """(width, height, [(dx, dy, row)], [(dx, dy, w, h, room)]) for
-        this reference and its descendants, laid out inside a box of its
-        own. Rooms come back relative to that box, whatever depth they
-        were drawn at, so a room inside a child's box lands where the
-        child's box lands."""
-        done = from_template(ref)
-        if done:
-            return done
+    def pack(nid):
+        n = node[nid]
         items = []
-        for row in sorted(by_ref[ref], key=lambda r: r.get("unit") or 1):
+        for row in sorted(n["rows"], key=lambda r: r.get("unit") or 1):
             w, h = size_of(row, blocks, model)
             items.append((w, h, ("part", row)))
-        # children grouped by room: a room is a box of its own inside the
-        # parent's, named; children in no room pack beside
-        by_room = {}
-        own = ((by_ref.get(ref) or [{}])[0] or {}).get("room") or ""
-        for kid in sorted(kids.get(ref, []), key=number_of):
-            krow = (by_ref.get(kid) or [None])[0]
-            kroom = (krow or {}).get("room") or ""
-            # a child in its parent's own room is the family, not a room
-            # inside it
-            by_room.setdefault("" if kroom == own else kroom, []).append(kid)
-        for room, members in sorted(by_room.items()):
-            if not room:
-                for kid in members:
-                    kw, kh, inner, krooms = pack(kid)
-                    items.append((kw, kh, ("box", (inner, krooms))))
-                continue
-            ritems = []
-            for kid in members:
-                kw, kh, inner, krooms = pack(kid)
-                ritems.append((kw, kh, ("box", (inner, krooms))))
-            rplaced, rw, rh = shelf(ritems, box_extent(ritems, down=True),
-                                    down=True)
-            pad = 2 * GRID
-            rflat, rrooms = [], []
-            for x, y, (kind, (inner, krooms)) in rplaced:
-                rflat.extend((x + pad + dx, y + pad + dy, r)
-                             for dx, dy, r in inner)
-                rrooms.extend(shifted(krooms, x + pad, y + pad))
-            items.append((rw + 2 * pad, rh + 2 * pad,
-                          ("room", (room, rw + 2 * pad, rh + 2 * pad,
-                                    rflat, rrooms))))
-        placed, w, h = shelf(items, box_extent(items, down=True),
-                             down=True)
-        flat, rooms = [], []
+        for kid in sorted(kids.get(nid, []), key=order_key):
+            kw, kh, kflat, krooms = pack(kid)
+            items.append((kw, kh, ("box", (kflat, krooms))))
+        if not items:
+            return 0.0, 0.0, [], []
+        placed, w, h = shelf(items, box_extent(items, down=True), down=True)
+        flat, out_rooms = [], []
         for x, y, (kind, payload) in placed:
             if kind == "part":
                 flat.append((x, y, payload))
-            elif kind == "box":
-                inner, krooms = payload
-                flat.extend((x + dx, y + dy, r) for dx, dy, r in inner)
-                rooms.extend(shifted(krooms, x, y))
             else:
-                room, rw, rh, inner, rrooms = payload
-                rooms.append((x, y, rw, rh, room))
-                rooms.extend(shifted(rrooms, x, y))
-                flat.extend((x + dx, y + dy, r) for dx, dy, r in inner)
-        return w, h, flat, rooms
-
-    tops = [ref for ref, par in parent_of.items()
-            if not par or par not in by_ref]
-
-    def rank(ref):
-        rs = by_ref[ref] or [by_ref[k][0] for k in kids.get(ref, [])
-                             if by_ref.get(k)]
-        return order_of(rs[0]) if rs else (1, "", ref, 0, 0, 0)
+                kflat, krooms = payload
+                flat.extend((x + dx, y + dy, r) for dx, dy, r in kflat)
+                out_rooms.extend((rx + x, ry + y, rw, rh, nm)
+                                 for rx, ry, rw, rh, nm in krooms)
+        if n["kind"] == "room":
+            pad = 2 * GRID
+            flat = [(x + pad, y + pad, r) for x, y, r in flat]
+            out_rooms = [(rx + pad, ry + pad, rw, rh, nm)
+                         for rx, ry, rw, rh, nm in out_rooms]
+            w, h = w + 2 * pad, h + 2 * pad
+            out_rooms.insert(0, (0.0, 0.0, w, h, n["name"]))
+        return w, h, flat, out_rooms
 
     out = []
-    for ref in sorted(tops, key=rank):
-        w, h, flat, rooms = pack(ref)
+    tops = [nid for nid, n in node.items() if not n["parent"]]
+    for nid in sorted(tops, key=order_key):
+        w, h, flat, rms = pack(nid)
         if flat:
-            out.append((w, h, flat, rooms))
+            out.append((w, h, flat, rms))
     return out
 
 
@@ -2313,7 +2271,8 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
     if not free:
         return body, page_h, page_w
 
-    boxes = boxes_of(free, blocks, model, ctx.get("templates"))
+    boxes = boxes_of(free, blocks, model, ctx.get("templates"),
+                     ctx.get("rooms"))
     boxes.sort(key=lambda b: -(b[0] * b[1]))
     items = [(w, h, (flat, rooms)) for w, h, flat, rooms in boxes]
     room = (height or width) - start_y - MARGIN
@@ -2796,7 +2755,7 @@ def main(argv):
                     use = next_ref_free(con, prefix.group(0) if prefix
                                         else "U", set(refs))
                 con.execute("insert into ref_table (uuid, ipn, parent, ref, "
-                            "page, room, path) values (?, ?, null, ?, ?, "
+                            "page, path) values (?, ?, null, ?, ?, "
                             "null, ?)", (u, ipn, use, page, path))
                 refs[use] = u
                 if i == 0:
@@ -2840,7 +2799,7 @@ def main(argv):
                     "select distinct uuid from ref_table where ipn = ? "
                     "and unit = 1", (ipn,)).fetchall():
                 first = con.execute(
-                    "select ref, page, room, path, parent, parent_path "
+                    "select ref, page, path, parent, parent_path "
                     "from ref_table where uuid = ? and unit = 1",
                     (u1,)).fetchall()
                 for unit in range(2, units + 1):
@@ -2851,12 +2810,12 @@ def main(argv):
                     if have:
                         continue
                     nu = str(uuid.uuid4())
-                    for ref, page, room, path, parent, ppath in first:
+                    for ref, page, path, parent, ppath in first:
                         con.execute(
                             "insert into ref_table (uuid, ipn, parent, "
-                            "parent_path, ref, page, room, unit, path) "
-                            "values (?,?,?,?,?,?,?,?,?)",
-                            (nu, ipn, parent, ppath, ref, page, room, unit,
+                            "parent_path, ref, page, unit, path) "
+                            "values (?,?,?,?,?,?,?,?)",
+                            (nu, ipn, parent, ppath, ref, page, unit,
                              path))
                         minted += 1
         con.commit()
@@ -2944,6 +2903,7 @@ def main(argv):
         on_page = [r for r in drawable if r["page"] == page]
         ctx = {"page": page, "model": model, "numbers": numbers,
                "templates": templates,
+               "rooms": ROOM_ROWS,
                "path_of": lambda p, page=page: kicad_path(root, sheets,
                                                           starts, page, p)}
         name, new, kept = write_page(board, project, page, on_page, blocks,

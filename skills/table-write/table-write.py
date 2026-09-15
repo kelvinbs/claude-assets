@@ -16,7 +16,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
-    table-write.py <board-dir> room   <ref> <name> | --none
+    table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -195,7 +195,7 @@ def parent_for(con, parent_ref, page, path):
     return pu, ppath
 
 
-def new_symbol(con, ipn, prefix, page, room, parent_ref):
+def new_symbol(con, ipn, prefix, page, parent_ref):
     """One symbol, drawn once: a fresh uuid, one row per instance path of
     its page, each with the next free reference. Returns the refs."""
     u = str(uuid.uuid4())
@@ -204,8 +204,8 @@ def new_symbol(con, ipn, prefix, page, room, parent_ref):
         ref = next_ref(con, prefix)
         parent, parent_path = parent_for(con, parent_ref, page, path)
         con.execute("insert into ref_table (uuid, ipn, parent, parent_path, "
-                    "ref, page, room, path) values (?,?,?,?,?,?,?,?)",
-                    (u, ipn, parent, parent_path, ref, page, room, path))
+                    "ref, page, path) values (?,?,?,?,?,?,?)",
+                    (u, ipn, parent, parent_path, ref, page, path))
         refs.append(ref)
     return refs
 
@@ -220,18 +220,18 @@ def replicate_sheet(con, ipn, new_paths):
                   "page the sheet is drawn on")
     added = 0
     rows = con.execute(
-        "select uuid, ipn, parent, ref, room, unit, page from ref_table "
+        "select uuid, ipn, parent, ref, unit, page from ref_table "
         "where page = ? group by uuid order by ref", (name,)).fetchall()
-    for u, cipn, parent, ref, room, unit, page in rows:
+    for u, cipn, parent, ref, unit, page in rows:
         prefix = REF.match(ref).group(1) if ref and REF.match(ref) else "U"
         for path in new_paths:
             if con.execute("select 1 from ref_table where uuid = ? and path = ?",
                            (u, path)).fetchone():
                 continue
             con.execute("insert into ref_table (uuid, ipn, parent, parent_path, "
-                        "ref, page, room, unit, path) values (?,?,?,?,?,?,?,?,?)",
+                        "ref, page, unit, path) values (?,?,?,?,?,?,?,?)",
                         (u, cipn, parent, path if parent else None,
-                         next_ref(con, prefix), page, room, unit, path))
+                         next_ref(con, prefix), page, unit, path))
             added += 1
     return added
 
@@ -271,7 +271,7 @@ def add(con, args):
         con.execute("update parts_table set symbol = ? where ipn = ?",
                     (f"sheet:{values['name']}", ipn))
     for _ in range(args.count):
-        refs = new_symbol(con, ipn, prefix, args.page, args.room, args.parent)
+        refs = new_symbol(con, ipn, prefix, args.page, args.parent)
         print(f"    {' '.join(refs)}  {args.page or '—'}")
     con.commit()
 
@@ -316,15 +316,14 @@ def place(con, args):
     before = {r[0] for r in con.execute(
         "select uuid from ref_table where ipn = ?", (args.ipn,))}
     for _ in range(args.count - have):
-        refs = new_symbol(con, args.ipn, prefix, page, args.room, args.parent)
+        refs = new_symbol(con, args.ipn, prefix, page, args.parent)
         print(f"{args.ipn}  {' '.join(refs)}  {page or '—'}")
-    if args.page or args.room:
+    if args.page:
         # the rows just made, and any row of the part still without a page
         sets, vals = [], []
         if args.page:
             sets.append("page = ?"); vals.append(args.page)
-        if args.room:
-            sets.append("room = ?"); vals.append(args.room)
+
         con.execute(f"update ref_table set {', '.join(sets)} where ipn = ? "
                     "and (page is null or page = '')",
                     tuple(vals) + (args.ipn,))
@@ -518,18 +517,76 @@ def net(con, args):
 
 
 def room(con, args):
-    """Put an instance in a room, T0.3: every row under the reference.
-    `--none` takes it out."""
-    instance_of(con, args.ref)
-    name = None if args.none else args.name
-    if not args.none and not name:
+    """Put an instance in a room. A room is a row of its own with a uuid
+    and a parent, so rooms nest: `room R3 Filter_I --under U15.2` makes
+    the room a child of U15's second unit and the instance a child of the
+    room. Without `--under` the room takes the parent the instance has
+    today, so nothing moves but the level. `--none` puts the instance back
+    under the room's own parent."""
+    import uuid as _u
+    ref = args.ref
+    rows = con.execute("select uuid, path, page, parent, parent_path from "
+                       "ref_table where ref = ?", (ref,)).fetchall()
+    if not rows:
+        raise Bad(f"no instance {ref}")
+    if args.none:
+        n = 0
+        for u, pth, page, par, ppath in rows:
+            up = con.execute("select parent, parent_path from room_table "
+                             "where uuid = ? and path = ?",
+                             (par, ppath or "")).fetchone()
+            con.execute("update ref_table set parent = ?, parent_path = ? "
+                        "where uuid = ? and path = ?",
+                        (up[0] if up else None, up[1] if up else None,
+                         u, pth))
+            n += 1
+        con.commit()
+        print(f"{ref}  out of its room on {n} row(s)")
+        return
+    name = args.name
+    if not name:
         raise Bad("room wants a name, or --none")
-    n = con.execute("update ref_table set room = ? where uuid in "
-                    "(select uuid from ref_table where ref = ?)",
-                    (name, args.ref)).rowcount
+    under = None
+    if args.under:
+        under = resolve_holder(con, args.under)
+    n = 0
+    for u, pth, page, par, ppath in rows:
+        hold = under if under else (par, ppath or "")
+        got = con.execute("select uuid, path from room_table where name = ? "
+                          "and page is ? and parent is ? and parent_path is ?",
+                          (name, page, hold[0] or None,
+                           hold[1] or None)).fetchone()
+        if got:
+            ru, rp = got
+        else:
+            ru, rp = str(_u.uuid4()), ""
+            con.execute("insert into room_table (uuid, path, name, parent, "
+                        "parent_path, page) values (?,?,?,?,?,?)",
+                        (ru, rp, name, hold[0] or None, hold[1] or None,
+                         page))
+        con.execute("update ref_table set parent = ?, parent_path = ? "
+                    "where uuid = ? and path = ?", (ru, rp, u, pth))
+        n += 1
     con.commit()
-    print(f"{args.ref}  room {name or '—'} on {n} row(s)")
+    print(f"{ref}  room {name}"
+          + (f" under {args.under}" if args.under else "")
+          + f" on {n} row(s)")
 
+
+def resolve_holder(con, spec):
+    """`U15`, `U15.2` or a room name: the (uuid, path) a parent names. A
+    unit is named with a dot, since a uuid names one row - T2.4."""
+    ref, _, unit = spec.partition(".")
+    q = ("select uuid, path from ref_table where ref = ?"
+         + (" and unit = ?" if unit else ""))
+    got = con.execute(q, (ref, int(unit)) if unit else (ref,)).fetchone()
+    if got:
+        return (got[0], got[1] or "")
+    got = con.execute("select uuid, path from room_table where name = ?",
+                      (spec,)).fetchone()
+    if got:
+        return (got[0], got[1] or "")
+    raise Bad(f"{spec} names no instance, no unit and no room")
 
 def unplace(con, args):
     """Send an instance back to the packer: its place and mark cleared,
@@ -856,6 +913,7 @@ def main(argv):
     rm = sub.add_parser("room", help="put an instance in a room")
     rm.add_argument("ref")
     rm.add_argument("name", nargs="?")
+    rm.add_argument("--under", help="the room, instance or unit this room sits in")
     rm.add_argument("--none", action="store_true", help="out of its room")
     rm.set_defaults(run=room)
 

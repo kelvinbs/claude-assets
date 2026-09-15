@@ -77,7 +77,6 @@ SCHEMA = {
             "parent        TEXT",
             "ref           TEXT",
             "page          TEXT",
-            "room          TEXT",
             "unit          INTEGER",
             "path          TEXT NOT NULL DEFAULT ''",
             "parent_path   TEXT",
@@ -89,8 +88,22 @@ SCHEMA = {
             # who set the place: tool, the packer; hand, a pull found it moved
             "placed        TEXT",
             "PRIMARY KEY (uuid, path)",
-            "FOREIGN KEY (parent, parent_path) REFERENCES ref_table(uuid, path)"
-            " ON DELETE SET NULL",
+            # no declared key on parent: it may name a room as well as an
+            # instance, so the tools check it, as T2.9 relations 4, 5 and 7
+            # already are
+        ),
+        # T2.4a — a room. One node kind beside the instance, same key, same
+        # parent field. A room's parent is a room, an instance or a unit;
+        # an instance's parent is the room it sits in. Rooms nest because
+        # nothing here distinguishes the two
+        "room_table": (
+            "uuid          TEXT NOT NULL",
+            "path          TEXT NOT NULL DEFAULT ''",
+            "name          TEXT NOT NULL",
+            "parent        TEXT",
+            "parent_path   TEXT",
+            "page          TEXT",
+            "PRIMARY KEY (uuid, path)",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of
         # any size reads off it and the survey is done once

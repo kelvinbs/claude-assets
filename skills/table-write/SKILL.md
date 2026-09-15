@@ -28,7 +28,7 @@ table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [-
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> unplace <ref>
-table-write.py <board-dir> room   <ref> <name> | --none
+table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
 table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
 table-write.py <board-dir> sim    set <name> <net> <source> | <net> --none | --directive <line>
 table-write.py <board-dir> sim    drop <name>
@@ -137,9 +137,15 @@ instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 
 ## room
 
-Puts an instance in a room, every row under the reference: `room R3
-Filter_I`. `--none` takes it out. A room is one function drawn together;
-the page lays a room as a box inside its block's box.
+Puts an instance in a room: `room R3 minus --under U15.2`. A room is a
+row of its own, T2.4a, with a uuid and a parent, so rooms nest. `--under`
+names what the room sits in — a room, an instance, or one unit of a
+package, written `U15.2`. Without it the room takes the parent the
+instance has today, so nothing moves but the level. `--none` puts the
+instance back under its room's own parent.
+
+The room is found or created on the instance's page under that parent,
+so naming the same room twice puts both instances in it.
 
 ## sim
 

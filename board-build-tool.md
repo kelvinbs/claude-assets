@@ -70,7 +70,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `room_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
 
@@ -132,14 +132,13 @@
 | 3 | `parent` | TEXT | | Yes |
 | 4 | `ref` | TEXT | | Yes |
 | 5 | `page` | TEXT | | Yes |
-| 6 | `room` | TEXT | | Yes |
-| 7 | `unit` | INTEGER | | Yes |
-| 8 | `path` | TEXT | Key | |
-| 9 | `parent_path` | TEXT | | Yes |
-| 10 | `x` | REAL | | Yes |
-| 11 | `y` | REAL | | Yes |
-| 12 | `rot` | INTEGER | | Yes |
-| 13 | `placed` | TEXT | | Yes |
+| 6 | `unit` | INTEGER | | Yes |
+| 7 | `path` | TEXT | Key | |
+| 8 | `parent_path` | TEXT | | Yes |
+| 9 | `x` | REAL | | Yes |
+| 10 | `y` | REAL | | Yes |
+| 11 | `rot` | INTEGER | | Yes |
+| 12 | `placed` | TEXT | | Yes |
 
 - An instance is `(uuid, path)`: the symbol drawn on a sheet, in one
   instance of that sheet. `uuid` is the symbol's uuid in the sheet file.
@@ -158,6 +157,28 @@
 - `placed` says who set it: `tool`, the packer; `hand`, a pull found the
   symbol somewhere other than where the record had it. Null with no
   place.
+
+**T2.4a — `room_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `uuid` | TEXT | Key | |
+| 2 | `path` | TEXT | Key | |
+| 3 | `name` | TEXT | | |
+| 4 | `parent` | TEXT | | Yes |
+| 5 | `parent_path` | TEXT | | Yes |
+| 6 | `page` | TEXT | | Yes |
+
+- A room is a node beside the instance, with the same key and the same
+  parent field. A room's parent is a room, an instance, or one unit of a
+  package; an instance's parent is the room it sits in. Rooms nest to any
+  depth because nothing in the schema tells the two apart.
+- `parent` names one row, and a row is one unit — T2.4. That is how a
+  discrete says which channel of a quad it serves, and nothing has to
+  resolve a uuid to a reference to find out.
+- A room carries no `ipn` and no nets. T2.9 relation 4 is untouched by it.
+- `ref_table.parent` may name a room, so it carries no declared foreign
+  key. The tools check it, as relations 4, 5 and 7 already are.
 
 **T2.5 — `source` letters**
 
@@ -313,14 +334,15 @@
 | # | From | To | Cardinality | On delete |
 |---|---|---|---|---|
 | 1 | `ref_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
-| 2 | `ref_table.parent`, `ref_table.parent_path` | `ref_table.uuid`, `ref_table.path` | Many-to-one, self | Set null |
+| 2 | `ref_table.parent`, `ref_table.parent_path` | `ref_table.uuid`, `ref_table.path` or `room_table.uuid`, `room_table.path` | Many-to-one | none — two possible targets, so the tools check it |
+| 2a | `room_table.parent`, `room_table.parent_path` | the same two | Many-to-one | none — as above |
 | 3 | `price_table.ipn` | `parts_table.ipn` | Many-to-one | Restrict |
 | 4 | `net_table.uuid` | `ref_table.uuid` | Many-to-one | `table-write` removes the nets with a drawing's last row |
 | 5 | `bus_table.net` | `net_table.net` | Many-to-one, by name | none — a member with no pin yet is allowed |
 | 6 | `sim_net_table.name` | `sim_table.name` | Many-to-one | Cascade |
 | 7 | `sim_net_table.block` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the reference on add |
 
-- 1 to 3 and 6 are declared foreign keys. 4 cannot be declared: `ref_table`'s
+- 1, 3 and 6 are declared foreign keys. 2 and 2a are not: a parent may name an instance or a room, and SQLite takes one target per key. 4 cannot be declared: `ref_table`'s
   key is `(uuid, path)` and a net belongs to the drawing, every path at
   once.
 - Every skill sets `PRAGMA foreign_keys = ON`.
