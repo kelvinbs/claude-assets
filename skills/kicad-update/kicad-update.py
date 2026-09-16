@@ -2345,11 +2345,11 @@ def flow(rows, blocks, project, ctx, width, start_y, height=None):
             if row.get("sheet"):
                 body += draw_one(row, x - half_w, y - half_h, 0, blocks,
                                  project, ctx)
-                packed_out.append((row["uuid"], snap(x - half_w),
+                packed_out.append((row["id"], snap(x - half_w),
                                    snap(y - half_h), 0))
             else:
                 body += draw_one(row, x, y, rot, blocks, project, ctx)
-                packed_out.append((row["uuid"], x, y, rot))
+                packed_out.append((row["id"], x, y, rot))
             drawn.append((x, y, half_w, half_h))
             refs.add(row["ref"])
         if len(refs) > 1:
@@ -2957,7 +2957,7 @@ def main(argv):
             try:
                 for u, px, py, prot in ctx["packed"]:
                     con.execute("update ref_table set x = ?, y = ?, rot = ?, "
-                                "placed = 'tool' where uuid = ?",
+                                "placed = 'tool' where id = ?",
                                 (px, py, prot, u))
                 con.commit()
             finally:
