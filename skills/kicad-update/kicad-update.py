@@ -1887,29 +1887,29 @@ def pull_positions(con, board, project, root_src):
     where the tool left it is not written. Returns (written, moved)."""
     placed, placed_sheets = read_pages(board, project,
                                        page_files(con, project, root_src))
-    known = {(u, p): (x, y, r) for u, p, x, y, r in con.execute(
-        "select id, path, x, y, rot from ref_table")}
-    hand = 0
+    # the symbol on the page is KiCad's uuid; the record's own key is id.
+    # One drawing in a sub-sheet is one node per instance, so a sym_uuid
+    # reaches several ids and every one takes the place.
     by_uuid = {}
-    for (u, p), v in known.items():
-        by_uuid.setdefault(u, []).append((p, v))
+    for nid, su, x, y, r in con.execute(
+            "select id, sym_uuid, x, y, rot from ref_table"):
+        if su:
+            by_uuid.setdefault(su, []).append((nid, (x, y, r)))
     written = moved = 0
     def put(u, x, y, rot):
         nonlocal written, moved
         if u not in by_uuid:
             return
-        for p, (ox, oy, orot) in by_uuid[u]:
+        for nid, (ox, oy, orot) in by_uuid[u]:
             if ox is None or abs(ox - x) > 0.01 or abs(oy - y) > 0.01 \
                     or (orot or 0) != rot:
                 if ox is not None:
                     moved += 1
                 # not where the tool left it: the hand's place, locked
                 con.execute("update ref_table set x = ?, y = ?, rot = ?, "
-                            "placed = 'hand' where uuid = ? and path = ?",
-                            (x, y, rot, u, p))
+                            "placed = 'hand' where id = ?",
+                            (x, y, rot, nid))
                 written += 1
-    for u, (fname, page, sym) in placed.items():
-        pass
     for path in sorted(board.glob(f"{project}-*.kicad_sch")):
         src = path.read_text()
         for a, b in symbol_blocks(src):
