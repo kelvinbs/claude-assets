@@ -124,11 +124,12 @@ and a board file. A page belongs to one board, so no page is shared and no
 page file is renamed.
 
 KiCad has no multi-board project: one board is one project and one project
-is one folder. So each board takes a folder of its own under the design
-folder — its root, its pages, its project file and its board file — and the
-record, the library, the parts and the models stay above them, shared. The
-folder gets its own `sym-lib-table` and `fp-lib-table` pointing at
-`${KIPRJMOD}/../lib`. A record naming one board or none keeps everything in
+is one folder. So the board projects sit together under
+`design/kicad files/`, one folder each, named for the project file it holds
+— root, pages, project file, board file — while the record, the library,
+the parts and the models stay in the design folder, shared and outside every
+project. Each folder gets its own `sym-lib-table` and `fp-lib-table`
+pointing at `${KIPRJMOD}/../../lib`. A record naming one board or none keeps everything in
 the design folder, as before.
 
 A net that reaches both boards is two nets, one per side, meeting at

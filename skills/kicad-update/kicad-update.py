@@ -958,17 +958,17 @@ def write_lib_tables(folder):
     for name, block in (
             ("sym-lib-table",
              '(sym_lib_table\n\t(version 7)\n\t(lib (name "%s")(type "KiCad")'
-             '(uri "${KIPRJMOD}/../lib/%s.kicad_sym")(options "")'
+             '(uri "${KIPRJMOD}/../../lib/%s.kicad_sym")(options "")'
              '(descr "Symbols owned by this project"))\n)\n'),
             ("fp-lib-table",
              '(fp_lib_table\n\t(version 7)\n\t(lib (name "%s")(type "KiCad")'
-             '(uri "${KIPRJMOD}/../lib/%s.pretty")(options "")'
+             '(uri "${KIPRJMOD}/../../lib/%s.pretty")(options "")'
              '(descr "Footprints owned by this project"))\n)\n')):
         path = folder / name
         if not path.exists():
-            nick = folder.parent.name if folder.parent.name else "lib"
-            src = (folder.parent / name).read_text() \
-                if (folder.parent / name).exists() else ""
+            top = folder.parent.parent
+            nick = "poc1"
+            src = (top / name).read_text() if (top / name).exists() else ""
             found = re.search(r'\(name "([^"]+)"\)', src)
             nick = found.group(1) if found else nick
             path.write_text(block % (nick, nick))
@@ -993,9 +993,11 @@ def roots_of(board, project, con):
         # KiCad has no multi-board project: one board is one project and one
         # project is one folder. A split record puts each board in its own,
         # beside the record and the library they share
-        # the folder is named for the project file it holds
-        folder = Path(board) / stem if name else Path(board)
-        folder.mkdir(exist_ok=True)
+        # the board projects live together under `kicad files`, one
+        # folder each, named for the project file it holds. Nothing of a
+        # board sits in the design folder beside the record
+        folder = Path(board) / "kicad files" / stem if name else Path(board)
+        folder.mkdir(parents=True, exist_ok=True)
         if name:
             write_lib_tables(folder)
         path = folder / f"{stem}.kicad_sch"
@@ -1658,7 +1660,7 @@ def sim_fields_for(row, part, models, project):
             return None, "no model written"
         sub, pins = models[row["ipn"]]
         return {"Sim.Device": "SUBCKT",
-                "Sim.Library": f"${{KIPRJMOD}}/../models/{project}.sp",
+                "Sim.Library": f"${{KIPRJMOD}}/../../models/{project}.sp",
                 "Sim.Name": sub, "Sim.Pins": pins}, ""
     return None, ""
 
