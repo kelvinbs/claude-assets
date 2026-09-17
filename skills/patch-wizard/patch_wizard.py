@@ -1,12 +1,17 @@
 """Aperture-fed patch, as a KiCad footprint wizard.
 
-One radiator, built as the copper actually is:
+Four features, each named for what it is:
 
-  the patch      a pad on an outer layer
-  the aperture   a rule area on the ground layer, copper pour not allowed,
-                 so the ground pour is cut where the slot belongs. An
-                 aperture is an absence of copper; a pad would be copper
-  the feed       a pad on the feed layer, crossing under the slot
+  patch      the radiator, a pad on the patch layer
+  aperture   the coupling slot: a rule area on the ground layer, copper pour
+             not allowed, so the pour is cut. An aperture is an absence of
+             copper - a pad would be copper
+  feed       the 50 Ohm line, a pad on the feed layer, its feed point at the
+             patch edge
+  stub       the open length of that line carried past the aperture
+
+A layer is named by what it carries. Nothing here says "inner layer": that
+would only be right for a feature meant for every inner layer.
 
 Every dimension is a parameter. The defaults are one openEMS run,
 tools/rf-simulation/px1, taken whole. A number in a simulation is not in
@@ -22,47 +27,53 @@ import FootprintWizardBase
 
 class PatchWizard(FootprintWizardBase.FootprintWizard):
 
-    # px1, taken whole
+    # tools/rf-simulation/px1, taken whole
     PX1 = {
         "patch_w": 10.45, "patch_l": 8.18,
         "ap_w": 4.0, "ap_l": 0.4,
-        "feed_w": 0.2377, "feed_stub": 4.008,
-        "patch_layer": "F.Cu", "gnd_layer": "In1.Cu", "feed_layer": "In2.Cu",
+        "feed_w": 0.2377, "stub": 4.008,
+        "patch_layer": "F.Cu", "ground_layer": "In1.Cu",
+        "feed_layer": "In2.Cu", "z0": 50.0,
     }
 
     def GetName(self):
         return "Aperture-fed patch"
 
     def GetDescription(self):
-        return ("One aperture-fed patch: radiator, the slot as a cut in the "
-                "ground pour, and the feed stub across it")
+        return ("Aperture-fed patch: the radiator, the slot cut in the "
+                "ground pour, and the 50 Ohm feed with its stub")
 
     def GenerateParameterList(self):
         p = self.PX1
         self.AddParam("Patch", "width", self.uMM, p["patch_w"])
         self.AddParam("Patch", "length", self.uMM, p["patch_l"])
-        self.AddParam("Patch", "layer", self.uString, p["patch_layer"])
+        self.AddParam("Patch", "patch layer", self.uString, p["patch_layer"])
 
         self.AddParam("Aperture", "width", self.uMM, p["ap_w"])
         self.AddParam("Aperture", "length", self.uMM, p["ap_l"])
-        self.AddParam("Aperture", "ground layer", self.uString, p["gnd_layer"])
-        self.AddParam("Aperture", "rotated", self.uBool, False)
+        self.AddParam("Aperture", "ground layer", self.uString,
+                      p["ground_layer"])
+        self.AddParam("Aperture", "along the patch width", self.uBool, True)
 
+        self.AddParam("Feed", "line impedance ohm", self.uFloat, p["z0"])
         self.AddParam("Feed", "line width", self.uMM, p["feed_w"])
-        self.AddParam("Feed", "stub past slot", self.uMM, p["feed_stub"])
-        self.AddParam("Feed", "layer", self.uString, p["feed_layer"])
-        self.AddParam("Feed", "draw", self.uBool, True)
+        self.AddParam("Feed", "stub past aperture", self.uMM, p["stub"])
+        self.AddParam("Feed", "feed layer", self.uString, p["feed_layer"])
 
     def CheckParameters(self):
         for group, key in (("Patch", "width"), ("Patch", "length"),
                            ("Aperture", "width"), ("Aperture", "length"),
-                           ("Feed", "line width")):
+                           ("Feed", "line width"),
+                           ("Feed", "stub past aperture")):
             if self.parameters[group][key] <= 0:
                 self.parameter_errors[group][key] = "must be positive"
-        if self.parameters["Aperture"]["width"] > \
-                self.parameters["Patch"]["width"]:
+        patch = self.parameters["Patch"]
+        ap = self.parameters["Aperture"]
+        along = ap["along the patch width"]
+        span = patch["width"] if along else patch["length"]
+        if ap["width"] > span:
             self.parameter_errors["Aperture"]["width"] = \
-                "slot is wider than the patch it feeds"
+                "longer than the patch dimension it lies along"
 
     def GetValue(self):
         p = self.parameters["Patch"]
@@ -73,35 +84,36 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
         n = self.board.GetLayerID(name) if self.board else -1
         return n if n >= 0 else fallback
 
-    def _pad(self, number, w, h, layer, x=0, y=0):
+    def _pad(self, number, name, w, h, layer, x=0, y=0):
         pad = pcbnew.PAD(self.module)
         pad.SetSize(pcbnew.VECTOR2I(int(w), int(h)))
         pad.SetShape(pcbnew.PAD_SHAPE_RECTANGLE)
         pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
-        pad.SetLayerSet(pcbnew.LSET(self._layer(layer)))
+        seq = pcbnew.LSEQ()
+        seq.push_back(self._layer(layer))
+        pad.SetLayerSet(pcbnew.LSET(seq))
         pad.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
         pad.SetNumber(str(number))
+        try:
+            pad.SetPinFunction(name)
+        except AttributeError:
+            pass
         return pad
 
     def _aperture(self, w, h, layer, x=0, y=0):
-        """The slot: a rule area that forbids copper pour, so the ground
-        pour is cut. Not a pad - a pad is copper."""
         z = pcbnew.ZONE(self.module)
         z.SetIsRuleArea(True)
         z.SetDoNotAllowZoneFills(True)
-        z.SetDoNotAllowTracks(False)
         z.SetDoNotAllowVias(True)
+        z.SetDoNotAllowTracks(False)
         z.SetDoNotAllowPads(False)
         z.SetDoNotAllowFootprints(False)
         z.SetLayer(self._layer(layer, pcbnew.In1_Cu))
-        pts = pcbnew.wxPoint_Vector() if hasattr(pcbnew, "wxPoint_Vector") \
-            else None
-        outline = pcbnew.SHAPE_POLY_SET()
-        outline.NewOutline()
+        pts = pcbnew.VECTOR_VECTOR2I()
         for dx, dy in ((-w / 2, -h / 2), (w / 2, -h / 2),
                        (w / 2, h / 2), (-w / 2, h / 2)):
-            outline.Append(int(x + dx), int(y + dy))
-        z.SetOutline(outline)
+            pts.push_back(pcbnew.VECTOR2I(int(x + dx), int(y + dy)))
+        z.AddPolygon(pts)
         return z
 
     def BuildThisFootprint(self):
@@ -109,25 +121,39 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
         ap = self.parameters["Aperture"]
         feed = self.parameters["Feed"]
 
-        self.module.Add(self._pad(1, patch["width"], patch["length"],
-                                  patch["layer"]))
+        pw, pl = patch["width"], patch["length"]
 
-        ap_w, ap_l = ap["width"], ap["length"]
-        if ap["rotated"]:
-            ap_w, ap_l = ap_l, ap_w
+        # the patch
+        self.module.Add(self._pad(1, "patch", pw, pl, patch["patch layer"]))
+
+        # the aperture, lying along the patch width unless told otherwise
+        if ap["along the patch width"]:
+            ap_w, ap_l = ap["width"], ap["length"]
+        else:
+            ap_w, ap_l = ap["length"], ap["width"]
         self.module.Add(self._aperture(ap_w, ap_l, ap["ground layer"]))
 
-        if feed["draw"]:
-            self.module.Add(self._pad(2, feed["line width"],
-                                      feed["stub past slot"] * 2,
-                                      feed["layer"]))
+        # the feed: 50 Ohm line, feed point at the patch edge, running in
+        # under the aperture and on past it by the stub
+        # from the patch edge at -pl/2, in under the aperture at 0, and on
+        # past it by the stub
+        run = pl / 2.0 + feed["stub past aperture"]
+        centre = -pl / 2.0 + run / 2.0
+        self.module.Add(self._pad(2, "feed", feed["line width"], run,
+                                  feed["feed layer"], 0, centre))
 
+        # fabrication: the patch edge, and the feed's impedance in words
         self.draw.SetLayer(pcbnew.F_Fab)
-        self.draw.Box(0, 0, patch["width"], patch["length"])
+        self.draw.Box(0, 0, pw, pl)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.1))
+        self.draw.TextSize(pcbnew.FromMM(0.8))
+        self.draw.Text(0, pl / 2.0 + pcbnew.FromMM(1.2),
+                       "feed %g ohm, feed point at the patch edge"
+                       % self.parameters["Feed"]["line impedance ohm"])
+
         self.draw.SetLayer(pcbnew.F_SilkS)
         self.draw.SetLineThickness(pcbnew.FromMM(0.12))
-        self.draw.Box(0, 0, patch["width"] + pcbnew.FromMM(0.4),
-                      patch["length"] + pcbnew.FromMM(0.4))
+        self.draw.Box(0, 0, pw + pcbnew.FromMM(0.4), pl + pcbnew.FromMM(0.4))
 
         self.module.SetAttributes(pcbnew.FP_SMD | pcbnew.FP_EXCLUDE_FROM_BOM)
 

@@ -1,122 +1,113 @@
-"""An array of aperture-fed patches, as one KiCad footprint wizard.
+"""An array of aperture-fed patches, as a placement graphic.
 
-The same radiator as patch_wizard, repeated on a grid, with the pitch a
-parameter rather than a placement. One object to place; move the array by
-moving it, change the spacing by editing the footprint.
+The array is not copper. It is the guide that says where the patches go: one
+outline per element on the fabrication layer, the element pitch, and the
+array's own extent. The patches themselves are separate footprints, placed
+against this.
 
-Pad numbering runs row by row from the top left: patch n is pad 3n+1, its
-slot 3n+2, its feed stub 3n+3.
+Nothing here is on a copper layer, so nothing here can short, pour or
+connect. Drawing the array as copper would put a second, stale copy of every
+patch on the board.
+
+Every dimension is a parameter. The defaults are one openEMS run,
+tools/rf-simulation/px1, taken whole.
+
+The wizard appears in the footprint editor under RF, "Patch array guide".
+KiCad finds it only in its own scripting path; see SKILL.md.
 """
 
 import pcbnew
 import FootprintWizardBase
 
 
-class PatchArrayWizard(FootprintWizardBase.FootprintWizard):
+class PatchArrayGuideWizard(FootprintWizardBase.FootprintWizard):
+
+    # tools/rf-simulation/px1, taken whole
+    PX1 = {
+        "rows": 2, "columns": 1,
+        "row_pitch": 22.32, "column_pitch": 22.45,
+        "patch_w": 10.45, "patch_l": 8.18,
+    }
 
     def GetName(self):
-        return "Aperture-fed patch array"
+        return "Patch array guide"
 
     def GetDescription(self):
-        return "A grid of aperture-fed patches: radiators, slots, feed stubs"
+        return ("Where the patches go: one outline per element, the pitch, "
+                "and the array extent. A graphic, not copper")
 
     def GenerateParameterList(self):
-        self.AddParam("Array", "rows", self.uInteger, 2)
-        self.AddParam("Array", "columns", self.uInteger, 1)
-        self.AddParam("Array", "row pitch", self.uMM, 22.32)
-        self.AddParam("Array", "column pitch", self.uMM, 22.45)
+        p = self.PX1
+        self.AddParam("Array", "rows", self.uInteger, p["rows"])
+        self.AddParam("Array", "columns", self.uInteger, p["columns"])
+        self.AddParam("Array", "row pitch", self.uMM, p["row_pitch"])
+        self.AddParam("Array", "column pitch", self.uMM, p["column_pitch"])
 
-        self.AddParam("Patch", "width", self.uMM, 10.45)
-        self.AddParam("Patch", "length", self.uMM, 8.18)
-        self.AddParam("Patch", "layer", self.uString, "F.Cu")
+        self.AddParam("Element", "patch width", self.uMM, p["patch_w"])
+        self.AddParam("Element", "patch length", self.uMM, p["patch_l"])
 
-        self.AddParam("Aperture", "width", self.uMM, 4.0)
-        self.AddParam("Aperture", "length", self.uMM, 0.4)
-        self.AddParam("Aperture", "layer", self.uString, "In1.Cu")
-        self.AddParam("Aperture", "rotated", self.uBool, False)
-
-        self.AddParam("Feed", "line width", self.uMM, 0.2377)
-        self.AddParam("Feed", "trunk length", self.uMM, 28.32)
-        self.AddParam("Feed", "layer", self.uString, "In2.Cu")
-        self.AddParam("Feed", "draw", self.uBool, True)
+        self.AddParam("Guide", "crosshair size", self.uMM, 1.0)
+        self.AddParam("Guide", "label elements", self.uBool, True)
 
     def CheckParameters(self):
         a = self.parameters["Array"]
+        e = self.parameters["Element"]
         if a["rows"] < 1:
             self.parameter_errors["Array"]["rows"] = "at least one"
         if a["columns"] < 1:
             self.parameter_errors["Array"]["columns"] = "at least one"
-        p = self.parameters["Patch"]
-        if a["rows"] > 1 and a["row pitch"] < p["length"]:
+        if a["rows"] > 1 and a["row pitch"] < e["patch length"]:
             self.parameter_errors["Array"]["row pitch"] = \
                 "closer than the patches are long"
-        if a["columns"] > 1 and a["column pitch"] < p["width"]:
+        if a["columns"] > 1 and a["column pitch"] < e["patch width"]:
             self.parameter_errors["Array"]["column pitch"] = \
                 "closer than the patches are wide"
 
     def GetValue(self):
         a = self.parameters["Array"]
-        return "patch_array_%dx%d" % (a["columns"], a["rows"])
-
-    def _layer(self, name):
-        n = self.board.GetLayerID(name) if self.board else -1
-        return n if n >= 0 else pcbnew.F_Cu
-
-    def _rect_pad(self, number, w, h, layer, x, y):
-        pad = pcbnew.PAD(self.module)
-        pad.SetSize(pcbnew.VECTOR2I(int(w), int(h)))
-        pad.SetShape(pcbnew.PAD_SHAPE_RECTANGLE)
-        pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
-        pad.SetLayerSet(pcbnew.LSET(self._layer(layer)))
-        pad.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
-        pad.SetNumber(str(number))
-        return pad
+        return "patch_array_guide_%dx%d" % (int(a["columns"]), int(a["rows"]))
 
     def BuildThisFootprint(self):
         a = self.parameters["Array"]
-        patch = self.parameters["Patch"]
-        ap = self.parameters["Aperture"]
-        feed = self.parameters["Feed"]
+        e = self.parameters["Element"]
+        g = self.parameters["Guide"]
 
         rows, cols = int(a["rows"]), int(a["columns"])
         rp, cp = a["row pitch"], a["column pitch"]
+        pw, pl = e["patch width"], e["patch length"]
         x0 = -cp * (cols - 1) / 2.0
         y0 = -rp * (rows - 1) / 2.0
+        half = g["crosshair size"] / 2.0
 
-        ap_w, ap_l = ap["width"], ap["length"]
-        if ap["rotated"]:
-            ap_w, ap_l = ap_l, ap_w
+        self.draw.SetLayer(pcbnew.F_Fab)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.1))
 
         n = 0
         for c in range(cols):
             x = x0 + c * cp
             for r in range(rows):
                 y = y0 + r * rp
-                self.module.Add(self._rect_pad(3 * n + 1, patch["width"],
-                                               patch["length"],
-                                               patch["layer"], x, y))
-                self.module.Add(self._rect_pad(3 * n + 2, ap_w, ap_l,
-                                               ap["layer"], x, y))
+                # where the patch sits, and its centre
+                self.draw.Box(x, y, pw, pl)
+                self.draw.Line(x - half, y, x + half, y)
+                self.draw.Line(x, y - half, x, y + half)
                 n += 1
-            # one trunk per column, running the length of the column
-            if feed["draw"]:
-                self.module.Add(self._rect_pad(3 * n, feed["line width"],
-                                               feed["trunk length"],
-                                               feed["layer"], x, 0))
+                if g["label elements"]:
+                    self.draw.TextSize(pcbnew.FromMM(0.8))
+                    self.draw.Text(x, y + pl / 2.0 + pcbnew.FromMM(0.9),
+                                   "AE%d" % n)
 
-        self.draw.SetLayer(pcbnew.F_Fab)
-        for c in range(cols):
-            x = x0 + c * cp
-            for r in range(rows):
-                y = y0 + r * rp
-                self.draw.Box(x, y, patch["width"], patch["length"])
-        self.draw.SetLayer(pcbnew.F_SilkS)
-        self.draw.SetLineThickness(pcbnew.FromMM(0.12))
-        self.draw.Box(0, 0,
-                      cp * (cols - 1) + patch["width"] + pcbnew.FromMM(0.4),
-                      rp * (rows - 1) + patch["length"] + pcbnew.FromMM(0.4))
+        # the array's extent, and the pitch it was drawn at
+        self.draw.SetLayer(pcbnew.Cmts_User)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.15))
+        self.draw.Box(0, 0, cp * (cols - 1) + pw, rp * (rows - 1) + pl)
+        self.draw.TextSize(pcbnew.FromMM(1.0))
+        self.draw.Text(0, rp * (rows - 1) / 2.0 + pl / 2.0 + pcbnew.FromMM(2.5),
+                       "patch guide %dx%d, row pitch %g, column pitch %g"
+                       % (cols, rows, pcbnew.ToMM(rp), pcbnew.ToMM(cp)))
 
-        self.module.SetAttributes(pcbnew.FP_SMD | pcbnew.FP_EXCLUDE_FROM_BOM)
+        self.module.SetAttributes(pcbnew.FP_EXCLUDE_FROM_POS_FILES
+                                  | pcbnew.FP_EXCLUDE_FROM_BOM)
 
 
-PatchArrayWizard().register()
+PatchArrayGuideWizard().register()

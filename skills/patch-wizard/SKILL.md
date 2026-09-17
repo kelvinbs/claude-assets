@@ -33,8 +33,12 @@ footprint editor.
 
 | Wizard | Makes |
 |---|---|
-| Aperture-fed patch | one radiator: the patch, the coupling slot in the ground below it, the feed stub that crosses the slot |
-| Aperture-fed patch array | the same radiator on a grid, with one feed trunk per column. Pitch is a parameter, not a placement |
+| Aperture-fed patch | one element, four named features: the patch, the aperture, the 50 Ohm feed, and the stub the feed carries past the aperture |
+| Patch array guide | where the patches go — one outline per element, its centre, the pitch and the array extent. A graphic, not copper |
+
+The array is deliberately not copper. Drawing it as copper would put a
+second, stale copy of every patch on the board; the patches are their own
+footprints, placed against the guide.
 
 ## Using it
 
@@ -47,24 +51,35 @@ then Save As into the project library under the name the record carries in
 | Group | Parameter | What it is |
 |---|---|---|
 | Patch | width, length | the radiator |
-| Patch | layer | the outer copper the patch sits on |
+| Patch | patch layer | the layer the patch is on, named for what it carries |
 | Aperture | width, length | the coupling slot |
-| Aperture | layer | the ground the slot is cut in |
-| Aperture | rotated | swaps the slot's two dimensions |
-| Feed | line width | the feed line |
-| Feed | stub past slot, trunk length | how far the line runs past the slot; in the array, the whole trunk |
-| Feed | layer | the layer the feed runs on |
-| Feed | draw | off when the feed is routed by hand instead |
+| Aperture | ground layer | the ground the slot is cut in |
+| Aperture | along the patch width | which patch dimension the slot lies along |
+| Feed | line impedance ohm | 50, and the footprint says so on the fabrication layer |
+| Feed | line width | the width that gives that impedance in this stack |
+| Feed | stub past aperture | the open length carried past the slot |
+| Feed | feed layer | the layer the feed runs on |
 | Array | rows, columns | the grid |
 | Array | row pitch, column pitch | the spacing |
+| Element | patch width, patch length | the outline the guide draws per element |
+| Guide | crosshair size, label elements | how the guide marks each centre |
 
-## What the pads are
+A layer is named by what it carries — the patch layer, the ground the
+aperture is cut in, the feed layer. Nothing is called an inner layer: that
+would only be right for a feature meant for every inner layer.
 
-Each patch is three pads on three layers: the radiator, the slot, the feed
-stub. The slot is a pad on the ground layer, so the zone that fills that
-layer is knocked back by it and the slot is cut. In the array the numbering
-runs row by row from the top left: patch n is pad 3n+1, its slot 3n+2, and
-the column's trunk takes the next free number.
+## What the features are
+
+| Feature | How it is built | Why |
+|---|---|---|
+| patch | pad 1 on the patch layer | the radiator, and where the net lands |
+| aperture | a rule area on the ground layer, copper pour not allowed | an aperture is the absence of copper. A pad would be copper and would cut nothing |
+| feed | pad 2 on the feed layer | the 50 Ohm line, its feed point at the patch edge |
+| stub | the part of pad 2 past the aperture | the open length that tunes the coupling |
+
+The aperture only shows its effect on a board with a filled ground pour. In
+the footprint editor there is nothing to cut, so it looks like an empty
+rectangle.
 
 ## The defaults are not the record
 
