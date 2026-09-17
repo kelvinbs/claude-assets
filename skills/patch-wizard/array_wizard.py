@@ -67,6 +67,20 @@ class PatchArrayGuideWizard(FootprintWizardBase.FootprintWizard):
         a = self.parameters["Array"]
         return "patch_array_guide_%dx%d" % (int(a["columns"]), int(a["rows"]))
 
+    def _text(self, x, y, value, size_mm=0.8, layer=None):
+        """A line of text on the footprint. KiCad 10's drawing aid has no
+        Text or TextSize, so the item is made here and added like any
+        other."""
+        t = pcbnew.PCB_TEXT(self.module)
+        t.SetText(value)
+        t.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
+        t.SetLayer(layer if layer is not None else self.draw.GetLayer())
+        t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(size_mm),
+                                      pcbnew.FromMM(size_mm)))
+        t.SetTextThickness(pcbnew.FromMM(size_mm / 8.0))
+        self.module.Add(t)
+        return t
+
     def BuildThisFootprint(self):
         a = self.parameters["Array"]
         e = self.parameters["Element"]
@@ -93,18 +107,13 @@ class PatchArrayGuideWizard(FootprintWizardBase.FootprintWizard):
                 self.draw.Line(x, y - half, x, y + half)
                 n += 1
                 if g["label elements"]:
-                    self.draw.TextSize(pcbnew.FromMM(0.8))
-                    self.draw.Text(x, y + pl / 2.0 + pcbnew.FromMM(0.9),
-                                   "AE%d" % n)
+                    self._text(x, y + pl / 2.0 + pcbnew.FromMM(0.9), "AE%d" % n, 0.8)
 
         # the array's extent, and the pitch it was drawn at
         self.draw.SetLayer(pcbnew.Cmts_User)
         self.draw.SetLineThickness(pcbnew.FromMM(0.15))
         self.draw.Box(0, 0, cp * (cols - 1) + pw, rp * (rows - 1) + pl)
-        self.draw.TextSize(pcbnew.FromMM(1.0))
-        self.draw.Text(0, rp * (rows - 1) / 2.0 + pl / 2.0 + pcbnew.FromMM(2.5),
-                       "patch guide %dx%d, row pitch %g, column pitch %g"
-                       % (cols, rows, pcbnew.ToMM(rp), pcbnew.ToMM(cp)))
+        self._text(0, rp * (rows - 1) / 2.0 + pl / 2.0 + pcbnew.FromMM(2.5), "patch guide %dx%d, row pitch %g, column pitch %g" % (cols, rows, pcbnew.ToMM(rp), pcbnew.ToMM(cp)), 1.0)
 
         self.module.SetAttributes(pcbnew.FP_EXCLUDE_FROM_POS_FILES
                                   | pcbnew.FP_EXCLUDE_FROM_BOM)

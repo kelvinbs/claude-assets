@@ -117,6 +117,20 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
         z.AddPolygon(pts)
         return z
 
+    def _text(self, x, y, value, size_mm=0.8, layer=None):
+        """A line of text on the footprint. KiCad 10's drawing aid has no
+        Text or TextSize, so the item is made here and added like any
+        other."""
+        t = pcbnew.PCB_TEXT(self.module)
+        t.SetText(value)
+        t.SetPosition(pcbnew.VECTOR2I(int(x), int(y)))
+        t.SetLayer(layer if layer is not None else self.draw.GetLayer())
+        t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(size_mm),
+                                      pcbnew.FromMM(size_mm)))
+        t.SetTextThickness(pcbnew.FromMM(size_mm / 8.0))
+        self.module.Add(t)
+        return t
+
     def BuildThisFootprint(self):
         patch = self.parameters["Patch"]
         ap = self.parameters["Aperture"]
@@ -150,10 +164,7 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
         self.draw.SetLineThickness(pcbnew.FromMM(0.15))
         self.draw.Line(pcbnew.FromMM(-0.6), fy, pcbnew.FromMM(0.6), fy)
         self.draw.Line(0, fy - pcbnew.FromMM(0.6), 0, fy + pcbnew.FromMM(0.6))
-        self.draw.TextSize(pcbnew.FromMM(0.7))
-        self.draw.Text(pcbnew.FromMM(1.2), fy,
-                       "feed point, %g ohm, %s"
-                       % (feed["line impedance ohm"], feed["feed layer"]))
+        self._text(pcbnew.FromMM(1.2), fy, "feed point, %g ohm, %s" % (feed["line impedance ohm"], feed["feed layer"]), 0.7)
         self.draw.SetLayer(pcbnew.F_SilkS)
         self.draw.SetLineThickness(pcbnew.FromMM(0.12))
         self.draw.Line(pcbnew.FromMM(-0.5), fy, pcbnew.FromMM(0.5), fy)
@@ -162,10 +173,7 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
         self.draw.SetLayer(pcbnew.F_Fab)
         self.draw.Box(0, 0, pw, pl)
         self.draw.SetLineThickness(pcbnew.FromMM(0.1))
-        self.draw.TextSize(pcbnew.FromMM(0.8))
-        self.draw.Text(0, pl / 2.0 + pcbnew.FromMM(1.2),
-                       "feed %g ohm, feed point at the patch edge"
-                       % self.parameters["Feed"]["line impedance ohm"])
+        self._text(0, pl / 2.0 + pcbnew.FromMM(1.2), "feed %g ohm, feed point at the patch edge" % self.parameters["Feed"]["line impedance ohm"], 0.8)
 
         self.draw.SetLayer(pcbnew.F_SilkS)
         self.draw.SetLineThickness(pcbnew.FromMM(0.12))
