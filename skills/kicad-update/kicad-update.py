@@ -157,6 +157,19 @@ def instances(con):
                  for r in con.execute(
                      "select id, sym_uuid, name, parent, page, corner "
                      "from ref_table where kind = 'room'")]
+    # A node that groups and never draws — a block parent, a part with no
+    # symbol and children under it — is a box like a room. The record says
+    # it is a node with children; the sheet has to show it.
+    ROOM_ROWS += [dict(zip(("id", "sym_uuid", "name", "parent", "page",
+                            "corner"), r))
+                  for r in con.execute(
+                      "select r.id, r.sym_uuid, r.ref, r.parent, r.page, "
+                      "r.corner from ref_table r "
+                      "join parts_table p on p.ipn = r.ipn "
+                      "where r.kind = 'part' and p.symbol is null "
+                      "and r.page is not null and r.page <> '' "
+                      "and exists (select 1 from ref_table c "
+                      "            where c.parent = r.id)")]
     # T2.4: the record holds the tree. A node's sheet path is the chain of
     # its sheet-instance parents from the root, so it is walked, not stored
     global PARENT_OF, SYM_OF, KIND_OF
