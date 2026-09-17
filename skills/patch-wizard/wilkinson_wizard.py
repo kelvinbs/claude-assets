@@ -126,14 +126,8 @@ class WilkinsonWizard(FootprintWizardBase.FootprintWizard):
         self.module.Add(self._pad(3, "branch2", rp, rp, lay,
                                   L / 2 - rp, rs / 2))
 
-        self.draw.SetLayer(pcbnew.Dwgs_User)
-        self.draw.SetLineThickness(pcbnew.FromMM(0.12))
-        self.draw.TextSize(pcbnew.FromMM(0.7))
-        self.draw.Text(0, gap / 2 + pcbnew.FromMM(1.6),
-                       "Wilkinson, arms %g mm, isolation resistor %g ohm"
-                       % (pcbnew.ToMM(L), 2 * line["system impedance ohm"]))
-
         self.draw.SetLayer(pcbnew.F_SilkS)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.12))
         self.draw.Box(0, 0, L + 2 * pl + pcbnew.FromMM(0.4),
                       gap + aw + pcbnew.FromMM(0.4))
 
