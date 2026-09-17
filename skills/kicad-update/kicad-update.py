@@ -2041,7 +2041,12 @@ def bus_alias_sexp(model):
 
 
 def write_bus_aliases(board, project, model):
-    """The bus aliases into every sheet file, after the paper line.
+    """The bus aliases into every sheet file, after the lib_symbols block.
+
+    Position matters: KiCad 10 writes them there, and a file carrying them
+    before `lib_symbols` loads with "An error was found when loading the
+    schematic that has been automatically fixed" - it moves them itself and
+    asks to be saved.
 
     KiCad 10 keeps them in the schematic, not the project: the GUI clears
     `schematic.bus_aliases` in the `.kicad_pro` on open and does not read
@@ -2055,10 +2060,15 @@ def write_bus_aliases(board, project, model):
         for a, b in sorted(top_blocks(src, "(bus_alias"), reverse=True):
             src = src[:a] + src[b:]
         if body:
-            m = re.search(r'\n\t\(paper "[^"]*"\)\n', src)
-            if not m:
-                raise Bad(f"{path.name} carries no paper line")
-            src = src[:m.end()] + body + src[m.end():]
+            spans = top_blocks(src, "(lib_symbols")
+            if spans:
+                at = spans[0][1]
+            else:
+                m = re.search(r'\n\t\(paper "[^"]*"\)\n', src)
+                if not m:
+                    raise Bad(f"{path.name} carries no paper line")
+                at = m.end()
+            src = src[:at] + body + src[at:]
         if src != before:
             path.write_text(src)
             changed += 1
