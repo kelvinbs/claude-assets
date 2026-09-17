@@ -46,7 +46,7 @@ together, at any point.
 |---|---|---|---|
 | `parts_view` | IPN | name, ipn, description, value, count, pages, mpn | What is on the board |
 | `assembly_view` | IPN, children under their parent | parent, ipn, description, count | What a function is built from |
-| `page_view` | instance | page, ref, ipn, description | What goes on a sheet |
+| `page_view` | instance | board, page, ref, ipn, description | What goes on a sheet, and on which board |
 | `library_view` | IPN | ipn, description, value, symbol, footprint, source, pinout_checked | What is drawn and what is not |
 | `sourcing_view` | IPN | name, ipn, description, mpn, manufacturer, datasheet, checked | What is bought |
 | `ready_view` | IPN | ipn, description, missing | What blocks layout |
@@ -61,7 +61,7 @@ together, at any point.
 |---|---|
 | `parts_view` | `select p.name, p.ipn, p.description, p.value, count(r.id) as count, group_concat(distinct r.page) as pages, p.mpn from parts_table p left join ref_table r using (ipn) group by p.ipn order by p.ipn;` |
 | `assembly_view` | `select coalesce(pp.ipn, p.ipn) as parent, p.name, p.ipn, p.description, count(r.id) as count from parts_table p left join ref_table r using (ipn) left join ref_table rp on rp.id = r.parent left join parts_table pp on pp.ipn = rp.ipn group by p.ipn, pp.ipn order by parent, pp.ipn is null desc, p.ipn;` |
-| `page_view` | `select r.page, r.ref, p.name, r.ipn, p.description from ref_table r join parts_table p using (ipn) order by r.page, r.ref;` |
+| `page_view` | `select coalesce(r.board, '—') as board, r.page, r.ref, p.name, r.ipn, p.description from ref_table r join parts_table p using (ipn) order by board, r.page, r.ref;` |
 | `library_view` | `select name, ipn, description, value, symbol, footprint, source, pinout_checked from parts_table order by symbol is not null, footprint is not null, ipn;` |
 | `sourcing_view` | `select p.name, p.ipn, p.description, p.mpn, p.manufacturer, p.datasheet, p.checked from parts_table p where p.mpn is not null order by p.ipn;` |
 | `ready_view` | `select p.name, p.ipn, p.description, trim(case when p.mpn is null then 'mpn ' else '' end \|\| case when p.symbol is null then 'symbol ' else '' end \|\| case when p.footprint is null then 'footprint' else '' end) as missing from parts_table p where missing <> '' order by p.ipn;` |

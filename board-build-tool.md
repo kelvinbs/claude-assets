@@ -141,6 +141,7 @@
 | 12 | `rot` | INTEGER | | Yes |
 | 13 | `placed` | TEXT | | Yes |
 | 14 | `corner` | TEXT | | Yes |
+| 15 | `board` | TEXT | | Yes |
 
 - **One node, one id.** `id` is the record's own and is the whole key. A
   row is a part instance or a room, told apart by `kind`: `part` or
@@ -163,6 +164,9 @@
   symbol somewhere other than where the record had it.
 - `corner` is which corner of its box a room's name is placed at: `nw`,
   `ne`, `sw`, `se`. Null is `nw`.
+- `board` is the physical board the node is on. A page is on one board,
+  so the column is set by page and every row of a page carries the same
+  value. A design of one board leaves it null.
 
 **T2.5 — `source` letters**
 
@@ -409,6 +413,7 @@
 
 | # | Rank | Dimension | Schematic | Board |
 |---|---|---|---|---|
+| 0 | 0 | `board` | — | Selects the board |
 | 1 | 1 | `page` | Selects the file — a root page, or a sub-sheet | — |
 | 2 | 1a | `parent` | Which instance of a sub-sheet, walked from the node's parents. Derived, never stored | — |
 | 3 | 2 | `room` | Block of the sheet | Region of the board |

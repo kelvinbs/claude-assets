@@ -95,6 +95,8 @@ SCHEMA = {
             "placed        TEXT",
             # which corner of its box a room's name is placed at
             "corner        TEXT",
+            # which physical board the node is on. A page is on one board
+            "board         TEXT",
             "PRIMARY KEY (id)",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of

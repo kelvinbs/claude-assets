@@ -29,6 +29,7 @@ table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
+table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
 table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
 table-write.py <board-dir> sim    set <name> <net> <source> | <net> --none | --directive <line>
 table-write.py <board-dir> sim    drop <name>
@@ -167,6 +168,15 @@ are printed with no source. `GND` is ground and gets nothing. `sim set
 and its rows. `sim show` lists every instance. `kicad-update --push`
 draws the sources and the directive, and marks everything outside the
 blocks excluded from simulation.
+
+## board
+
+Which board a node is on: `board rf --page RF`. `board` is a column of
+`ref_table` beside the room — the page selects the sheet file, the board
+selects the physical board. A page is on one board, so the column is set
+by page; `--ref` sets one instance, `--none` clears it, `--show` prints
+board by page. A row with a page and no board takes its page's board on
+the next run of any verb, so a part placed later does not rot.
 
 ## unplace
 

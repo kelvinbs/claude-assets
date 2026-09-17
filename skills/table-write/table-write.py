@@ -17,6 +17,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
     table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] [--corner nw|ne|sw|se] | --none
+    table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
     table-write.py <board-dir> show   [<ipn>]
 
 It adds what is missing and leaves what is there. An instance is removed only
@@ -591,6 +592,48 @@ def resolve_holder(con, spec):
         return got[0]
     raise Bad(f"{spec} names no instance, no unit and no room")
 
+def inherit_board(con):
+    """A row with a page and no board takes the board of its page. The
+    board is a property of the page — every row on one page is on one
+    board — so a row made after the page was assigned does not rot."""
+    return con.execute(
+        "update ref_table set board = (select r2.board from ref_table r2 "
+        "where r2.page = ref_table.page and r2.board is not null limit 1) "
+        "where board is null and page is not null and page <> ''").rowcount
+
+
+def board_verb(con, args):
+    """Say which board a thing is on. `board` is a column of `ref_table`
+    beside the room: the page selects the sheet file, the board selects
+    the physical board. Set it by page — a page is on one board — or by
+    one reference."""
+    if args.show:
+        rows = con.execute(
+            "select coalesce(board, '\u2014'), coalesce(page, '\u2014'), "
+            "count(*) from ref_table group by 1, 2 order by 1, 2").fetchall()
+        print("| board | page | rows |")
+        print("|---|---|---|")
+        for b, pg, n in rows:
+            print(f"| {b} | {pg} | {n} |")
+        return
+    name = None if args.none else args.name
+    if name is None and not args.none:
+        raise Bad("board wants a name, or --none, or --show")
+    if args.page:
+        n = con.execute("update ref_table set board = ? where page = ?",
+                        (name, args.page)).rowcount
+        where = f"page {args.page}"
+    elif args.ref:
+        instance_of(con, args.ref)
+        n = con.execute("update ref_table set board = ? where ref = ?",
+                        (name, args.ref)).rowcount
+        where = args.ref
+    else:
+        raise Bad("board wants --page or --ref")
+    con.commit()
+    print(f"{where}  board {name or '\u2014'} on {n} row(s)")
+
+
 def unplace(con, args):
     """Send an instance back to the packer: its place and mark cleared,
     every row of the drawing. The symbol on the sheet stays where it is
@@ -922,6 +965,14 @@ def main(argv):
     rm.add_argument("--none", action="store_true", help="out of its room")
     rm.set_defaults(run=room)
 
+    bd = sub.add_parser("board", help="which board a thing is on")
+    bd.add_argument("name", nargs="?", help="the board")
+    bd.add_argument("--page", help="every row on this page")
+    bd.add_argument("--ref", help="one instance")
+    bd.add_argument("--none", action="store_true", help="clear the board")
+    bd.add_argument("--show", action="store_true", help="board by page")
+    bd.set_defaults(run=board_verb)
+
     x = sub.add_parser("unplace", help="clear an instance's place")
     x.add_argument("ref")
     x.set_defaults(run=unplace)
@@ -969,6 +1020,8 @@ def main(argv):
                 and not IPN.match(args.ipn):
             raise Bad(f"'{args.ipn}' names no part")
         args.run(con, args)
+        if inherit_board(con):
+            con.commit()
     finally:
         con.close()
     return 0
