@@ -144,6 +144,21 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
                                   feed["feed layer"], 0, centre))
 
         # fabrication: the patch edge, and the feed's impedance in words
+        # the feed point, marked where it is: at the patch edge
+        fy = -pl / 2.0
+        self.draw.SetLayer(pcbnew.Dwgs_User)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.15))
+        self.draw.Line(pcbnew.FromMM(-0.6), fy, pcbnew.FromMM(0.6), fy)
+        self.draw.Line(0, fy - pcbnew.FromMM(0.6), 0, fy + pcbnew.FromMM(0.6))
+        self.draw.TextSize(pcbnew.FromMM(0.7))
+        self.draw.Text(pcbnew.FromMM(1.2), fy,
+                       "feed point, %g ohm, %s"
+                       % (feed["line impedance ohm"], feed["feed layer"]))
+        self.draw.SetLayer(pcbnew.F_SilkS)
+        self.draw.SetLineThickness(pcbnew.FromMM(0.12))
+        self.draw.Line(pcbnew.FromMM(-0.5), fy, pcbnew.FromMM(0.5), fy)
+        self.draw.Line(0, fy, 0, fy - pcbnew.FromMM(0.8))
+
         self.draw.SetLayer(pcbnew.F_Fab)
         self.draw.Box(0, 0, pw, pl)
         self.draw.SetLineThickness(pcbnew.FromMM(0.1))
