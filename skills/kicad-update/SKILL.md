@@ -10,7 +10,7 @@ record. The skill of stages 4 and 6.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch` — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
+| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
@@ -113,6 +113,19 @@ KiCad's own simulator, Inspect, Simulator, Run. What push writes:
   `exclude_from_sim` is `no`, the room is gone. The sheet is as it was.
 - Node `GND` is ground to ngspice. A net named as a rail, `3V3`, gets a
   DC source from `sim add`; the rest is the User's, `table-write sim set`.
+
+## Boards
+
+`ref_table.board` says which physical board a node is on, T2.4. A record
+that names one board, or none, is the ordinary project: `<project>.kicad_sch`,
+`.kicad_pro`, `.kicad_pcb`. Two or more and each board takes its own, named
+`<project>-board-<board>` — a root sheet with its own uuid, a project file
+and a board file. A page belongs to one board, so no page is shared and no
+page file is renamed; only the roots multiply.
+
+A net that reaches both boards is two nets, one per side, meeting at
+whatever part the design puts on the joint. That is what the netlist reads,
+and it is the point of splitting.
 
 ## Sub-sheets
 

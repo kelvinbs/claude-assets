@@ -460,7 +460,7 @@
 | 1 | `<project>/` | the root. Its name is the project name |
 | 2 | `design/` | the design folder — everything below lives in it |
 | 3 | `design/board.db` | the record |
-| 4 | `design/<project>.kicad_pro`, `design/<project>.kicad_sch`, `design/<project>.kicad_pcb` | the KiCad project |
+| 4 | `design/<project>.kicad_pro`, `design/<project>.kicad_sch`, `design/<project>.kicad_pcb` | the KiCad project. A record that names two or more boards in `ref_table.board` takes one set each, `design/<project>-board-<board>.*`, and no `<project>.*` — one root, one project file and one board file per board |
 | 5 | `design/sym-lib-table`, `design/fp-lib-table` | library resolution, committed |
 | 6 | `design/lib/` | symbols, footprints, `3d/` models |
 | 7 | `design/datasheets/` | manufacturer datasheets |
