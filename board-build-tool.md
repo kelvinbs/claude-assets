@@ -28,13 +28,13 @@
 
 ### 1.3 — How it works
 
-- The LLM performs the stages using the seven skills — T5.1.
+- The LLM performs the stages using the skills of T5.1.
 
 ### 1.4 — The contract
 
 - The structure — enforced and immutable:
   - The stages — T4.1
-  - The seven skills — T5.1
+  - The skills — T5.1
   - The tables with their keys — sections 2.3, 2.4 and 2.9
   - The relations — T2.9
 - The tool is stateless.
@@ -507,7 +507,7 @@
 | 2 | Update parts | `table-write` | — |
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
-| 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read` | — |
+| 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`patch-wizard` | — |
 | 6 | Update PCB | `kicad-update` | Routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
@@ -515,6 +515,9 @@
 - Both Update library stages — symbols, footprints, 3D: `copy-kicad-part`
   is primary. Borrow, not build.
 - On miss it returns `null` — the stage reports and stops.
+- A `pcb-feature` is the exception: it is copper the design draws, so no
+  library holds it and there is nothing to borrow. `patch-wizard` makes that
+  footprint, and the stage finishes.
 
 ### 4.2 — init-pipeline
 
@@ -588,6 +591,7 @@ One skill, one run — T4.2.
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 8 | `table-write` | Create or modify part; put a node in a room; record a vendor price survey; tag a simulation | Record row, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `sim_table`, `sim_net_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
+| 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, or an array of them | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 
 ### 5.3 — Layout
 
