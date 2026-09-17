@@ -8,7 +8,8 @@ Four features, each named for what it is:
              copper - a pad would be copper
   feed       the 50 Ohm line, a pad on the feed layer, its feed point at the
              patch edge
-  stub       the open length of that line carried past the aperture
+  stub       the open length of that line carried past the aperture. In px1
+             the trunk runs 3.0 past each slot
 
 A layer is named by what it carries. Nothing here says "inner layer": that
 would only be right for a feature meant for every inner layer.
@@ -31,7 +32,7 @@ class PatchWizard(FootprintWizardBase.FootprintWizard):
     PX1 = {
         "patch_w": 10.45, "patch_l": 8.18,
         "ap_w": 4.0, "ap_l": 0.4,
-        "feed_w": 0.2377, "stub": 4.008,
+        "feed_w": 0.2377, "stub": 3.0,
         "patch_layer": "F.Cu", "ground_layer": "In1.Cu",
         "feed_layer": "In2.Cu", "z0": 50.0,
     }
