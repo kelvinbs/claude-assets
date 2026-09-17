@@ -952,6 +952,28 @@ def board_of_page(con):
     return out
 
 
+def write_lib_tables(folder):
+    """A board folder reaches the shared library one level up. Written once;
+    an existing table is left alone."""
+    for name, block in (
+            ("sym-lib-table",
+             '(sym_lib_table\n\t(version 7)\n\t(lib (name "%s")(type "KiCad")'
+             '(uri "${KIPRJMOD}/../lib/%s.kicad_sym")(options "")'
+             '(descr "Symbols owned by this project"))\n)\n'),
+            ("fp-lib-table",
+             '(fp_lib_table\n\t(version 7)\n\t(lib (name "%s")(type "KiCad")'
+             '(uri "${KIPRJMOD}/../lib/%s.pretty")(options "")'
+             '(descr "Footprints owned by this project"))\n)\n')):
+        path = folder / name
+        if not path.exists():
+            nick = folder.parent.name if folder.parent.name else "lib"
+            src = (folder.parent / name).read_text() \
+                if (folder.parent / name).exists() else ""
+            found = re.search(r'\(name "([^"]+)"\)', src)
+            nick = found.group(1) if found else nick
+            path.write_text(block % (nick, nick))
+
+
 def roots_of(board, project, con):
     """One root per board - T2.4's `board` column. A record naming no board,
     or one, is the ordinary project: `<project>.kicad_sch`, `.kicad_pro`,
@@ -968,7 +990,14 @@ def roots_of(board, project, con):
         # `<project>-board-<board>`: a page file is `<project>-<page>`,
         # and a board named after a page would otherwise take its file
         stem = f"{project}-board-{slug(name)}" if name else project
-        path = Path(board) / f"{stem}.kicad_sch"
+        # KiCad has no multi-board project: one board is one project and one
+        # project is one folder. A split record puts each board in its own,
+        # beside the record and the library they share
+        folder = Path(board) / slug(name) if name else Path(board)
+        folder.mkdir(exist_ok=True)
+        if name:
+            write_lib_tables(folder)
+        path = folder / f"{stem}.kicad_sch"
         src = path.read_text() if path.exists() else None
         if src:
             found = re.search(r'\(uuid "([0-9a-f-]{36})"\)', src)
@@ -980,7 +1009,7 @@ def roots_of(board, project, con):
             # project and the board, so the same board keeps the same root
             root = uid(project, "root", name or "")
         out[name] = {"name": name, "stem": stem, "path": path,
-                     "uuid": root, "src": src}
+                     "dir": folder, "uuid": root, "src": src}
     return out
 
 
@@ -1017,23 +1046,34 @@ def page_files(con, project, root_src):
     return by_file
 
 
+def sheet_files(board, project, pattern=None):
+    """Every sheet file of this project, in the board folders under the
+    design folder. A hidden folder is an editor's, not the project's -
+    `.history/` holds stale copies and they are not sheets."""
+    pat = pattern or f"{project}-*.kicad_sch"
+    return sorted(q for q in Path(board).rglob(pat)
+                  if not any(part.startswith(".")
+                             for part in q.relative_to(board).parts))
+
+
 def read_pages(board, project, by_file):
     """Every symbol and every sheet symbol on every page: two maps, uuid ->
     (file name, page name, what was read)."""
     found, sheets = {}, {}
-    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+    for path in sheet_files(board, project):
         page = by_file.get(path.name)
         if page is None:
             continue
+        fname = str(path.relative_to(board))
         src = path.read_text()
         for start, end in symbol_blocks(src):
             sym = read_symbol(src[start:end])
             if sym["uuid"]:
-                found[sym["uuid"]] = (path.name, page, sym)
+                found[sym["uuid"]] = (fname, page, sym)
         for start, end in sheet_blocks(src):
             sh = read_sheet(src[start:end])
             if sh["uuid"]:
-                sheets[sh["uuid"]] = (path.name, page, sh)
+                sheets[sh["uuid"]] = (fname, page, sh)
     return found, sheets
 
 
@@ -1617,7 +1657,7 @@ def sim_fields_for(row, part, models, project):
             return None, "no model written"
         sub, pins = models[row["ipn"]]
         return {"Sim.Device": "SUBCKT",
-                "Sim.Library": f"${{KIPRJMOD}}/models/{project}.sp",
+                "Sim.Library": f"${{KIPRJMOD}}/../models/{project}.sp",
                 "Sim.Name": sub, "Sim.Pins": pins}, ""
     return None, ""
 
@@ -1813,7 +1853,7 @@ def push_sim_fittings(con, board, project, root, root_src, rows, sim):
         if not page:
             raise Bad(f"simulation block {sim['blocks'][0]} has no page")
     changed = {}
-    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+    for path in sheet_files(board, project):
         pg = by_file.get(path.name)
         if pg is None:
             continue
@@ -1891,12 +1931,12 @@ def is_sim_fitting(project, sym):
             and bool(SIM_REF.match(sym["props"].get("Reference", ""))))
 
 
-def push_board(board, project, root, root_src, rows, stem=None):
+def push_board(board, project, root, root_src, rows, stem=None, folder=None):
     """Record to board: every footprint whose Reference the record holds
     takes that instance's sheet path, so Update PCB from Schematic finds
     it where the symbol now is. Placement and routing untouched. Returns
     (rewritten, unknown references)."""
-    path = Path(board) / f"{stem or project}.kicad_pcb"
+    path = Path(folder or board) / f"{stem or project}.kicad_pcb"
     if not path.exists():
         return 0, []
     sheets = root_sheets(root_src)
@@ -1969,7 +2009,7 @@ def pull_positions(con, board, project, root_src):
                             "placed = 'hand' where id = ?",
                             (x, y, rot, nid))
                 written += 1
-    for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+    for path in sheet_files(board, project):
         src = path.read_text()
         for a, b in symbol_blocks(src):
             sym = read_symbol(src[a:b])
@@ -2007,7 +2047,7 @@ def write_bus_aliases(board, project, model):
     drops the token, so nothing may normalize a sheet after it."""
     body = bus_alias_sexp(model)
     changed = 0
-    for path in sorted(Path(board).glob(f"{project}*.kicad_sch")):
+    for path in sheet_files(board, project, f"{project}*.kicad_sch"):
         before = src = path.read_text()
         for a, b in sorted(top_blocks(src, "(bus_alias"), reverse=True):
             src = src[:a] + src[b:]
@@ -2478,9 +2518,12 @@ def merge_sheet(src, blocks, needed, body):
 
 def write_page(board, project, page, rows, blocks, fixed, ctx):
     """One page file: every drawing the record puts on it. `rows` are the
-    drawings, each with its paths."""
+    drawings, each with its paths. The file sits in its board's folder,
+    beside the root that carries it."""
     name = f"{project}-{slug(page)}.kicad_sch"
-    path = Path(board) / name
+    folder = ctx.get("dir") or Path(board)
+    path = Path(folder) / name
+    name = str(path.relative_to(Path(board)))
     needed = {r["symbol"] for r in rows if not r["sheet"]}
     model = ctx["model"]
 
@@ -2528,12 +2571,13 @@ def write_page(board, project, page, rows, blocks, fixed, ctx):
     return name, len(rows), 0
 
 
-def write_root(board, project, root, pages, model, fixed=None, stem=None):
+def write_root(board, project, root, pages, model, fixed=None, stem=None,
+               folder=None):
     """The root is the tool's. It carries one sheet symbol per root page,
     each pin a net or bus that leaves the page, each pin joined to a root
     label by a stub. Rewritten on every run; a page keeps its sheet uuid
     and its page number. Returns {page: (sheet uuid, page number)}."""
-    path = Path(board) / f"{stem or project}.kicad_sch"
+    path = Path(folder or board) / f"{stem or project}.kicad_sch"
     src = path.read_text() if path.exists() else None
     have = root_sheets(src)
     used = {n for _, n in have.values()}
@@ -2593,9 +2637,9 @@ def write_root(board, project, root, pages, model, fixed=None, stem=None):
     return {page: (ids[page], numbers[page]) for page in pages}
 
 
-def write_project_file(board, project, stem=None):
+def write_project_file(board, project, stem=None, folder=None):
     stem = stem or project
-    path = Path(board) / f"{stem}.kicad_pro"
+    path = Path(folder or board) / f"{stem}.kicad_pro"
     if path.exists():
         return False
     path.write_text(json.dumps({
@@ -2679,7 +2723,7 @@ def main(argv):
                 normalize_lib(library)
                 con.execute("update parts_table set symbol = ? "
                             "where ipn = ?", (f"{project}:{new}", ipn))
-                for path in sorted(board.glob(f"{project}-*.kicad_sch")):
+                for path in sheet_files(board, project):
                     text = path.read_text()
                     if f"{project}:{old}" not in text:
                         continue
@@ -2778,10 +2822,11 @@ def main(argv):
                     bpages = sorted({r["page"] for r in brows if r["page"]
                                      and r["page"] not in model.sheet_pages})
                     write_root(board, project, info["uuid"], bpages, model,
-                               stem=info["stem"])
+                               stem=info["stem"], folder=info["dir"])
                     normalize(info["path"])
                     info["src"] = info["path"].read_text()
-                    made = write_project_file(board, project, info["stem"])
+                    made = write_project_file(board, project, info["stem"],
+                                              folder=info["dir"])
                     print(f"{info['stem']}.kicad_pro  "
                           f"{'written' if made else 'kept'}")
                     print(f"{info['stem']}.kicad_sch  rewritten, "
@@ -2829,7 +2874,8 @@ def main(argv):
                              if board_of(r["page"]) == info["name"]]
                     fixed, unknown = push_board(board, project, info["uuid"],
                                                 info["src"], brows,
-                                                stem=info["stem"])
+                                                stem=info["stem"],
+                                                folder=info["dir"])
                     print(f"push  {fixed} footprint path(s) rewritten on "
                           f"{info['stem']}.kicad_pcb"
                           + (f"; not in the record: {' '.join(unknown)}"
@@ -3027,9 +3073,10 @@ def main(argv):
     sheets = {}
     for info in roots.values():
         bpages = [pg for pg in root_pages if board_of(pg) == info["name"]]
-        made = write_project_file(board, project, info["stem"])
+        made = write_project_file(board, project, info["stem"],
+                                  folder=info["dir"])
         sheets.update(write_root(board, project, info["uuid"], bpages, model,
-                                 stem=info["stem"]))
+                                 stem=info["stem"], folder=info["dir"]))
         normalize(info["path"])
         info["src"] = info["path"].read_text()
         print(f"{info['stem']}.kicad_pro  {'written' if made else 'kept'}")
@@ -3048,6 +3095,7 @@ def main(argv):
     for page in root_pages + sub_pages:
         on_page = [r for r in drawable if r["page"] == page]
         ctx = {"page": page, "model": model, "numbers": numbers,
+               "dir": roots[board_of(page)]["dir"],
                "templates": templates,
                "rooms": ROOM_ROWS,
                "path_of": lambda p, page=page: kicad_path(root_of(page),
