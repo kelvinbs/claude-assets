@@ -993,7 +993,8 @@ def roots_of(board, project, con):
         # KiCad has no multi-board project: one board is one project and one
         # project is one folder. A split record puts each board in its own,
         # beside the record and the library they share
-        folder = Path(board) / slug(name) if name else Path(board)
+        # the folder is named for the project file it holds
+        folder = Path(board) / stem if name else Path(board)
         folder.mkdir(exist_ok=True)
         if name:
             write_lib_tables(folder)
