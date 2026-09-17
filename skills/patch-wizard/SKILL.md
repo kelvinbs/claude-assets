@@ -5,9 +5,8 @@ description: Make a footprint for a printed feature no library holds — an aper
 
 # patch-wizard
 
-A footprint for copper that is the design, not a purchased device. The name
-is the first thing it built; the skill covers printed features generally —
-today a patch, an array guide and a Wilkinson divider. Stage 5's
+A footprint for copper that is the design, not a purchased device. The skill covers printed features: a patch, an array guide and a
+Wilkinson divider. Stage 5's
 other skill, `copy-kicad-part`, borrows a footprint from the installed
 libraries; no library holds your antenna, so for a `pcb-feature` there is
 nothing to borrow and the stage cannot finish. This skill is how it finishes.
