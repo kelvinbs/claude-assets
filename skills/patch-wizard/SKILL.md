@@ -5,7 +5,9 @@ description: Make a footprint for a printed feature no library holds — an aper
 
 # patch-wizard
 
-A footprint for copper that is the design, not a purchased device. Stage 5's
+A footprint for copper that is the design, not a purchased device. The name
+is the first thing it built; the skill covers printed features generally —
+today a patch, an array guide and a Wilkinson divider. Stage 5's
 other skill, `copy-kicad-part`, borrows a footprint from the installed
 libraries; no library holds your antenna, so for a `pcb-feature` there is
 nothing to borrow and the stage cannot finish. This skill is how it finishes.
@@ -35,6 +37,7 @@ footprint editor.
 |---|---|
 | Aperture-fed patch | one element, four named features: the patch, the aperture, the 50 Ohm feed, and the stub the feed carries past the aperture |
 | Patch array guide | where the patches go — one outline per element, its centre, the pitch and the array extent. A graphic, not copper |
+| Wilkinson divider | two quarter-wave arms, three ports and the isolation resistor's pads. Run backwards it is a combiner; the copper is the same |
 
 The array is deliberately not copper. Drawing it as copper would put a
 second, stale copy of every patch on the board; the patches are their own
@@ -63,10 +66,17 @@ then Save As into the project library under the name the record carries in
 | Array | row pitch, column pitch | the spacing |
 | Element | patch width, patch length | the outline the guide draws per element |
 | Guide | crosshair size, label elements | how the guide marks each centre |
+| Line | system impedance ohm, port width, port length, layer | the ports the divider presents, and where they sit |
+| Arms | length, width, separation | a quarter wavelength at the design frequency, at the width that makes Z0·√2 on this stack |
+| Resistor | pad size, pad separation | the chip resistor bridging the branches, 2·Z0 |
 
 A layer is named by what it carries — the patch layer, the ground the
 aperture is cut in, the feed layer. Nothing is called an inner layer: that
 would only be right for a feature meant for every inner layer.
+
+The arm width is given, not computed. The width that makes Z0·√2 depends on
+the stack, and on the px1 stack it lands near the fabricator's minimum track,
+so the choice belongs to whoever knows the stack.
 
 ## What the features are
 
