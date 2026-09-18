@@ -127,9 +127,13 @@ class WilkinsonWizard(FootprintWizardBase.FootprintWizard):
         # the isolation resistor, bridging the arms at their far ends
         rp = res["pad size"]
         rs = res["pad separation"]
-        self.module.Add(self._pad(2, "branch1", rp, rp, lay,
+        # no number on these either: they are where the chip resistor is
+        # soldered, at the far end of each arm, and they are already that
+        # arm's copper. Numbered, each branch would carry a second pad and
+        # the router would ask for a trace to it
+        self.module.Add(self._pad("", "iso1", rp, rp, lay,
                                   L / 2 - rp, -rs / 2))
-        self.module.Add(self._pad(3, "branch2", rp, rp, lay,
+        self.module.Add(self._pad("", "iso2", rp, rp, lay,
                                   L / 2 - rp, rs / 2))
 
         self.draw.SetLayer(pcbnew.F_SilkS)
