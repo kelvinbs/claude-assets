@@ -34,7 +34,9 @@ class WilkinsonWizard(FootprintWizardBase.FootprintWizard):
         "port_w": 0.2377,
         "gap": 1.2,
         "port_len": 1.0,
-        "layer": "In2.Cu",
+        # a printed part is drawn top-side; which face it ends on is a
+        # layout decision, and KiCad's flip makes it
+        "layer": "F.Cu",
         "res_pad": 0.6,
         "res_len": 1.0,
         "z0": 50.0,
