@@ -82,6 +82,8 @@ class WilkinsonWizard(FootprintWizardBase.FootprintWizard):
         return n if n >= 0 else fallback
 
     def _pad(self, number, name, w, h, layer, x, y):
+        """`number` empty makes copper that is not a port: KiCad joins it to
+        whatever it touches and asks nothing of the router."""
         pad = pcbnew.PAD(self.module)
         pad.SetSize(pcbnew.VECTOR2I(int(w), int(h)))
         pad.SetShape(pcbnew.PAD_SHAPE_RECTANGLE)
@@ -111,9 +113,11 @@ class WilkinsonWizard(FootprintWizardBase.FootprintWizard):
 
         # the common port, left
         self.module.Add(self._pad(1, "common", pl, pw, lay, -L / 2 - pl / 2, 0))
-        # the two arms, drawn as copper
+        # the two arms, drawn as copper. They carry NO pad number: an arm
+        # is the divider's own line, not a port, and a number would put it
+        # on the input's net and ask the router for a trace to it
         for sign in (-1, 1):
-            self.module.Add(self._pad(1, "common", L, aw, lay, 0,
+            self.module.Add(self._pad("", "arm", L, aw, lay, 0,
                                       sign * gap / 2))
         # the branch ports, right
         self.module.Add(self._pad(2, "branch1", pl, pw, lay,
