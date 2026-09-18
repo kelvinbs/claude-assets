@@ -596,7 +596,7 @@ One skill, one run — T4.2.
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 8 | `table-write` | Create or modify part; put a node in a room; record a vendor price survey; tag a simulation | Record row, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `sim_table`, `sim_net_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
-| 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, or a Wilkinson divider | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
+| 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 
 ### 5.3 — Layout
 

@@ -1,12 +1,12 @@
 ---
 name: patch-wizard
-description: Make a footprint for a printed feature no library holds — an aperture-fed patch, or an array of them. Stage 5.
+description: Make a footprint for a printed feature no library holds — an aperture-fed patch, an array of them, a Wilkinson divider or a rat-race hybrid ring. Stage 5.
 ---
 
 # patch-wizard
 
-A footprint for copper that is the design, not a purchased device. The skill covers printed features: a patch, an array guide and a
-Wilkinson divider. Stage 5's
+A footprint for copper that is the design, not a purchased device. The skill covers printed features: a patch, an array guide, a
+Wilkinson divider and a rat-race hybrid ring. Stage 5's
 other skill, `copy-kicad-part`, borrows a footprint from the installed
 libraries; no library holds your antenna, so for a `pcb-feature` there is
 nothing to borrow and the stage cannot finish. This skill is how it finishes.
@@ -30,13 +30,14 @@ ln -s <repo>/tools/board-build/skills/patch-wizard \
 KiCad reads it at start, or on Tools, External Plugins, Refresh in the
 footprint editor.
 
-## The two wizards
+## The four wizards
 
 | Wizard | Makes |
 |---|---|
 | Aperture-fed patch | one element, four named features: the patch, the aperture, the 50 Ohm feed, and the stub the feed carries past the aperture |
 | Patch array guide | where the patches go — one outline per element, its centre, the pitch and the array extent. A graphic, not copper |
 | Wilkinson divider | two quarter-wave arms, three ports and the isolation resistor's pads. Run backwards it is a combiner; the copper is the same |
+| Rat-race hybrid ring | a ring of one and a half guide wavelengths, four ports on it a quarter wavelength apart. Driven at the Δ port the two outputs are 3 dB and 180° apart; driven at Σ they are in phase. Run backwards it is a combiner, as the Wilkinson is |
 
 The array is deliberately not copper. Drawing it as copper would put a
 second, stale copy of every patch on the board; the patches are their own
@@ -68,6 +69,7 @@ then Save As into the project library under the name the record carries in
 | Line | system impedance ohm, port width, port length, layer | the ports the divider presents, and where they sit |
 | Arms | length, width, separation | a quarter wavelength at the design frequency, at the width that makes Z0·√2 on this stack |
 | Resistor | pad size, pad separation | the chip resistor bridging the branches, 2·Z0 |
+| Ring | quarter wavelength, track width | a quarter wavelength at the design frequency — the ring is six of them round — at the width that makes Z0·√2 on this stack |
 
 A layer is named by what it carries — the patch layer, the ground the
 aperture is cut in, the feed layer. Nothing is called an inner layer: that
