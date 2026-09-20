@@ -1,0 +1,12 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-assets",
+  "description": "Local marketplace for cross-project Claude assets.",
+  "owner": { "name": "kelvinbs" },
+  "plugins": [
+    { "name": "board-build", "source": "./board-build",
+      "description": "Claude-assisted hardware design in KiCad: record, library, schematic, PCB, in stages. Eight skills." },
+    { "name": "dev-process", "source": "./dev-process",
+      "description": "Dev-work state machine: one legal FSM move per turn, state in the plan file." }
+  ]
+}
