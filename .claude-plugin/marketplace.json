@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "board-build-local",
+  "description": "Local marketplace for the board-build plugin, which lives in the radar repo.",
+  "owner": {
+    "name": "kelvinbs"
+  },
+  "plugins": [
+    {
+      "name": "board-build",
+      "source": "./",
+      "description": "Claude-assisted hardware design in KiCad: record, library, schematic, PCB, in stages. Eight skills."
+    }
+  ]
+}
