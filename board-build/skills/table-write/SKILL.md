@@ -22,11 +22,12 @@ table-write.py <board-dir> add    --class A --description "..." [options]
 table-write.py <board-dir> set    <ipn> [--field value ...]
 table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
 table-write.py <board-dir> parent <ref> --under <ref> | --none
-table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--note ...]
+table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--part-notes ...]
 table-write.py <board-dir> drop   <ref>
 table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [--checked DATE] [--library L] --break QTY:PRICE ...
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
 table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
@@ -60,13 +61,15 @@ the sheet on a page first, then place parts on the sheet's page.
 `--description` is required. A part with no description is a row nobody can
 read six months later.
 
-`--value` and `--note` are the other `parts_table` fields it writes.
+`--value` and `--part-notes` are the other `parts_table` fields it writes.
+`--part-notes` is what is true of the part wherever it is used. What one
+placement does is `ref_table.instance_notes`, written by the `notes` verb.
 
 `--parent` names the instance this one serves — the op-amp instance a
 feedback resistor closes the loop around. Parenthood is a property of use,
 so it is a reference, resolves to that instance's `id`, and goes on the
-`ref_table` rows with `--page` and `--room`. `show <ipn>` lists an
-instance's children.
+`ref_table` rows with `--page` and `--room`. `show <ipn>` lists the
+elements that name this part's instances as parent.
 
 There is no status to set. The record says what the design is, not how far
 along it is — see T2.3.

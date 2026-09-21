@@ -45,7 +45,7 @@ together, at any point.
 | View | One row per | Columns | Answers |
 |---|---|---|---|
 | `parts_view` | IPN | name, ipn, description, value, count, pages, mpn | What is on the board |
-| `assembly_view` | IPN, children under their parent | parent, ipn, description, count | What a function is built from |
+| `assembly_view` | IPN, elements grouped under the parent they name | parent, ipn, description, count | What a function is built from |
 | `page_view` | instance | board, page, ref, ipn, description | What goes on a sheet, and on which board |
 | `library_view` | IPN | ipn, description, value, symbol, footprint, source, pinout_checked | What is drawn and what is not |
 | `sourcing_view` | IPN | name, ipn, description, mpn, manufacturer, datasheet, checked | What is bought |

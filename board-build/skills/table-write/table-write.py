@@ -66,7 +66,7 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
-FIELDS = ("description", "value", "note", "name", "mpn", "manufacturer",
+FIELDS = ("description", "value", "part_notes", "name", "mpn", "manufacturer",
           "datasheet", "footprint", "sim_model", "sim_params")
 
 SIM_MODELS = ("R", "C", "L", "opamp", "rnet")
@@ -197,9 +197,9 @@ def under(con, sheet_id, nid):
 
 
 def parent_for(con, parent_ref, sheet_id):
-    """The parent id for a child in this sheet instance. A parent drawn in
+    """The parent id for a node in this sheet instance. A parent drawn in
     the same sub-sheet is matched instance for instance; otherwise the
-    sheet-instance node itself carries the child, so its path derives."""
+    sheet-instance node itself is the parent, so its path derives."""
     if not parent_ref:
         return sheet_id
     for (pid,) in con.execute("select id from ref_table where ref = ? "
@@ -253,7 +253,10 @@ def replicate_sheet(con, ipn, new_sheets):
 
 
 def check(field, value):
-    if value is None:
+    """A field's value on its way into `parts_table`. Empty is NULL and
+    nothing else: `--part-notes ""` clears the field, and a query for a
+    field with nothing in it is `is null` everywhere in the record."""
+    if value is None or value == "":
         return None
     return value
 
@@ -308,7 +311,7 @@ def setf(con, args):
                 f" where ipn = ?", tuple(changes.values()) + (args.ipn,))
     con.commit()
     for f, v in changes.items():
-        print(f"{args.ipn}  {f}: {row[f] or '—'} -> {v}")
+        print(f"{args.ipn}  {f}: {row[f] or '—'} -> {v if v is not None else '—'}")
 
 
 def place(con, args):
@@ -361,7 +364,7 @@ def reparent(con, args):
                       (args.ref,)).fetchone()
     if row is None:
         raise Bad(f"{args.ref} is not in ref_table")
-    child, was = row
+    node, was = row
     if args.none:
         new = None
     else:
@@ -524,7 +527,7 @@ def net(con, args):
 def room(con, args):
     """Put an instance in a room. A room is a row of its own with a uuid
     and a parent, so rooms nest: `room R3 Filter_I --under U15.2` makes
-    the room a child of U15's second unit and the instance a child of the
+    the room name U15's second unit as parent and the instance name the
     room. Without `--under` the room takes the parent the instance has
     today, so nothing moves but the level. `--none` puts the instance back
     under the room's own parent."""
@@ -632,6 +635,27 @@ def board_verb(con, args):
         raise Bad("board wants --page or --ref")
     con.commit()
     print(f"{where}  board {name or '\u2014'} on {n} row(s)")
+
+
+def notes(con, args):
+    """What this one node does here - `ref_table.instance_notes`, T2.4.
+    Written on every row of the reference, since a package's units and a
+    sub-sheet's instances are one placement to the engineer reading it."""
+    instance_of(con, args.ref)
+    text = None if args.none or args.text == "" else args.text
+    if text is None and not args.none:
+        for (nid, unit, got) in con.execute(
+                "select id, unit, instance_notes from ref_table "
+                "where ref = ? order by unit", (args.ref,)):
+            print(f"{args.ref}" + (f".{unit}" if unit else "")
+                  + "  " + (got or "\u2014"))
+        return
+    n = con.execute("update ref_table set instance_notes = ? where ref = ?",
+                    (text, args.ref)).rowcount
+    con.commit()
+    print(f"{args.ref}  instance_notes "
+          + ("cleared" if args.none else "set")
+          + f" on {n} row(s)")
 
 
 def unplace(con, args):
@@ -870,12 +894,16 @@ def show(con, args):
         if args.ipn:
             print(f"    source: {source or '—'}  symbol: {sym or '—'}"
                   f"  footprint: {fp or '—'}")
-            kids = [r[0] for r in con.execute(
-                "select r2.ref from ref_table r2 join ref_table r1"
-                " on r2.parent = r1.uuid where r1.ipn = ? order by r2.ref",
-                (ipn,))]
-            if kids:
-                print(f"    children: {' '.join(kids)}")
+            # T2.4: an element naming this one as parent is a part
+            # instance, which carries a ref, or a room, which carries a
+            # name instead
+            under = [r[0] for r in con.execute(
+                "select coalesce(r2.ref, r2.name) from ref_table r2"
+                " join ref_table r1 on r2.parent = r1.id"
+                " where r1.ipn = ? and coalesce(r2.ref, r2.name) is not null"
+                " order by 1", (ipn,))]
+            if under:
+                print(f"    same parent: {' '.join(under)}")
             nm, mp, mf, ds = con.execute(
                 "select name, mpn, manufacturer, datasheet from "
                 "parts_table where ipn = ?", (ipn,)).fetchone()
@@ -972,6 +1000,12 @@ def main(argv):
     bd.add_argument("--none", action="store_true", help="clear the board")
     bd.add_argument("--show", action="store_true", help="board by page")
     bd.set_defaults(run=board_verb)
+
+    nt = sub.add_parser("notes", help="what this instance does here")
+    nt.add_argument("ref")
+    nt.add_argument("text", nargs="?", help="omit to show what is there")
+    nt.add_argument("--none", action="store_true", help="clear the notes")
+    nt.set_defaults(run=notes)
 
     x = sub.add_parser("unplace", help="clear an instance's place")
     x.add_argument("ref")

@@ -158,8 +158,8 @@ def instances(con):
                      "select id, sym_uuid, name, parent, page, corner "
                      "from ref_table where kind = 'room'")]
     # A node that groups and never draws — a block parent, a part with no
-    # symbol and children under it — is a box like a room. The record says
-    # it is a node with children; the sheet has to show it.
+    # symbol and elements naming it as parent — is a box like a room. The
+    # record says elements sit under it; the sheet has to show it.
     ROOM_ROWS += [dict(zip(("id", "sym_uuid", "name", "parent", "page",
                             "corner"), r))
                   for r in con.execute(
@@ -183,11 +183,13 @@ def instances(con):
         if (sym or "").startswith("sheet:")}
     rows = []
     for nid, sym_uuid, ipn, ref, page, unit, symbol, footprint, \
-            description, datasheet, manufacturer, mpn, note, checked, \
+            description, datasheet, manufacturer, mpn, part_notes, \
+            instance_notes, checked, \
             name, x, y, rot, placed in con.execute(
             "select r.id, r.sym_uuid, r.ipn, r.ref, r.page, r.unit, "
             "       p.symbol, p.footprint, p.description, p.datasheet, "
-            "       p.manufacturer, p.mpn, p.note, p.checked, p.name, "
+            "       p.manufacturer, p.mpn, p.part_notes, "
+            "       r.instance_notes, p.checked, p.name, "
             "       r.x, r.y, r.rot, r.placed "
             "from ref_table r join parts_table p on p.ipn = r.ipn "
             "where r.kind = 'part' "
@@ -202,7 +204,9 @@ def instances(con):
             "value": value_of(con, ipn, description),
             "description": description or "", "datasheet": datasheet or "",
             "manufacturer": manufacturer or "", "mpn": mpn or "",
-            "note": note or "", "checked": checked or "no",
+            "part_notes": part_notes or "",
+            "instance_notes": instance_notes or "",
+            "checked": checked or "no",
             "parent": "",
             "sheet": name if (symbol or "").startswith("sheet:") else "",
         })
@@ -267,9 +271,9 @@ def number_of(ref):
 
 
 def order_of(row):
-    """T2.12, ranks 2 and 3. Rooms come first, in name order. A child sorts
-    under its parent, so a parent and the parts that serve it stay together.
-    What has neither runs by reference."""
+    """T2.12, ranks 2 and 3. Rooms come first, in name order. A node sorts
+    under the node it names as parent, so a parent and the parts that serve
+    it stay together. What has neither runs by reference."""
     number = number_of(row["ref"])
     unit = row.get("unit") or 1
     parent = row.get("parent") or ""
@@ -319,7 +323,10 @@ def instance_sexp(project, path_uuid, row, x, y, bottom, right, rot=0):
         + property_sexp("Manufacturer", row["manufacturer"], f"{x:.2f}",
                         f"{y:.2f}", hide=True)
         + property_sexp("MPN", row["mpn"], f"{x:.2f}", f"{y:.2f}", hide=True)
-        + property_sexp("note", row["note"], f"{x:.2f}", f"{y:.2f}", hide=True)
+        + property_sexp("part_notes", row["part_notes"], f"{x:.2f}",
+                        f"{y:.2f}", hide=True)
+        + property_sexp("instance_notes", row["instance_notes"],
+                        f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("ipn", row["ipn"], f"{x:.2f}", f"{y:.2f}", hide=True)
         + property_sexp("parent", row["parent_field"], f"{x:.2f}", f"{y:.2f}",
                         hide=True)
@@ -654,7 +661,7 @@ def bus_breakout_sexp(page, bus, members, x, y):
 
 def unit_count(block, name):
     """How many units the symbol has - the greatest x in its NAME_x_y
-    children. 0 and shared children do not add units."""
+    sub-symbols. 0 and shared sub-symbols do not add units."""
     return max([int(m) for m in
                 re.findall(r'\(symbol "%s_(\d+)_\d+"' % re.escape(name),
                            block)] or [1])
@@ -1090,12 +1097,12 @@ def next_ref_free(con, prefix, taken):
 # ------------------------------------------------- the library fields (T2.11)
 
 FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
-          "MPN", "note", "ipn", "checked"]
+          "MPN", "part_notes", "ipn", "checked"]
 
 PULLED = {"Description": ("parts_table", "description"),
           "Value": ("parts_table", "value"),
           "Footprint": ("parts_table", "footprint"),
-          "note": ("parts_table", "note"),
+          "part_notes": ("parts_table", "part_notes"),
           "Manufacturer": ("parts_table", "manufacturer"),
           "Datasheet": ("parts_table", "datasheet")}
 
@@ -1104,9 +1111,10 @@ def field_rows(con, nickname):
     """One dict of T2.11 fields per part whose symbol is in this project's
     library, keyed by the symbol name."""
     out = {}
-    for ipn, description, value, footprint, note, symbol, mpn, \
+    for ipn, description, value, footprint, part_notes, symbol, mpn, \
             manufacturer, datasheet, checked in con.execute(
-            "select ipn, description, value, footprint, note, symbol, mpn, "
+            "select ipn, description, value, footprint, part_notes, "
+            "symbol, mpn, "
             "manufacturer, datasheet, checked from parts_table "
             "where symbol is not null"):
         nick, _, name = symbol.partition(":")
@@ -1120,7 +1128,7 @@ def field_rows(con, nickname):
                      "Manufacturer": manufacturer or "",
                      "MPN": mpn or "",
                      "checked": checked or "no",
-                     "note": note or ""}
+                     "part_notes": part_notes or ""}
     return out
 
 
@@ -1194,7 +1202,9 @@ def push_fields(con, library, nickname, only=None):
 INSTANCE_FIELDS = (("Value", "value"), ("Footprint", "footprint"),
                    ("Description", "description"), ("Datasheet", "datasheet"),
                    ("Manufacturer", "manufacturer"), ("MPN", "mpn"),
-                   ("note", "note"), ("parent", "parent_field"),
+                   ("part_notes", "part_notes"),
+                   ("instance_notes", "instance_notes"),
+                   ("parent", "parent_field"),
                    ("checked", "checked"))
 
 
@@ -2085,7 +2095,7 @@ def write_bus_aliases(board, project, model):
 
 
 def pull_fields(con, library, nickname):
-    """Library to record: Description, Value, Footprint, note, Manufacturer,
+    """Library to record: Description, Value, Footprint, part_notes, Manufacturer,
     Datasheet to `parts_table`. MPN is reported on mismatch, never
     written."""
     src = library.read_text()
@@ -2186,8 +2196,9 @@ def box_extent(items, down=False):
 
 def family_templates(rows):
     """The arrangement of every family whose parent has a place: keyed by
-    the parent's part, a list of (child part, dx, dy, rot) in child
-    reference order, offsets from the parent's origin. A first family
+    the parent's part, a list of (part, dx, dy, rot) over the elements
+    naming it as parent, in reference order, offsets from the parent's
+    origin. A first family
     with a given parent part is the template; later ones do not replace
     it."""
     by_page = {}
@@ -2223,8 +2234,9 @@ def family_templates(rows):
 def boxes_of(rows, blocks, model=None, templates=None, rooms_rows=None):
     """One node list, one walk. A node is a part instance or a room; both
     carry `(uuid, path)` and a parent that may be either. A room draws a
-    named box around its children; a part draws its symbol. Nothing asks
-    whether a child is family or a room, and a multi-unit package stays
+    named box around the elements naming it as parent; a part draws its
+    symbol. Nothing asks whether such an element is family or a room, and
+    a multi-unit package stays
     one node with its units side by side - kicad-update SKILL, Units."""
     # part nodes, one per reference, its unit rows together
     by_ref = {}

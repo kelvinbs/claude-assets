@@ -71,7 +71,7 @@
 | # | File | Holds |
 |---|---|---|
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
-| 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `note`, `ipn` |
+| 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `part_notes`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
 
 - `board.db` is master. Part fields push to the library symbol; instance
@@ -103,7 +103,7 @@
 | 4 | `symbol` | TEXT |  | Yes |
 | 5 | `footprint` | TEXT |  | Yes |
 | 6 | `source` | TEXT |  | Yes |
-| 7 | `note` | TEXT |  | Yes |
+| 7 | `part_notes` | TEXT |  | Yes |
 | 8 | `name` | TEXT | Unique | Yes |
 | 9 | `mpn` | TEXT |  | Yes |
 | 10 | `manufacturer` | TEXT |  | Yes |
@@ -142,6 +142,7 @@
 | 13 | `placed` | TEXT | | Yes |
 | 14 | `corner` | TEXT | | Yes |
 | 15 | `board` | TEXT | | Yes |
+| 16 | `instance_notes` | TEXT | | Yes |
 
 - **One node, one id.** `id` is the record's own and is the whole key. A
   row is a part instance or a room, told apart by `kind`: `part` or
@@ -164,6 +165,10 @@
   symbol somewhere other than where the record had it.
 - `corner` is which corner of its box a room's name is placed at: `nw`,
   `ne`, `sw`, `se`. Null is `nw`.
+- `instance_notes` is what this one node does here — the role this
+  placement serves. It is the node's, never the part's: two nodes of one
+  part carry different text. A note true of the part wherever it is used
+  is `parts_table.part_notes`, T2.3.
 - `board` is the physical board the node is on. A page is on one board,
   so the column is set by page and every row of a page carries the same
   value. A design of one board leaves it null.
@@ -384,7 +389,8 @@
 | 5 | `Datasheet` | the library symbol | `parts_table.datasheet` |
 | 6 | `Manufacturer` | the library symbol | `parts_table.manufacturer` |
 | 7 | `MPN` | the library symbol | `parts_table.mpn` |
-| 8 | `note` | the library symbol | `parts_table.note` |
+| 8 | `part_notes` | the library symbol | `parts_table.part_notes` |
+| 8a | `instance_notes` | the instance | `ref_table.instance_notes` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 | 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref`; in a sub-sheet, every instance's parent, space-separated |
 | 11 | `room` | the instance | `ref_table.room` |
@@ -401,9 +407,11 @@
 - `pinout_checked` stays in the record. It is not a project field and does
   not reach the library or the sheets.
 
-- `parent` and `room` are per-instance and never reach the library
-  symbol. They say what a part serves and which sub-circuit it sits in, so
-  an engineer reads the organisation off the page.
+- `parent` and `instance_notes` are per-instance and never reach the
+  library symbol. They say what a part serves and what this one placement
+  does, so an engineer reads the organisation off the page.
+- `part_notes` is the part's, so it is the same on every instance of it.
+  A note that is not true of every instance belongs in `instance_notes`.
 - `Value` is `parts_table.value`, what a person reads on a sheet. The IPN
   is the key and travels in its own field.
 
@@ -417,7 +425,7 @@
 | 1 | 1 | `page` | Selects the file — a root page, or a sub-sheet | — |
 | 2 | 1a | `parent` | Which instance of a sub-sheet, walked from the node's parents. Derived, never stored | — |
 | 3 | 2 | `room` | Block of the sheet | Region of the board |
-| 4 | 3 | `parent` | Groups a parent with its children | Groups a parent with its children |
+| 4 | 3 | `parent` | Groups a node with the elements that name it as parent | Groups a node with the elements that name it as parent |
 
 - Order of rooms within a page is arbitrary — subject to re-entry,
   section 4.3.
@@ -425,8 +433,8 @@
   is drawn where it is. The ranks order the rest, packed below what the
   hand placed, and the packer writes where it put each one, marked
   `tool`. A family with no hand place takes the arrangement of a family
-  marked `hand` with the same parent part and child parts, child to child
-  by part in reference order: the family template.
+  marked `hand` with the same parent part and the same parts under it,
+  matched one to one by part in reference order: the family template.
 - `--pull` writes a place only where the symbol is not where the record
   has it, and marks it `hand`; `--push` never writes one. Arrange by hand
   in KiCad, pull, and the arrangement is the record's. `table-write

@@ -55,7 +55,7 @@ SCHEMA = {
             "symbol        TEXT",
             "footprint     TEXT",
             "source        TEXT",
-            "note          TEXT",
+            "part_notes    TEXT",
             "name          TEXT",
             "mpn           TEXT",
             "manufacturer  TEXT",
@@ -97,6 +97,9 @@ SCHEMA = {
             "corner        TEXT",
             # which physical board the node is on. A page is on one board
             "board         TEXT",
+            # T2.4 — what this one node does here. The node's, never the
+            # part's; a note true of the part anywhere is part_notes
+            "instance_notes TEXT",
             "PRIMARY KEY (id)",
         ),
         # T2.6 — the price survey. One row per vendor break, so a build of
