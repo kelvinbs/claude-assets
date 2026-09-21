@@ -393,13 +393,12 @@
 | 8a | `instance_notes` | the instance | `ref_table.instance_notes` |
 | 9 | `ipn` | both | `parts_table.ipn`, the key |
 | 10 | `parent` | the instance | `ref_table.parent`, written as that instance's `ref`; in a sub-sheet, every instance's parent, space-separated |
-| 11 | `room` | the instance | `ref_table.room` |
+| 11 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 | 12 | `label` or `hierarchical_label` | the drawing's pin end | `net_table.net`, kind per T2.6c |
 | 12a | sheet symbol, its pins, the stubs and labels on them | the page a sub-sheet instance sits on | `ref_table` rows of the class-`B` part; pins per T2.6c; labels from `net_table` |
 | 12b | bus breakout | each file a bus leaves | `bus_table` |
 | 12c | `bus_alias` blocks | every `*.kicad_sch` | `bus_table`. Written last in a run: `kicad-cli sch upgrade` drops the block |
 | 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
-| 12 | `checked` | the library symbol | `parts_table.checked`. The User's field. The tool writes it out and never sets it |
 | 13 | `Sim.Device`, `Sim.Params`; `Sim.Library`, `Sim.Name`, `Sim.Pins` | the instance, every unit, inside the active simulation's blocks | `parts_table.sim_model`, `sim_params`, T2.3; an op-amp's subcircuit from `models/<project>.sp`, T2.6e. Outside the blocks the fields go |
 | 13a | `exclude_from_sim` | the instance | `no` inside the active simulation's blocks and on a part with fields; `yes` on everything else while a simulation is active; `no` everywhere with none |
 | 13b | source symbols `VS1` `VS2`, a label at each pin, the sim room and the directive text | the page of the first block | `sim_table`, `sim_net_table`. Tool fittings, `in_bom no`, `on_board no`, redrawn every push, gone when the instance is dropped |
