@@ -5,7 +5,7 @@
   "owner": { "name": "kelvinbs" },
   "plugins": [
     { "name": "board-build", "source": "./board-build",
-      "description": "Claude-assisted hardware design in KiCad: record, library, schematic, PCB, in stages. Eight skills." },
+      "description": "Claude-assisted hardware design in KiCad: record, library, schematic, PCB, in stages. Nine skills." },
     { "name": "dev-process", "source": "./dev-process",
       "description": "Dev-work state machine: one legal FSM move per turn, state in the plan file." }
   ]

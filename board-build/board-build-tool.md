@@ -40,8 +40,8 @@
 - The tool is stateless.
 - A field may be added to any table at runtime. Other schema change is a
   change to this document.
-- No code or skill outside T5.1. Authoring scripts at runtime is
-  prohibited.
+- No code or skill outside T5.1. No runtime script for any board-build
+  activity. Period.
 - ERC and DRC: the tool does not run the checks, but may set up the
   checks to be performed.
 - On a failure — or when a skill does not cover the work:
@@ -520,7 +520,7 @@
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`patch-wizard` | — |
-| 6 | Update PCB | `kicad-update` | Routes |
+| 6 | Update PCB | `kicad-update`<br>`cooperative-placement` | Placement, block by block; routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
@@ -604,6 +604,7 @@ One skill, one run — T4.2.
 | 8 | `table-write` | Create or modify part; put a node in a room; record a vendor price survey; tag a simulation | Record row, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `sim_table`, `sim_net_table` |
 | 9 | `kicad-update` | Place instances; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
+| 11 | `cooperative-placement` | Cooperative parts placement: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place | `board.db` — `ref_table`<br>the board open in KiCad, live | footprint positions and the selection, live; nothing saved |
 
 ### 5.3 — Layout
 
