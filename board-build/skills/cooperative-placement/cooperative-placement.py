@@ -62,6 +62,17 @@ def ensure_kipy():
     os.execv(str(PY), [str(PY), __file__, *sys.argv[1:]])
 
 
+def schematic_open():
+    """True when a Schematic Editor window is open. KiCad 10.0.5 hands board
+    API calls to the schematic editor's handler then, and crashes; the crash
+    is what brings up the restore dialog on the next launch."""
+    run = subprocess.run(["osascript", "-e", 'tell application "System Events" '
+                          'to get name of every window of (every process '
+                          'whose name contains "kicad")'],
+                         capture_output=True, text=True)
+    return "Schematic Editor" in run.stdout
+
+
 def block(db, key):
     """The refs of every part in the block `key` names, by board."""
     con = sqlite3.connect(db)
@@ -115,6 +126,8 @@ def main():
         raise Bad(f"no record at {db}")
     parts = block(db, a.key)
 
+    if schematic_open():
+        raise Bad("close the Schematic Editor first; KiCad crashes otherwise")
     try:
         b = KiCad(timeout_ms=10000).get_board()
     except Exception as e:

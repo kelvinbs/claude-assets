@@ -87,6 +87,11 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
 - `UpdateItems` crashes KiCad 10.0.5 the same way, in the schematic
   editor's `handleUpdateItems`, seen 2026-09-24 with the Schematic Editor
   open beside the PCB Editor. With the PCB Editor alone it has run clean.
+- So the script refuses while a Schematic Editor window is open, and
+  touches nothing. A crash leaves autosave files, and KiCad asks on the
+  next launch whether to restore them. The refusal is what keeps that
+  dialog from appearing.
+- Claude never crashes or kills KiCad to get past a refusal.
 
 ## 5 — What it refuses
 
@@ -94,3 +99,4 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
 - A name that is neither a room nor a ref
 - A name held by unrelated rooms, T2 row 4
 - No board open in KiCad, or no Edge.Cuts on it
+- A Schematic Editor window open, section 4
