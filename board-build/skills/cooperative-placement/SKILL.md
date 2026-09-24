@@ -14,17 +14,25 @@ time; Claude gathers each block for the User. The skill of stage 6, beside
 | `board.db` — `ref_table`<br>the board open in KiCad, live | the board open in KiCad — footprint positions and the selection. Nothing saved |
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> <room|ref> [--gap MM] [--width MM]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> <room|ref> [--except REF ...] [--gap MM] [--width MM]
 ```
 
 ## 1 — The mode
+
+- "Stage" and "cooperative placement" are the same thing. "Stage the
+  driver", "stage PA A except U10" are orders to run this skill.
+- An order is carried out, not discussed. No question, no proposal, no
+  confirmation, no notes. The User's global rules on proposing and asking
+  first do not apply to an order in this mode.
+- "Except" names parts to leave where they are: `--except`.
+- Only a refusal of the script, section 5, is reported, in one line.
 
 **T1 — One turn of the mode**
 
 | # | Who | Does |
 |---|---|---|
-| 1 | User | Names a block: a room, a schematic block, or a part |
-| 2 | Claude | Runs the script with that name. Nothing else |
+| 1 | User | Names a block: a room, a schematic block, or a part; and any part to leave out |
+| 2 | Claude | Runs the script with that name and `--except`. Nothing else |
 | 3 | Claude | Replies with the script's one line. No notes, no comments |
 | 4 | User | Drags the selected parts into place, and names the next block |
 
@@ -64,6 +72,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
 | 4 | Gap | `--gap` between parts on both axes, default 0.5 mm |
 | 5 | Anchor | the cluster's lower right corner `--gap` above the upper right corner of Edge.Cuts |
 | 6 | Finish | the parts selected in the editor |
+| 7 | Left out | refs named by `--except`, not moved, not selected |
 
 ## 4 — The link to KiCad
 
@@ -75,6 +84,9 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
   editor's handler when both editors are open, and crashes in
   `API_HANDLER_EDITOR::checkForBusy()`. Undo therefore takes each part
   back on its own.
+- `UpdateItems` crashes KiCad 10.0.5 the same way, in the schematic
+  editor's `handleUpdateItems`, seen 2026-09-24 with the Schematic Editor
+  open beside the PCB Editor. With the PCB Editor alone it has run clean.
 
 ## 5 — What it refuses
 

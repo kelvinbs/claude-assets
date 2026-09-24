@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """cooperative-placement — gather one block's footprints for the User to place.
 
-    cooperative-placement.py <board-dir> <room|ref> [--gap MM] [--width MM]
+    cooperative-placement.py <board-dir> <room|ref> [--except REF ...] [--gap MM] [--width MM]
 
 The User places parts on the board one block at a time. This script is
 Claude's half: it names the block from the record, finds its footprints in
@@ -12,7 +12,8 @@ place from there.
 The block is a room by `ref_table.name`, or a part by `ref`, and
 everything under it by `parent` — T2.4. Rooms of the same name nested in
 the one named are the same block. Two unrelated rooms of one name are
-refused; name a part instead.
+refused; name a part instead. `--except` leaves the refs it names where
+they are.
 
 The board is live: KiCad's IPC API, through `kicad-python` in the tool's
 own venv, `.venv` at the plugin root, made on first run. KiCad and the
@@ -104,6 +105,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("board_dir")
     ap.add_argument("key")
+    ap.add_argument("--except", dest="skip", nargs="+", default=[])
     ap.add_argument("--gap", type=float, default=0.5)
     ap.add_argument("--width", type=float, default=16.0)
     a = ap.parse_args()
@@ -120,6 +122,7 @@ def main():
     stem = Path(b.name).stem
     board = stem.split("-board-", 1)[1] if "-board-" in stem else None
     refs = {r for r, bd in parts if board is None or bd is None or bd == board}
+    refs -= set(a.skip)
     if not refs:
         raise Bad(f"{a.key!r} has no parts on board {board!r}")
 
