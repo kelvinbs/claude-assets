@@ -67,7 +67,8 @@ REF = re.compile(r"^([A-Z]+)(\d+)$")
 # Update parts writes the part. The library objects are Update library's,
 # written by symbol-draw and footprint-draw once copied into lib/
 FIELDS = ("description", "value", "part_notes", "name", "mpn", "manufacturer",
-          "datasheet", "footprint", "sim_model", "sim_params")
+          "datasheet", "symbol", "footprint", "source", "sim_model",
+          "sim_params")
 
 SIM_MODELS = ("R", "C", "L", "opamp", "rnet")
 SIM_KINDS = {"ac": ".ac dec 100 1 10meg", "tran": ".tran 1u 10m",

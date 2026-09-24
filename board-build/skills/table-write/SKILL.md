@@ -80,7 +80,9 @@ Changes fields on a part that exists. Prints what each field was and what it
 became, so a change is legible in the terminal as well as in the database.
 `--value` is what the sheet shows as Value. `--sim-model` is `R`, `C`, `L`,
 `opamp` or `rnet`, what the part is to the simulator; `--sim-params` its
-parameters, T2.3. `--footprint` takes the project footprint, `<nickname>:<name>`, written by
+parameters, T2.3. `--symbol` takes the project symbol, `<nickname>:<name>`, written after
+`copy-kicad-part` copies it; `--source` its T2.5 letters.
+`--footprint` takes the project footprint, `<nickname>:<name>`, written by
 the session at Update library — footprints, 3D (`copy-kicad-part.md`,
 Footprints).
 
