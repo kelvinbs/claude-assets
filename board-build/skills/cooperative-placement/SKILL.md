@@ -80,18 +80,14 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
   the plugin root. The script makes it on first run and runs itself in it;
   kept out of git.
 - The API server must be on in KiCad's preferences.
-- No commit is opened. KiCad 10.0.5 routes `BeginCommit` to the schematic
-  editor's handler when both editors are open, and crashes in
-  `API_HANDLER_EDITOR::checkForBusy()`. Undo therefore takes each part
-  back on its own.
-- `UpdateItems` crashes KiCad 10.0.5 the same way, in the schematic
-  editor's `handleUpdateItems`, seen 2026-09-24 with the Schematic Editor
-  open beside the PCB Editor. With the PCB Editor alone it has run clean.
-- So the script refuses while a Schematic Editor window is open, and
-  touches nothing. A crash leaves autosave files, and KiCad asks on the
-  next launch whether to restore them. The refusal is what keeps that
-  dialog from appearing.
-- Claude never crashes or kills KiCad to get past a refusal.
+- No commit is opened.
+- KiCad 10.0.5 keeps the schematic editor's API handler registered after
+  the Schematic Editor window closes. Its frame is gone, and the next
+  board call reaches it first and crashes KiCad in
+  `API_HANDLER_EDITOR::checkForBusy()`: seen 2026-09-24 on `BeginCommit`
+  and `UpdateItems`. A crash leaves the restore dialog on the next launch.
+- So the Schematic Editor, once opened, stays open until KiCad quits.
+  Open or never opened, the script runs clean. Claude never closes it.
 
 ## 5 — What it refuses
 
@@ -99,4 +95,3 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
 - A name that is neither a room nor a ref
 - A name held by unrelated rooms, T2 row 4
 - No board open in KiCad, or no Edge.Cuts on it
-- A Schematic Editor window open, section 4

@@ -17,9 +17,10 @@ they are.
 
 The board is live: KiCad's IPC API, through `kicad-python` in the tool's
 own venv, `.venv` at the plugin root, made on first run. KiCad and the
-board stay open. No commit is opened: KiCad 10.0.5 routes `BeginCommit`
-to the schematic editor's handler when both editors are open, and it
-crashes there.
+board stay open. No commit is opened. KiCad 10.0.5 keeps the schematic
+editor's API handler after that editor is closed, and a board call that
+reaches it crashes KiCad; so the Schematic Editor is not closed while
+KiCad runs.
 
 Pack: footprints by bounding box without text, tallest first, into rows no
 wider than `--width`, `--gap` apart on both axes. The cluster's lower right
@@ -60,17 +61,6 @@ def ensure_kipy():
             raise Bad("could not install kicad-python: "
                       + (run.stderr or run.stdout).strip()[-200:])
     os.execv(str(PY), [str(PY), __file__, *sys.argv[1:]])
-
-
-def schematic_open():
-    """True when a Schematic Editor window is open. KiCad 10.0.5 hands board
-    API calls to the schematic editor's handler then, and crashes; the crash
-    is what brings up the restore dialog on the next launch."""
-    run = subprocess.run(["osascript", "-e", 'tell application "System Events" '
-                          'to get name of every window of (every process '
-                          'whose name contains "kicad")'],
-                         capture_output=True, text=True)
-    return "Schematic Editor" in run.stdout
 
 
 def block(db, key):
@@ -126,8 +116,6 @@ def main():
         raise Bad(f"no record at {db}")
     parts = block(db, a.key)
 
-    if schematic_open():
-        raise Bad("close the Schematic Editor first; KiCad crashes otherwise")
     try:
         b = KiCad(timeout_ms=10000).get_board()
     except Exception as e:
