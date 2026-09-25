@@ -44,6 +44,7 @@ CLASSES = {
     "A": ("amplifier", "U"),
     "B": ("block, sub-sheet", "SH"),
     "C": ("capacitor", "C"),
+    "D": ("diode", "D"),
     "E": ("antenna", "AE"),
     "F": ("filter", "FL"),
     "G": ("synthesizer", "U"),

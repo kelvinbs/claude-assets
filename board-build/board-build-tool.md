@@ -354,6 +354,7 @@
 | 1 | `A` | Amplifier |
 | 1a | `B` | Block — a sub-sheet, drawn once, instanced where placed. Its `name` is the page it is drawn on; its `symbol` is `sheet:<name>`; its instances annotate as `SH` |
 | 2 | `C` | Capacitor |
+| 2a | `D` | Diode, TVS, ESD protection |
 | 3 | `E` | Antenna, panel |
 | 4 | `F` | Filter |
 | 5 | `G` | Synthesizer, PLL |
@@ -370,7 +371,7 @@
 | 16 | `W` | Splitter, coupler, bias tee |
 | 17 | `Y` | Oscillator, reference |
 
-- Ten letters match the KiCad reference designator for the same class.
+- Eleven letters match the KiCad reference designator for the same class.
 - `U0001` is a part, `U1` an instance.
 - A multi-unit package is one instance: one row per unit, same `ref`,
   own uuid, `unit` numbering them from 1. Every unit is placed and every
