@@ -537,14 +537,25 @@ def main(argv):
             raise Bad(f"'{project}' is not usable as a project name")
         con.execute("insert into project_table (name) values (?)", (project,))
         con.commit()
+    # T3.1 row 4: a record naming two or more boards keeps each board's
+    # project under `kicad files/`, kicad-update's. Nothing of a board sits
+    # in the design folder beside the record
+    boards = [r[0] for r in con.execute(
+        "select distinct board from ref_table where board is not null "
+        "and board <> '' order by board")]
     con.close()
-    for path, made in (make_project(board, project),
-                       make_sheet(board, project),
-                       make_board(board, project),
-                       make_library(board, project),
-                       make_pretty(board, project),
-                       make_table(board, project),
-                       make_fp_table(board, project)):
+    split = len(boards) >= 2
+    if split:
+        print(f"{board}  record names {len(boards)} boards "
+              f"({', '.join(boards)}): no project, root sheet or board "
+              f"written here; they are kicad-update's, under `kicad files/`")
+    for path, made in ((() if split else (make_project(board, project),
+                                          make_sheet(board, project),
+                                          make_board(board, project)))
+                       + (make_library(board, project),
+                          make_pretty(board, project),
+                          make_table(board, project),
+                          make_fp_table(board, project))):
         print(f"{path}  {'written' if made else 'already there'}")
     venv, made = ensure_converter()
     print(f"{venv}  {'created' if made else 'present'}  easyeda2kicad")

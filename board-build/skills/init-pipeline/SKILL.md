@@ -101,5 +101,10 @@ table sits in the project directory, its one path is `${KIPRJMOD}/lib/...`,
 and the nickname is the project's, so a fresh clone opens with nothing
 missing.
 
+A record whose `ref_table.board` names two or more boards gets no project
+file, root sheet or board file in the design folder: each board's project
+is `kicad-update`'s, under `design/kicad files/` (T3.1 row 4). The run
+says so. The library and the two tables are still made.
+
 A nickname already present and pointing elsewhere stops the run and is
 named. A file that is there is left exactly as it is, symbols included.

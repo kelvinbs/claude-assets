@@ -54,9 +54,15 @@ not written, and the run says so. The board projects under
 
 | # | Step | Status |
 |---|---|---|
-| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s1.2 | `init-pipeline.py`: read the boards `ref_table` names after the tables are made; two or more and the project, root sheet and board files are not made, and the run says so | implemented |
+| s1.3 | `init-pipeline/SKILL.md`, The KiCad project: the split-record rule | implemented |
+| s1.4 | Test on the scratch copy: split record gains `mate_table`, rows kept, no KiCad file in `design/`; a fresh single-board folder still gets all three | implemented |
+| s1.5 | Commit p1, code and docs together | implemented |
 
 **Notes:**
+
+- n1.1 s1.4 on the scratch copy: run reported the two boards and wrote no project, sheet or board in `design/`; `mate_table` created; ref_table 490, net_table 1044 rows before and after. Fresh folder `one/design`: `one.kicad_pro`, `.kicad_sch`, `.kicad_pcb` written
 
 ---
 
