@@ -24,6 +24,7 @@ table-write.py <board-dir> place  <ipn> --count N [--page P] [--room R]
 table-write.py <board-dir> parent <ref> --under <ref> | --none
 table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--part-notes ...]
 table-write.py <board-dir> drop   <ref>
+table-write.py <board-dir> drop-part <ipn>
 table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [--checked DATE] [--library L] --break QTY:PRICE ...
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> rename-net <old> <new> [--merge]
@@ -133,6 +134,15 @@ Removes one instance by its reference. One at a time, and it says which part
 it came out of. A sub-sheet instance takes the rows drawn under it. A
 drawing in a sub-sheet is one drawing, so its rows go together. A drawing's
 nets go with its last row.
+
+## drop-part
+
+Deletes a part no instance uses: `drop-part W0021`, or its name or MPN.
+Its `parts_table` row and its `price_table` rows go. A part any instance
+points at is refused, and the instances are named; `change-part` or `drop`
+them first. The library symbol, the footprint and the part file stay, and
+the run names them: they are the User's to remove, and they hold the
+number.
 
 ## net
 
@@ -298,6 +308,7 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
   pin already in a pair, two references on one board, or a reference on
   no board; a `mate --drop` of a pin in no pair
 - Lowering an instance count
+- A `drop-part` of a part any instance uses, or of no part
 - `add` with no description
 - A project folder with no `board.db`, or one missing a table
 
@@ -307,7 +318,9 @@ Each exits non-zero and names what it found.
 
 A reference number is free when no row holds it. `drop U4` then `place` puts
 `U4` back. The IPN number is not reused — the highest in the class is the
-mark, so a deleted part does not hand its number to the next one.
+mark, taken over the record, the part files under `parts/` and the `ipn`
+fields of the library symbols, so a deleted part does not hand its number
+to the next one.
 
 Nothing here annotates a sheet. These references are the tool's;
 `kicad-update` writes them out.

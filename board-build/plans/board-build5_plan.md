@@ -154,6 +154,13 @@ removed. Skill named: `table-write`.
 
 | # | Step | Status |
 |---|---|---|
-| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s5.2 | `table-write.py`: verb `drop-part <part>`: refuses a part in use, naming the instances; deletes the part and its price rows; reports symbol, footprint, part file left | implemented |
+| s5.3 | `table-write.py` `next_ipn`: the mark is the highest IPN in the record, the part files and the library's `ipn` fields | implemented |
+| s5.4 | Docs: `table-write/SKILL.md` usage, `drop-part`, refusals, Numbering; `board-build-tool.md` T5.1 row 8 | implemented |
+| s5.5 | Test on the scratch copy: drop W0021 while U35 uses it, refused; `change-part U35 W0020`; drop W0021 by name; again, refused; next W part is W0022 | implemented |
+| s5.6 | Commit p5, code and docs together | implemented |
 
 **Notes:**
+
+- n5.1 s5.5, first run: with the record alone as the mark, the next W part took W0021 again; pcb-features have no part file. The library symbol's `ipn` field added to the mark; second run gave W0022

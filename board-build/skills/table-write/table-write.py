@@ -102,10 +102,20 @@ def connect(board, name="board.db",
     return con
 
 
-def next_ipn(con, letter):
+def next_ipn(con, letter, board=None):
+    """The next number in a class: one past the highest the record holds,
+    a part file under `parts/` names, or a library symbol's `ipn` field
+    carries - a deleted part leaves its file and its symbol, so its number
+    is not handed on (T2.6)."""
     used = [IPN.match(r[0]) for r in
             con.execute("select ipn from parts_table where ipn glob ?",
                         (f"{letter}[0-9][0-9][0-9][0-9]",))]
+    if board:
+        used += [IPN.match(q.name[:5]) for q in
+                 (Path(board) / "parts").glob(f"{letter}[0-9][0-9][0-9][0-9]-*")]
+        for lib in (Path(board) / "lib").glob("*.kicad_sym"):
+            used += [IPN.match(v) for v in re.findall(
+                rf'\(property "ipn" "({letter}\d{{4}})"', lib.read_text())]
     n = max((int(m.group(2)) for m in used if m), default=0) + 1
     if n > 9999:
         raise Bad(f"class {letter} is full")
@@ -279,7 +289,7 @@ def add(con, args):
         raise Bad("a part needs a description")
 
     category, prefix = CLASSES[letter]
-    ipn = next_ipn(con, letter)
+    ipn = next_ipn(con, letter, args.board)
     values = {f: check(f, getattr(args, f, None)) for f in FIELDS}
     values["description"] = args.description
     if args.parent:
@@ -399,6 +409,32 @@ def ref_of(con, u):
     row = con.execute("select ref from ref_table where id = ?",
                       (u,)).fetchone()
     return row[0] if row else None
+
+
+def drop_part(con, args):
+    """Delete a part no instance uses: its parts_table row and its
+    price_table rows. Its number is not reused. The library symbol, the
+    footprint and the part file are reported, not removed."""
+    row = con.execute("select name, symbol, footprint from parts_table "
+                      "where ipn = ?", (args.ipn,)).fetchone()
+    if not row:
+        raise Bad(f"{args.ipn} names no part")
+    refs = sorted({r[0] or "?" for r in con.execute(
+        "select ref from ref_table where ipn = ?", (args.ipn,))})
+    if refs:
+        raise Bad(f"{args.ipn} is used by {len(refs)} instance(s): "
+                  + " ".join(refs))
+    prices = con.execute("delete from price_table where ipn = ?",
+                         (args.ipn,)).rowcount
+    con.execute("delete from parts_table where ipn = ?", (args.ipn,))
+    con.commit()
+    print(f"{args.ipn} {row[0] or ''}  deleted; {prices} price row(s)")
+    files = sorted((Path(args.board) / "parts").glob(f"{args.ipn}-*"))
+    for what, val in (("symbol", row[1]), ("footprint", row[2])):
+        if val:
+            print(f"    {what} {val} left in the library")
+    for q in files:
+        print(f"    part file {q.name} left; it holds the number")
 
 
 def drop(con, args):
@@ -1399,6 +1435,10 @@ def main(argv):
     sd.add_argument("name")
     smsub.add_parser("show", help="every simulation instance")
     sm.set_defaults(run=sim)
+
+    dp = sub.add_parser("drop-part", help="delete a part no instance uses")
+    dp.add_argument("ipn", help="IPN, name or MPN")
+    dp.set_defaults(run=drop_part)
 
     w = sub.add_parser("show", help="print parts and their instances")
     w.add_argument("ipn", nargs="?")
