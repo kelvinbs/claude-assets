@@ -35,6 +35,7 @@ table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> move   <ref> --page P
 table-write.py <board-dir> change-part <ref> <part>
 table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
+table-write.py <board-dir> drop-room <name> --page P [--under <room|ref|ref.unit>]
 table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
 table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
 table-write.py <board-dir> sim    set <name> <net> <source> | <net> --none | --directive <line>
@@ -172,7 +173,15 @@ instance has today, so nothing moves but the level. `--none` puts the
 instance back under its room's own parent.
 
 The room is found or created on the instance's page under that parent,
-so naming the same room twice puts both instances in it.
+so naming the same room twice puts both instances in it. A room named in
+`--under` is looked for on the instance's page, and must be the only room
+of that name there; otherwise name the instance or unit it sits under.
+
+## drop-room
+
+Drops an empty room: `drop-room Pad --page TX`. `--under` picks one of
+several rooms of that name on the page. A room that holds anything is
+refused.
 
 `--corner nw|ne|sw|se` says which corner of the box the room's name is
 placed at. Null is `nw`. It is a property of the room, so two rooms on
@@ -213,8 +222,9 @@ is placed afresh.
 
 Moves an instance to another page: `move R3 --page Motion`. Every row of
 the reference takes the page and that page's board, and its place is
-cleared, so the packer lays it there. A room it sat in stays on the old
-page; the instance takes the room's own parent. The reference, the ids,
+cleared, so the packer lays it there. Its rooms go with it: the chain
+of rooms it sat in is found or made on the new page, under the same
+instance or unit, and a room the move leaves empty is dropped. The reference, the ids,
 the symbol uuid and the nets are kept. `kicad-update --move` then takes
 the symbol off the old sheet and draws it on the new one.
 
@@ -270,7 +280,10 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 - A `sim_model` not `R`, `C`, `L`, `opamp` or `rnet`; a `sim add` kind not `ac`,
   `tran`, `dc` or `op`; a `--block` that names no instance; a `sim` name
   already taken, or one that names no instance on `set` and `drop`
-- A `parent` or `--under` that names no instance, or closes a loop
+- A `parent` or `--under` that names no instance, or closes a loop; a
+  room `--under` that names two rooms on the instance's page
+- A `drop-room` of a room that is not empty, that names no room, or that
+  names two without `--under`
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
 - A `rename-net` or `drop-net` of a net no row names; a `rename-net` onto a

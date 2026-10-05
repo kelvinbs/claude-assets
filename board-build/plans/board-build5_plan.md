@@ -79,9 +79,18 @@ page. A new verb drops an empty room by name and page. Skill named:
 
 | # | Step | Status |
 |---|---|---|
-| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s2.2 | `table-write.py` `move`: the row's room chain found or made on the new page under the same holder; rooms it leaves empty dropped, upward | implemented |
+| s2.3 | `table-write.py`: `room --under <name>` resolves on the instance's page and refuses two of that name; verb `drop-room <name> --page P [--under]` | implemented |
+| s2.4 | Docs: `table-write/SKILL.md` usage, `room`, `drop-room`, `move`, refusals; `board-build-tool.md` T5.1 row 8 | implemented |
+| s2.5 | Test on the scratch copy: move the whole TX tree, AE7 and AE8 to page `TX`; structure before and after compared; `--under` and `drop-room` cases and refusals | implemented |
+| s2.6 | Commit p2, code and docs together | implemented |
 
 **Notes:**
+
+- n2.1 s2.5: 55 parts moved RF to TX. Every part's room path to its first instance holder identical before and after. Rooms RF 34 to 22, TX 12; no TX room left under a RF-page holder. `room --under "PA A"` refused, 3 on TX; `--under U10` took. `drop-room` refused a non-empty room and an unknown one, dropped empty ones
+- n2.2 Seen, present before this plan: page `Compute` holds two empty rooms, `Ethernet` and `CM5`
+- n2.3 `/usr/bin/python3` is 3.9 and does not compile `table-write.py`, line 712, an f-string with a backslash. Tests ran on `/opt/homebrew/bin/python3`, 3.14
 
 ---
 

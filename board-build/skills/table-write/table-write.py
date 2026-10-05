@@ -617,7 +617,7 @@ def room(con, args):
         raise Bad("room wants a name, or --none")
     under = None
     if args.under:
-        under = resolve_holder(con, args.under)
+        under = resolve_holder(con, args.under, rows[0][1])
     n = 0
     for u, page, par in rows:
         hold = under if under else par
@@ -643,15 +643,27 @@ def room(con, args):
           + f" on {n} row(s)")
 
 
-def resolve_holder(con, spec):
+def resolve_holder(con, spec, page=None):
     """`U15`, `U15.2` or a room name: the id a parent names. A unit is
-    named with a dot, since one id names one node - T2.4."""
+    named with a dot, since one id names one node - T2.4. A room name is
+    looked for on `page` when one is given, and must name one room
+    there."""
     ref, _, unit = spec.partition(".")
     q = ("select id from ref_table where kind = 'part' and ref = ?"
          + (" and unit = ?" if unit else ""))
     got = con.execute(q, (ref, int(unit)) if unit else (ref,)).fetchone()
     if got:
         return got[0]
+    if page is not None:
+        got = [r[0] for r in con.execute(
+            "select id from ref_table where kind = 'room' and name = ? "
+            "and page is ?", (spec, page))]
+        if len(got) > 1:
+            raise Bad(f"{len(got)} rooms {spec} on {page}; name the "
+                      f"instance it sits under instead")
+        if got:
+            return got[0]
+        raise Bad(f"{spec} names no instance, no unit and no room on {page}")
     got = con.execute("select id from ref_table where kind = 'room' "
                       "and name = ?", (spec,)).fetchone()
     if got:
@@ -789,8 +801,10 @@ def change_part(con, args):
 def move(con, args):
     """Move an instance to another page, and so to that page's board. Every
     row of the reference takes the page, its place is cleared for the
-    packer, and a room it sat in stays behind on the old page. The
+    packer, and its chain of rooms is found or made on the new page under
+    the same holder. A room the move leaves empty is dropped. The
     reference, the ids, the symbol uuid and the nets are kept."""
+    import uuid as _u
     rows = con.execute("select id, ipn, page, parent from ref_table "
                        "where ref = ? and kind = 'part'",
                        (args.ref,)).fetchall()
@@ -808,18 +822,90 @@ def move(con, args):
     board = con.execute("select board from ref_table where page = ? "
                         "and board is not null limit 1",
                         (args.page,)).fetchone()
+    made, left = 0, set()
     for nid, _, _, parent in rows:
-        room_up = con.execute("select parent from ref_table where id = ? "
-                              "and kind = 'room'", (parent,)).fetchone()
+        # the rooms the row sits in, innermost first, up to the first
+        # holder that is not a room: an instance, a unit, or none
+        chain, hold = [], parent
+        while hold:
+            r = con.execute("select kind, name, corner, parent from "
+                            "ref_table where id = ?", (hold,)).fetchone()
+            if not r or r[0] != "room":
+                break
+            chain.append((r[1], r[2]))
+            left.add(hold)
+            hold = r[3]
+        # the same chain on the new page, outermost first
+        for name, corner in reversed(chain):
+            got = con.execute("select id from ref_table where kind = 'room' "
+                              "and name = ? and page = ? and parent is ?",
+                              (name, args.page, hold)).fetchone()
+            if got:
+                hold = got[0]
+                continue
+            rid = str(_u.uuid4())
+            con.execute("insert into ref_table (id, kind, name, parent, "
+                        "page, board, corner) values (?,'room',?,?,?,?,?)",
+                        (rid, name, hold, args.page,
+                         board[0] if board else None, corner))
+            made += 1
+            hold = rid
         con.execute("update ref_table set page = ?, board = ?, x = null, "
                     "y = null, rot = null, placed = null, parent = ? "
                     "where id = ?",
-                    (args.page, board[0] if board else None,
-                     room_up[0] if room_up else parent, nid))
+                    (args.page, board[0] if board else None, hold, nid))
+    dropped = prune_rooms(con, left)
     con.commit()
     print(f"{args.ref}  {was or '—'} -> {args.page}"
           + (f", board {board[0]}" if board else "")
-          + f" on {len(rows)} row(s); kicad-update --move draws it there")
+          + f" on {len(rows)} row(s)"
+          + (f"; {made} room(s) made there" if made else "")
+          + (f"; {dropped} empty room(s) dropped" if dropped else "")
+          + "; kicad-update --move draws it there")
+
+
+def prune_rooms(con, ids):
+    """Drop each room of `ids` that holds nothing, then its room parent if
+    that is left empty in turn. Returns how many went."""
+    gone, todo = 0, list(ids)
+    while todo:
+        rid = todo.pop()
+        r = con.execute("select kind, parent from ref_table where id = ?",
+                        (rid,)).fetchone()
+        if not r or r[0] != "room":
+            continue
+        if con.execute("select 1 from ref_table where parent = ? limit 1",
+                       (rid,)).fetchone():
+            continue
+        con.execute("delete from ref_table where id = ?", (rid,))
+        gone += 1
+        if r[1]:
+            todo.append(r[1])
+    return gone
+
+
+def drop_room(con, args):
+    """Drop an empty room, named by its name and page; `--under` picks one
+    of several of that name. A room holding anything is refused."""
+    q = ("select id from ref_table where kind = 'room' and name = ? "
+         "and page is ?")
+    vals = [args.name, args.page]
+    if args.under:
+        q += " and parent is ?"
+        vals.append(resolve_holder(con, args.under, args.page))
+    got = [r[0] for r in con.execute(q, vals)]
+    if not got:
+        raise Bad(f"no room {args.name} on {args.page}"
+                  + (f" under {args.under}" if args.under else ""))
+    if len(got) > 1:
+        raise Bad(f"{len(got)} rooms {args.name} on {args.page}; "
+                  f"--under names which")
+    if con.execute("select 1 from ref_table where parent = ? limit 1",
+                   (got[0],)).fetchone():
+        raise Bad(f"room {args.name} on {args.page} is not empty")
+    con.execute("delete from ref_table where id = ?", (got[0],))
+    con.commit()
+    print(f"room {args.name} on {args.page}  dropped")
 
 
 def unplace(con, args):
@@ -1244,6 +1330,12 @@ def main(argv):
                     help="which corner of the box the name is placed at")
     rm.add_argument("--none", action="store_true", help="out of its room")
     rm.set_defaults(run=room)
+
+    dr = sub.add_parser("drop-room", help="drop an empty room")
+    dr.add_argument("name")
+    dr.add_argument("--page", required=True)
+    dr.add_argument("--under", help="the room, instance or unit it sits in")
+    dr.set_defaults(run=drop_room)
 
     bd = sub.add_parser("board", help="which board a thing is on")
     bd.add_argument("name", nargs="?", help="the board")
