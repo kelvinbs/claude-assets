@@ -13,7 +13,7 @@ record. The skill of stages 4 and 6.
 | `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --push
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
@@ -222,13 +222,20 @@ Each run reads every page back and settles the difference both ways.
 | Symbol on a page, no `ipn` field, or one naming no part | Reported, left as is. The LLM names the part from the symbol and its `Value`, creates it with `table-write` if it is new, and reruns with `--assign <uuid>=<ipn>`; the script writes the `ipn` field and enters the row |
 | Symbol on a page whose `Reference` is held by another instance | Reported as a conflict, left as is. The User renames one |
 | Symbol on both sides, a field differs | left alone. Fields flow to instances by Update Symbols from Library, not by this tool |
-| Symbol on both sides, on a page other than `ref_table.page` | Reported. Moving a symbol between sheets would cut its wires |
+| Symbol on both sides, on a page other than `ref_table.page` | Reported. Moving a symbol between sheets would cut its wires. With `--move` it leaves that page and is drawn on its record page |
 
 The tool deletes on neither side. It cannot tell an instance the User
 removed from a sheet from one it has not placed yet, and it keeps no state
 to learn the difference — section 1.4. Removal is the User's: delete the
 symbol on the sheet first, then `table-write drop` in the record. The other
 order re-enters the symbol on the next run.
+
+`--move` follows `table-write move`. The symbol block leaves the old page
+file and the run draws it on the record's page, same uuid and reference,
+its labels on the next push. Wires the User drew to its old place stay
+on the old page, unjoined. Moved to another board, its footprint stays on
+the old board's PCB, where push reports it as not in the record; the new
+board takes it by Update PCB from Schematic.
 
 `--assign` is the one judgment the skill has. The script decides nothing
 about which part a symbol is; it reports the symbol and applies the answer.

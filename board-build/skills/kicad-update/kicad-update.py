@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """kicad-update — carry the record onto the pages, and the pages back.
 
-    kicad-update.py <board-dir> [--assign <uuid>=<ipn> ...]
+    kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
 
 The skill of stages 4 and 6. Every instance in `ref_table` that carries a
 page and whose part carries a symbol is drawn on that page, in the order of
@@ -2689,6 +2689,9 @@ def main(argv):
     ap.add_argument("--rename", nargs=2, metavar=("OLD", "NEW"),
                     help="rename a part: parts_table.name, the library "
                          "symbol, every sheet lib_id, one pass")
+    ap.add_argument("--move", action="store_true",
+                    help="place run: a symbol on a page other than its "
+                         "record page leaves it and is drawn on its own")
     ap.add_argument("--assign", action="append", default=[],
                     metavar="UUID=IPN",
                     help="the part a placed symbol is, when its ipn field "
@@ -3046,6 +3049,28 @@ def main(argv):
     elsewhere = {u for u, (fname, page, sym) in placed.items()
                  if u in by_uuid and by_uuid[u]["page"] != page}
 
+    # --move: a symbol on a page other than its record page leaves that
+    # page, and is drawn on its own below. Wires to its old place are left
+    # where they are, unjoined
+    moved, moved_files = [], set()
+    if args.move and elsewhere:
+        gone = {}
+        for u in elsewhere:
+            gone.setdefault(placed[u][0], set()).add(u)
+        for fname, us in sorted(gone.items()):
+            path = board / fname
+            src = path.read_text()
+            for a, b in sorted(symbol_blocks(src), reverse=True):
+                if read_symbol(src[a:b])["uuid"] in us:
+                    src = src[:a] + src[b:]
+            path.write_text(src)
+            moved_files.add(fname)
+        moved = [(by_uuid[u]["ref"], placed[u][0], by_uuid[u]["page"])
+                 for u in sorted(elsewhere)]
+        for u in elsewhere:
+            placed.pop(u)
+        mismatched, elsewhere = [], set()
+
     con = connect(board)
     try:
         model = Nets(con, rows)
@@ -3116,7 +3141,7 @@ def main(argv):
         nxt += 1
 
     templates = family_templates(rows)
-    touched = set(refreshed)
+    touched = set(refreshed) | moved_files
     for page in root_pages + sub_pages:
         on_page = [r for r in drawable if r["page"] == page]
         ctx = {"page": page, "model": model, "numbers": numbers,
@@ -3166,10 +3191,14 @@ def main(argv):
               "another instance, left as they are:")
         for u, fname, ref, other in conflicts:
             print(f"    {u}  {fname}  {ref} is {other}")
+    if moved:
+        print(f"\n{len(moved)} instance(s) moved to the record's page: "
+              + " ".join(f"{ref}:{f}->{p}" for ref, f, p in moved))
     if mismatched:
         print(f"\n{len(mismatched)} instance(s) on a page other than the "
               "record's, left where they are: "
-              + " ".join(f"{ref}:{f}!={p}" for ref, f, p in mismatched))
+              + " ".join(f"{ref}:{f}!={p}" for ref, f, p in mismatched)
+              + ". --move moves them")
     if orphan:
         print(f"\n{len(orphan)} drawing(s) in a sub-sheet with no instance, "
               "not drawn: " + " ".join(sorted(r["ref"] for r in orphan)))

@@ -78,9 +78,16 @@ with its pin labels, and the packer lays it there. Skills named:
 
 | # | Step | Status |
 |---|---|---|
-| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s2.2 | `table-write.py`: verb `move <ref> --page P`. Every row of the reference takes the new page and the new page's board, and its place is cleared. A parent that is a room leaves with the old page: the instance takes the room's own parent. Reference, ids, symbol UUID and nets kept. Refused for a reference that names no instance, a class-B sheet instance, a drawing in a sub-sheet, a sub-sheet page as target, and the page it is already on | implemented |
+| s2.3 | `kicad-update.py`: flag `--move` on the place run. A symbol found on a page other than its record page is removed from that page's file, its uuid then counting as not placed, so the run draws it on its record page. Without the flag the run reports it as today | implemented |
+| s2.4 | Docs: `table-write/SKILL.md` usage, a `move` section, refusals; `kicad-update/SKILL.md` usage, the return-direction row, a `--move` note that wires to the old place are left dangling and a footprint on the old board's PCB is reported there; `board-build-tool.md` T5.1 rows 8 and 9 | implemented |
+| s2.5 | Test on the scratch copy: move a part to another page on the same board, `kicad-update --move`, then `--push`; check the symbol left the old file, is drawn on the new page with its reference and uuid, its labels follow, a second run reports zeros. Each refusal once | implemented |
+| s2.6 | Commit p2, code and docs together. Push | implemented |
 
 **Notes:**
+
+- n2.1 s2.5 on the scratch copy: R1 moved MCU -> Motion, board rf, place cleared; place run without `--move` reported it, with `--move` it left `poc1-mcu.kicad_sch` and was drawn on `poc1-motion.kicad_sch`, same uuid; push wrote its MCU_NRST and 3V3 labels there; a rerun placed nothing and moved nothing. Refused: already on the page, unknown reference, sub-sheet instance SH1, drawing U24 in sub-sheet Buck, target Buck. RX_Block, a block parent with no symbol, moved as a row
 
 ---
 

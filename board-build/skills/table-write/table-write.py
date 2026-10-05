@@ -18,6 +18,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> drop-net <name>
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
+    table-write.py <board-dir> move   <ref> --page P
     table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] [--corner nw|ne|sw|se] | --none
     table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
     table-write.py <board-dir> show   [<ipn>]
@@ -718,6 +719,42 @@ def notes(con, args):
           + f" on {n} row(s)")
 
 
+def move(con, args):
+    """Move an instance to another page, and so to that page's board. Every
+    row of the reference takes the page, its place is cleared for the
+    packer, and a room it sat in stays behind on the old page. The
+    reference, the ids, the symbol uuid and the nets are kept."""
+    rows = con.execute("select id, ipn, page, parent from ref_table "
+                       "where ref = ? and kind = 'part'",
+                       (args.ref,)).fetchall()
+    if not rows:
+        raise Bad(f"{args.ref} names no instance")
+    ipn, was = rows[0][1], rows[0][2]
+    if ipn.startswith("B"):
+        raise Bad(f"{args.ref} is a sub-sheet instance; it stays where it is")
+    if was and sheet_part(con, was):
+        raise Bad(f"{args.ref} is drawn in sub-sheet {was}; it stays there")
+    if sheet_part(con, args.page):
+        raise Bad(f"{args.page} is a sub-sheet page")
+    if was == args.page:
+        raise Bad(f"{args.ref} is already on {args.page}")
+    board = con.execute("select board from ref_table where page = ? "
+                        "and board is not null limit 1",
+                        (args.page,)).fetchone()
+    for nid, _, _, parent in rows:
+        room_up = con.execute("select parent from ref_table where id = ? "
+                              "and kind = 'room'", (parent,)).fetchone()
+        con.execute("update ref_table set page = ?, board = ?, x = null, "
+                    "y = null, rot = null, placed = null, parent = ? "
+                    "where id = ?",
+                    (args.page, board[0] if board else None,
+                     room_up[0] if room_up else parent, nid))
+    con.commit()
+    print(f"{args.ref}  {was or '—'} -> {args.page}"
+          + (f", board {board[0]}" if board else "")
+          + f" on {len(rows)} row(s); kicad-update --move draws it there")
+
+
 def unplace(con, args):
     """Send an instance back to the packer: its place and mark cleared,
     every row of the drawing. The symbol on the sheet stays where it is
@@ -1077,6 +1114,11 @@ def main(argv):
     nt.add_argument("text", nargs="?", help="omit to show what is there")
     nt.add_argument("--none", action="store_true", help="clear the notes")
     nt.set_defaults(run=notes)
+
+    mv = sub.add_parser("move", help="move an instance to another page")
+    mv.add_argument("ref")
+    mv.add_argument("--page", required=True)
+    mv.set_defaults(run=move)
 
     x = sub.add_parser("unplace", help="clear an instance's place")
     x.add_argument("ref")

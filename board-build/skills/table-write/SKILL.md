@@ -31,6 +31,7 @@ table-write.py <board-dir> drop-net <name>
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
+table-write.py <board-dir> move   <ref> --page P
 table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
 table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
 table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
@@ -206,6 +207,15 @@ Clears an instance's place and mark, every row of the drawing. The symbol
 stays on the sheet where it is; the packer lays it the next time the page
 is placed afresh.
 
+## move
+
+Moves an instance to another page: `move R3 --page Motion`. Every row of
+the reference takes the page and that page's board, and its place is
+cleared, so the packer lays it there. A room it sat in stays on the old
+page; the instance takes the room's own parent. The reference, the ids,
+the symbol uuid and the nets are kept. `kicad-update --move` then takes
+the symbol off the old sheet and draws it on the new one.
+
 ## bus
 
 Groups nets into a bus: `bus RAILS 3V3 5V0 GND`. A net is in one bus; naming
@@ -239,6 +249,8 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 - A reference that names no instance
 - A `rename-net` or `drop-net` of a net no row names; a `rename-net` onto a
   name already in use without `--merge`
+- A `move` of a sub-sheet instance, of a drawing in a sub-sheet, onto a
+  sub-sheet page, or onto the page the instance is on
 - Lowering an instance count
 - `add` with no description
 - A project folder with no `board.db`, or one missing a table
