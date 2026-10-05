@@ -1230,14 +1230,25 @@ def push_instances(con, board, project, root, root_src, rows):
         path = board / fname
         before = src = path.read_text()
         out, last, count = [], 0, 0
-        edits = []
+        edits, need = [], set()
         for start, end in symbol_blocks(src):
             block = src[start:end]
-            u = read_symbol(block)["uuid"]
+            sym = read_symbol(block)
+            u = sym["uuid"]
             if u not in wanted:
                 continue
             row = draw[u]
             new = block
+            # the record's part changed (table-write change-part): the
+            # symbol takes the part's lib_id, same pins, and the page
+            # carries its definition
+            if row["symbol"] and not row["sheet"] \
+                    and sym["lib_id"] != row["symbol"]:
+                new = new.replace(f'(lib_id "{sym["lib_id"]}")',
+                                  f'(lib_id "{row["symbol"]}")', 1)
+                need.add(row["symbol"])
+            if sym["props"].get("ipn") != row["ipn"]:
+                new = set_property(new, "ipn", row["ipn"])
             for field, key in INSTANCE_FIELDS:
                 new = set_property(new, field, row[key])
             new = set_property(new, "Reference", row["ref"])
@@ -1260,7 +1271,16 @@ def push_instances(con, board, project, root, root_src, rows):
             count += 1
         if count:
             out.append(src[last:])
-            path.write_text("".join(out))
+            text = "".join(out)
+            if need:
+                blocks = library_blocks(board, project, need)
+                have = set(re.findall(r'\t\t\(symbol "([^"]+)"', text))
+                missing = "".join(indent_block(blocks[k], 1).rstrip() + "\n"
+                                  for k in sorted(need) if k not in have)
+                m = re.search(r"\(lib_symbols\n", text)
+                if missing and m:
+                    text = text[:m.end()] + missing + text[m.end():]
+            path.write_text(text)
             run = subprocess.run(["kicad-cli", "sch", "upgrade", "--force",
                                   str(path)], capture_output=True, text=True)
             if run.returncode != 0:

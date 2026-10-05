@@ -11,7 +11,7 @@ Create or modify a part. The skill of Update parts.
 |---|---|
 | `board.db` — `parts_table`, `ref_table`, `net_table`; the part files' pins | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
 
-Part fields reach KiCad by `kicad-update --push`. It never opens a KiCad file, and of the sourcing tables it touches only
+Part fields reach KiCad by `kicad-update --push`. It writes no KiCad file; `change-part` reads the project library for the two symbols' pins. Of the sourcing tables it touches only
 `init-pipeline` must have run first.
 
 It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves
@@ -32,6 +32,7 @@ table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> move   <ref> --page P
+table-write.py <board-dir> change-part <ref> <part>
 table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] | --none
 table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
 table-write.py <board-dir> sim    add <name> <kind> --block <ref> [--block <ref> ...]
@@ -216,6 +217,19 @@ page; the instance takes the room's own parent. The reference, the ids,
 the symbol uuid and the nets are kept. `kicad-update --move` then takes
 the symbol off the old sheet and draws it on the new one.
 
+## change-part
+
+Points an instance at another existing part: `change-part R3 R0007`, or
+the part's name or MPN — a resistor value, a capacitor from 0402 to 0603.
+Every row of the drawing takes the IPN: every unit, and in a sub-sheet
+every instance sharing its symbol. Nothing else in those rows changes —
+the reference, the ids, the symbol uuid, the nets, the parent and the
+room are kept. The two parts' symbols must carry the same pins on the same
+units, read from `lib/<project>.kicad_sym`. `kicad-update --push` then
+gives the symbol the new `lib_id` and fields; KiCad's Update PCB from
+Schematic keeps the footprint where it is, or swaps it in place when the
+footprint differs.
+
 ## bus
 
 Groups nets into a bus: `bus RAILS 3V3 5V0 GND`. A net is in one bus; naming
@@ -251,6 +265,10 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
   name already in use without `--merge`
 - A `move` of a sub-sheet instance, of a drawing in a sub-sheet, onto a
   sub-sheet page, or onto the page the instance is on
+- A `change-part` to a part that is not in the record, to the part the
+  instance already is, between parts one of which has no symbol or a
+  symbol the project library does not hold, or between symbols whose pins
+  differ
 - Lowering an instance count
 - `add` with no description
 - A project folder with no `board.db`, or one missing a table

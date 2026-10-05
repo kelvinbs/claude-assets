@@ -19,6 +19,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
     table-write.py <board-dir> move   <ref> --page P
+    table-write.py <board-dir> change-part <ref> <part>
     table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] [--corner nw|ne|sw|se] | --none
     table-write.py <board-dir> board  <name> --page P | --ref R | --none | --show
     table-write.py <board-dir> show   [<ipn>]
@@ -719,6 +720,71 @@ def notes(con, args):
           + f" on {n} row(s)")
 
 
+def symbol_pins(board, symbol):
+    """{pin number: unit} of a project-library symbol, `nick:name`, read
+    from `lib/<nick>.kicad_sym`; unit 0 is shared by every unit. None when
+    the library does not hold it."""
+    nick, _, name = (symbol or "").partition(":")
+    path = Path(board) / "lib" / f"{nick}.kicad_sym"
+    if not name or not path.exists():
+        return None
+    src = path.read_text(errors="replace")
+    start = src.find(f'\n\t(symbol "{name}"\n')
+    if start < 0:
+        return None
+    end = src.find('\n\t(symbol "', start + 1)
+    block = src[start:end if end > 0 else len(src)]
+    pins = {}
+    for m in re.finditer(r'\(symbol "%s_(\d+)_\d+"' % re.escape(name), block):
+        nxt = block.find('(symbol "', m.end())
+        body = block[m.end():nxt if nxt > 0 else len(block)]
+        for num in re.findall(r'\(number "([^"]*)"', body):
+            pins[num] = int(m.group(1))
+    return pins
+
+
+def change_part(con, args):
+    """Point an instance at another existing part: `ref_table.ipn` on every
+    row of its drawing, nothing else. The reference, the ids, the symbol
+    uuid, the nets, the parent and the room are kept, so the footprint keeps
+    its place. The two parts' symbols must carry the same pins on the same
+    units."""
+    rows = con.execute("select id, sym_uuid, ipn from ref_table where ref = ? "
+                       "and kind = 'part'", (args.ref,)).fetchall()
+    if not rows:
+        raise Bad(f"{args.ref} names no instance")
+    ipn = resolve(con, args.part)
+    new = part(con, ipn) if IPN.match(ipn) else None
+    if new is None:
+        raise Bad(f"'{args.part}' names no part")
+    old = part(con, rows[0][2])
+    if old["ipn"] == ipn:
+        raise Bad(f"{args.ref} is already {ipn}")
+    for p in (old, new):
+        if not p["symbol"]:
+            raise Bad(f"{p['ipn']} has no symbol; its pins cannot be compared")
+    a, b = symbol_pins(args.board, old["symbol"]), \
+        symbol_pins(args.board, new["symbol"])
+    for p, pins in ((old, a), (new, b)):
+        if pins is None:
+            raise Bad(f"{p['symbol']} is not in the project library")
+    if a != b:
+        raise Bad(f"{old['ipn']} and {ipn} differ in their pins: "
+                  f"{' '.join(sorted(set(a) ^ set(b))) or 'same numbers, other units'}")
+    syms = {s for _, s, _ in rows if s}
+    ids = {i for i, _, _ in rows}
+    for s in syms:
+        ids |= {i for (i,) in con.execute(
+            "select id from ref_table where sym_uuid = ?", (s,))}
+    marks = ",".join("?" * len(ids))
+    n = con.execute(f"update ref_table set ipn = ? where id in ({marks})",
+                    (ipn,) + tuple(ids)).rowcount
+    con.commit()
+    print(f"{args.ref}  {old['ipn']} -> {ipn} on {n} row(s): "
+          f"{old['value'] or '—'} {old['footprint'] or '—'} -> "
+          f"{new['value'] or '—'} {new['footprint'] or '—'}")
+
+
 def move(con, args):
     """Move an instance to another page, and so to that page's board. Every
     row of the reference takes the page, its place is cleared for the
@@ -1114,6 +1180,12 @@ def main(argv):
     nt.add_argument("text", nargs="?", help="omit to show what is there")
     nt.add_argument("--none", action="store_true", help="clear the notes")
     nt.set_defaults(run=notes)
+
+    cp = sub.add_parser("change-part",
+                        help="point an instance at another existing part")
+    cp.add_argument("ref")
+    cp.add_argument("part", help="IPN, name or MPN of an existing part")
+    cp.set_defaults(run=change_part)
 
     mv = sub.add_parser("move", help="move an instance to another page")
     mv.add_argument("ref")

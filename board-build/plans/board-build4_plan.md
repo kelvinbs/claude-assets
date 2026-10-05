@@ -111,9 +111,19 @@ existing row:
 
 | # | Step | Status |
 |---|---|---|
-| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s3.2 | `table-write.py`: verb `change-part <ref> <part>`, the part named as IPN, name or MPN. Every row of the drawing — every unit, every sub-sheet instance sharing its symbol uuid — takes the target IPN; nothing else in those rows changes. Refused when the reference names no instance, the part names no row, the part is the one it has, either part has no symbol, or the two symbols' pins differ. Pins are read from the project library `lib/<project>.kicad_sym`, pin number to unit, and must match exactly | implemented |
+| s3.3 | `kicad-update.py --push`: a placed symbol whose `lib_id` differs from its record part's symbol takes the record's `lib_id`, and the page's `lib_symbols` gains that symbol's definition when it lacks it. Then the existing field push writes Value, Footprint and the rest, and the labels are drawn at the new symbol's pin ends | implemented |
+| s3.4 | Docs: `table-write/SKILL.md` usage, a `change-part` section, the refusals, and the opening line on what it reads — the project library's pins for `change-part`, read only; `kicad-update/SKILL.md` push row names the `lib_id`; `board-build-tool.md` T5.1 row 8 | implemented |
+| s3.5 | Test on the scratch copy: change a 0402 resistor's value, and a capacitor from 0402 to 0603 or another package the record holds; push; check the sheet symbol keeps uuid, reference and position, takes the new `lib_id`, Value and Footprint, the page carries the new definition, labels sit on the pins, the PCB footprint keeps its path. The footprint swap in the PCB is KiCad's Update PCB from Schematic, a GUI action; it is listed for the User to confirm in KiCad. Each refusal once | implemented |
+| s3.6 | Commit p3, code and docs together. Push | implemented |
 
 **Notes:**
+
+- n3.1 s3.5 on the scratch copy: R1 R0001 10 kOhm -> R0003 10 Ohm, same 0402 footprint; C3 C0002 100 nF 0402 -> C0003 10 uF 1206. Rows kept their ids, symbol uuids and places. After push both symbols kept uuid, reference and position, took the new `lib_id`, Value, Footprint and `ipn`, and each page carries the new definition; C3's two labels sit on its pins; R1's PCB footprint path is unchanged. Refused: unknown reference, R9999, the part it already is, R0001 -> A0006 (pins 3–8 differ)
+- n3.2 First push left the old `ipn` field on a changed symbol: `ipn` is written at placement, not on push. Fixed: push writes `ipn` when the sheet's differs from the record's
+- n3.3 Every push reports one instance updated on one sheet, with or without this phase's code (three pushes of an untouched poc1 copy before p3). Present before this plan; left as found
+- n3.4 The footprint swap inside the PCB is KiCad's Update PCB from Schematic, a GUI action, not run here. For the User to confirm in KiCad: the footprint keeps reference, position and rotation, and swaps when it differs
 
 ---
 
