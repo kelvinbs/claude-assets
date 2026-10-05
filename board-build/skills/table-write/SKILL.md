@@ -26,6 +26,8 @@ table-write.py <board-dir> mpn    <ipn> <mpn> [--rank N] [--part-notes ...]
 table-write.py <board-dir> drop   <ref>
 table-write.py <board-dir> price  <ipn> --vendor V --vendor-pn PN [--stock N] [--checked DATE] [--library L] --break QTY:PRICE ...
 table-write.py <board-dir> net    <ref> <pin> <name> | --none
+table-write.py <board-dir> rename-net <old> <new> [--merge]
+table-write.py <board-dir> drop-net <name>
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
 table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
@@ -141,6 +143,21 @@ global — and loses it on the push after the row goes. On a sub-sheet
 instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 `{RAILS}`; the net is what it joins on the page above.
 
+## rename-net
+
+Renames a net in every row that names it: `net_table`, `bus_table` and
+`sim_net_table`. The pins keep their places; the sheet labels take the
+new name on the next `kicad-update --push`. A name already in use is
+refused unless `--merge` is given; with it the two nets become one, and a
+row whose key would collide — the net's bus, a simulation's source — keeps
+the row already under the new name. It prints what changed per table.
+
+## drop-net
+
+Removes a net from every row that names it: its pins carry no net, it
+leaves its bus, and its simulation source goes. Their labels leave the
+sheet on the next `kicad-update --push`. It prints what went per table.
+
 ## room
 
 Puts an instance in a room: `room R3 minus --under U15.2`. A room is a
@@ -220,6 +237,8 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 - A `parent` or `--under` that names no instance, or closes a loop
 - An IPN that does not read as one, or names no row
 - A reference that names no instance
+- A `rename-net` or `drop-net` of a net no row names; a `rename-net` onto a
+  name already in use without `--merge`
 - Lowering an instance count
 - `add` with no description
 - A project folder with no `board.db`, or one missing a table

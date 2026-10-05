@@ -53,9 +53,15 @@ follow on the next `kicad-update --push`, as they do for `net` today.
 
 | # | Step | Status |
 |---|---|---|
-| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s1.2 | `table-write.py`: verb `rename-net <old> <new> [--merge]` — every `net_table`, `bus_table` and `sim_net_table` row naming `<old>` takes `<new>`. Refused when `<old>` is named nowhere, and when `<new>` is already in use without `--merge`. With `--merge`, a row whose key would collide keeps the row already under `<new>` and drops the `<old>` row. Verb `drop-net <name>` — every row naming the net leaves the three tables. Refused when the net is named nowhere. Both print what changed per table. Usage list in the module docstring | implemented |
+| s1.3 | `table-write/SKILL.md`: the two verbs in the usage block, a section each, the refusals in "What it refuses". `board-build-tool.md` T5.1 row 8: function and out columns name the net edits and the tables written | implemented |
+| s1.4 | Test on a scratch copy of `radar/builds/poc1/design/`: rename, rename onto a used name refused, rename with `--merge`, drop, both refusals on an unknown net, then `kicad-update --push` and check the sheet labels carry the new name and the dropped net's labels are gone | implemented |
+| s1.5 | Commit p1, code and docs together. Push | implemented |
 
 **Notes:**
+
+- n1.1 s1.4 on a scratch copy of poc1: GNSSA_TX renamed in `bus_table`; rename onto 3V3 refused; NOPE refused; BB_I renamed on 3 pins and its simulation source; GNSSA_RX merged into GTX, its bus row dropped and GTX's kept; 5V0_BB merged into 5V0, 28 pins; drop GTX and the refusal on a second drop. `kicad-update --push`: SW_NODE and BB_IX labels on the sheets, no SW, 3V3_CLK, 5V0_BB or BB_I label left. Foreign keys clean
 
 ---
 

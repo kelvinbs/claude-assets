@@ -14,6 +14,8 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> drop   <ref>
     table-write.py <board-dir> price  <ipn> --vendor V --break QTY:PRICE ...
     table-write.py <board-dir> net    <ref> <pin> <name> | --none
+    table-write.py <board-dir> rename-net <old> <new> [--merge]
+    table-write.py <board-dir> drop-net <name>
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
     table-write.py <board-dir> unplace <ref>
     table-write.py <board-dir> room   <ref> <name> [--under <room|ref|ref.unit>] [--corner nw|ne|sw|se] | --none
@@ -526,6 +528,62 @@ def net(con, args):
     print(f"{args.ref}  pin {args.pin}: {args.name}")
 
 
+# the tables that name a net, and the key a renamed row keeps beside it
+NET_TABLES = (("net_table", ("id", "pin")), ("bus_table", ()),
+              ("sim_net_table", ("name", "block")))
+
+
+def net_rows(con, name):
+    """{table: rows naming the net}, over the tables of NET_TABLES."""
+    return {t: con.execute(f"select count(*) from {t} where net = ?",
+                           (name,)).fetchone()[0] for t, _ in NET_TABLES}
+
+
+def rename_net(con, args):
+    """Rename a net in every row that names it: net_table, bus_table and
+    sim_net_table. A name already in use takes --merge; then a row whose key
+    would collide keeps the row already under the new name."""
+    old, new = args.old, args.new
+    if old == new:
+        raise Bad(f"{old} is already the name")
+    if not any(net_rows(con, old).values()):
+        raise Bad(f"no net named {old}")
+    if any(net_rows(con, new).values()) and not args.merge:
+        raise Bad(f"net {new} is in use. --merge joins {old} into it")
+    for table, key in NET_TABLES:
+        if key:
+            cols = ", ".join(key)
+            dropped = con.execute(
+                f"delete from {table} where net = ? and ({cols}) in "
+                f"(select {cols} from {table} where net = ?)",
+                (old, new)).rowcount
+        else:
+            dropped = con.execute(
+                f"delete from {table} where net = ? and exists "
+                f"(select 1 from {table} where net = ?)", (old, new)).rowcount
+        n = con.execute(f"update {table} set net = ? where net = ?",
+                        (new, old)).rowcount
+        if n or dropped:
+            print(f"{table}  {old} -> {new} on {n} row(s)"
+                  + (f", {dropped} row(s) already under {new} kept"
+                     if dropped else ""))
+    con.commit()
+
+
+def drop_net(con, args):
+    """Remove a net from every row that names it: its pins lose their
+    label on the next push, it leaves its bus, and its simulation source
+    goes."""
+    if not any(net_rows(con, args.name).values()):
+        raise Bad(f"no net named {args.name}")
+    for table, _ in NET_TABLES:
+        n = con.execute(f"delete from {table} where net = ?",
+                        (args.name,)).rowcount
+        if n:
+            print(f"{table}  {args.name} removed from {n} row(s)")
+    con.commit()
+
+
 def room(con, args):
     """Put an instance in a room. A room is a row of its own with a uuid
     and a parent, so rooms nest: `room R3 Filter_I --under U15.2` makes
@@ -985,6 +1043,17 @@ def main(argv):
     n.add_argument("name", nargs="?")
     n.add_argument("--none", action="store_true", help="clear the net")
     n.set_defaults(run=net)
+
+    rn = sub.add_parser("rename-net", help="rename a net everywhere")
+    rn.add_argument("old")
+    rn.add_argument("new")
+    rn.add_argument("--merge", action="store_true",
+                    help="join into a net already in use")
+    rn.set_defaults(run=rename_net)
+
+    dn = sub.add_parser("drop-net", help="remove a net everywhere")
+    dn.add_argument("name")
+    dn.set_defaults(run=drop_net)
 
     rm = sub.add_parser("room", help="put an instance in a room")
     rm.add_argument("ref")
