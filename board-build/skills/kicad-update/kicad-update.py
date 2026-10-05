@@ -1047,14 +1047,44 @@ def page_names(root_src):
     return dict(zip(files, names))
 
 
-def page_files(con, project, root_src):
+def page_files(con, project, root_src, record=False):
     """Sheetfile to page name: the root's sheet symbols, plus every
-    sub-sheet the record names, whose file is named from its name."""
+    sub-sheet the record names, whose file is named from its name. With
+    `record`, every page the record names as well - on the place run, a
+    page whose board's root is not written yet is still read back."""
     by_file = page_names(root_src)
+    if record:
+        for (page,) in con.execute("select distinct page from ref_table "
+                                   "where page is not null and page <> ''"):
+            by_file.setdefault(f"{project}-{slug(page)}.kicad_sch", page)
     for (name,) in con.execute("select name from parts_table where symbol "
                                "like 'sheet:%' and name is not null"):
         by_file[f"{project}-{slug(name)}.kicad_sch"] = name
     return by_file
+
+
+def relocate_pages(board, project, roots, page_board):
+    """A page's file sits in its board's folder. A page whose board changed
+    in the record has its file, the User's wiring with it, moved there from
+    the folder it is in. Two copies of one page is a fault and is named.
+    Returns [(page, from, to)]."""
+    first = next(iter(roots))
+    files = sheet_files(board, project)
+    moved = []
+    for page, name in sorted(page_board.items(), key=lambda x: x[0]):
+        want = roots[name if name in roots else first]["dir"]
+        fname = f"{project}-{slug(page)}.kicad_sch"
+        found = [q for q in files if q.name == fname]
+        target = Path(want) / fname
+        if len(found) > 1:
+            raise Bad(f"page {page} has {len(found)} files: "
+                      + ", ".join(str(q.relative_to(board)) for q in found))
+        if not found or found[0].resolve() == target.resolve():
+            continue
+        found[0].rename(target)
+        moved.append((page, found[0].relative_to(board),
+                       target.relative_to(board)))
+    return moved
 
 
 def sheet_files(board, project, pattern=None):
@@ -2900,6 +2930,10 @@ def main(argv):
         page_board = board_of_page(con)
     finally:
         con.close()
+    if not args.push and not args.pull:
+        for page, src, dst in relocate_pages(board, project, roots,
+                                             page_board):
+            print(f"page {page}  moved with its board: {src} -> {dst}")
     if len(roots) == 1 and None in roots and roots[None]["src"] is None:
         raise Bad(f"{roots[None]['path']} does not exist. Run init-pipeline "
                   "first")
@@ -3033,7 +3067,7 @@ def main(argv):
     # and enter what the User put there.
     con = connect(board)
     try:
-        by_file = page_files(con, project, root_src)
+        by_file = page_files(con, project, root_src, record=True)
         placed, placed_sheets = read_pages(board, project, by_file)
         rows = instances(con)
         known = {r["uuid"] for r in rows}

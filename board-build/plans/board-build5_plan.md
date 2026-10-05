@@ -105,9 +105,18 @@ and reports it. No second copy is left. Skill named: `kicad-update`.
 
 | # | Step | Status |
 |---|---|---|
-| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s3.2 | `kicad-update.py`: `relocate_pages` on the place run moves a page file into its record board's folder and reports it; two files for one page refused | implemented |
+| s3.3 | `kicad-update.py`: `page_files(record=True)` on the place run, so pages of a board whose root is not yet written are read back. Push keeps the root-only map: the sim fittings walk every sheet file and take only their own root's pages | implemented |
+| s3.4 | Docs: `kicad-update/SKILL.md`, Boards | implemented |
+| s3.5 | Test on the scratch copy: the radar_2 p3 split end to end — init, TX tree to `TX`, TP1–TP4 to `Baseband`, boards by page, place with `--move`, push, place again | implemented |
+| s3.6 | Commit p3, code and docs together | implemented |
 
 **Notes:**
+
+- n3.1 s3.5: 9 page files moved from `poc1-board-rf/` to `poc1-board-motherboard/` and `poc1-board-rx/`. Push clean, second place reports zeros. Netlist components per board equal the record's: tx 42, rx 69, patch 5, motherboard 230 plus the 4 Buck sheet blocks. Wires on every moved page equal the original but `poc1-rf`, 27 to 19: the 8 gone are port-area stubs at x 807–815 mm, the tool's, fewer nets leaving the page
+- n3.2 First try added every record page to `page_files` for every caller; push then failed in the sim fittings, `root sheet has no sheet symbol for page 'Baseband'`. Narrowed to the place run, s3.3
+- n3.3 `poc1-board-rf/` keeps its root, project and PCB after the split; its root still names the moved pages. Left for the User
 
 ---
 

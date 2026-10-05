@@ -142,6 +142,14 @@ it, no footprint, track, via, zone or drawing. The template project's
 names fewer than two boards, a board the record does not name, and a
 board whose PCB exists. Footprints arrive by Update PCB from Schematic.
 
+A page whose board changes in the record (`table-write board`) takes its
+file with it: the place run finds the page file in the folder it sits in
+and moves it into its board's folder, the User's wiring with it, and says
+so. Two files for one page stop the run, named. Its old board's project
+folder is left as it is. On that run every page the record names is read
+back, so a page in a board whose root is not written yet still keeps its
+symbols.
+
 A net that reaches both boards is two nets, one per side, meeting at
 whatever part the design puts on the joint. That is what the netlist reads,
 and it is the point of splitting.
