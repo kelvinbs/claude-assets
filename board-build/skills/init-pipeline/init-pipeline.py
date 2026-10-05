@@ -151,6 +151,16 @@ SCHEMA = {
             "source        TEXT",
             "PRIMARY KEY (name, block, net)",
         ),
+        # T2.6f — the pins that mate between boards: board A's reference and
+        # pin to board B's. By name, as sim_net_table.block; table-write
+        # checks the references on add
+        "mate_table": (
+            "a_ref         TEXT NOT NULL",
+            "a_pin         TEXT NOT NULL",
+            "b_ref         TEXT NOT NULL",
+            "b_pin         TEXT NOT NULL",
+            "PRIMARY KEY (a_ref, a_pin)",
+        ),
     },
 }
 

@@ -29,6 +29,7 @@ table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> rename-net <old> <new> [--merge]
 table-write.py <board-dir> drop-net <name>
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+table-write.py <board-dir> mate   [<ref> <pin> <ref> <pin> | --drop <ref> <pin> | --check]
 table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
 table-write.py <board-dir> move   <ref> --page P
@@ -237,6 +238,17 @@ it again moves it. `bus --drop GND` takes nets out. `bus` alone lists.
 Members keep their names; `kicad-update` writes the alias to the project
 and a breakout on every page the bus leaves.
 
+## mate
+
+The pins that mate between boards, T2.6f: `mate J1 40 J7 40` records a
+pair — a connector pin on one board and the pin it meets on another, or
+the two ends of a coax. A pin is in one pair. `--drop J1 40` removes the
+pair holding that pin; `mate` alone lists every pair. `--check` reads the
+record's nets on both pins of every pair, the nets set with `net`, prints
+each pair, and names a pair whose pins carry different nets or a pin with
+no net; it exits non-zero when it finds one. The record needs
+`mate_table`; an older one gains it on the next `init-pipeline` run.
+
 ## show
 
 Every part, its class, its status and its instances. With an IPN, that part
@@ -269,6 +281,9 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
   instance already is, between parts one of which has no symbol or a
   symbol the project library does not hold, or between symbols whose pins
   differ
+- A `mate` naming a reference with no instance, a pin its symbol lacks, a
+  pin already in a pair, two references on one board, or a reference on
+  no board; a `mate --drop` of a pin in no pair
 - Lowering an instance count
 - `add` with no description
 - A project folder with no `board.db`, or one missing a table

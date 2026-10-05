@@ -70,7 +70,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `part_notes`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
 
@@ -320,6 +320,23 @@
   names from the part file. The subcircuit joins the models file the same
   way.
 
+**T2.6f — `mate_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `a_ref` | TEXT | Key | |
+| 2 | `a_pin` | TEXT | Key | |
+| 3 | `b_ref` | TEXT | | |
+| 4 | `b_pin` | TEXT | | |
+
+- The pins that mate between boards: board A's reference and pin to board
+  B's, a connector pair or the two ends of a coax. A pin is in one pair.
+  The two references are on different boards.
+- A signal crossing a board edge is two nets, one per board (kicad-update,
+  Boards). `table-write mate --check` reads the record's nets on the two
+  pins and reports a pair whose pins carry different nets, or a pin with
+  none.
+
 ### 2.5 — The relations
 
 **T2.9 — The relations**
@@ -333,6 +350,7 @@
 | 5 | `bus_table.net` | `net_table.net` | Many-to-one, by name | none — a member with no pin yet is allowed |
 | 6 | `sim_net_table.name` | `sim_table.name` | Many-to-one | Cascade |
 | 7 | `sim_net_table.block` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the reference on add |
+| 8 | `mate_table.a_ref`, `mate_table.b_ref` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the references on add |
 
 - Every skill sets `PRAGMA foreign_keys = ON`.
 
@@ -540,7 +558,7 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its eight tables |
+| 1 | `board.db` and its nine tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/<project>.kicad_sym`, `lib/<project>.pretty/` |
 
 - The project folder names the project — its name is stored at first
@@ -597,12 +615,12 @@ One skill, one run — T4.2.
 
 | # | Skill | Function | In | Out |
 |---|---|---|---|---|
-| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/` |
+| 1 | `init-pipeline` | Create the blank framework and the KiCad project | T2.3, T2.4, T2.6f, T2.13 | `board.db`<br>`*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/` |
 | 2 | `table-read` | Show the record, one view per stage | `board.db` | Markdown on stdout |
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 8 | `table-write` | Create or modify part; name, rename or drop a net; move an instance to another page; point an instance at another part; put a node in a room; record a vendor price survey; tag a simulation | Record row, net, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
+| 8 | `table-write` | Create or modify part; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; record a vendor price survey; tag a simulation | Record row, net, mating pins, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
 | 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place | `board.db` — `ref_table`<br>the board open in KiCad, live | footprint positions and the selection, live; nothing saved |

@@ -17,6 +17,7 @@ object into `lib/` before naming it. Parenthood is a property of use:
     table-write.py <board-dir> rename-net <old> <new> [--merge]
     table-write.py <board-dir> drop-net <name>
     table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+    table-write.py <board-dir> mate   [<ref> <pin> <ref> <pin> | --drop <ref> <pin> | --check]
     table-write.py <board-dir> unplace <ref>
     table-write.py <board-dir> move   <ref> --page P
     table-write.py <board-dir> change-part <ref> <part>
@@ -861,6 +862,83 @@ def bus(con, args):
     con.commit()
 
 
+def pin_net(con, board, ref, pin):
+    """The net the record names on one pin of an instance, or None."""
+    u = unit_of_pin(con, board, ref, pin)
+    row = con.execute("select net from net_table where id = ? and pin = ?",
+                      (u, pin)).fetchone()
+    return row[0] if row else None
+
+
+def mate(con, args):
+    """The pins that mate between boards - T2.6f. `mate A 3 B 3` records a
+    pair, `--drop A 3` removes the pair holding that pin, `mate` alone
+    lists, `--check` reports a pair whose two pins carry different nets or
+    a pin with no net."""
+    if not con.execute("select 1 from sqlite_master where type = 'table' "
+                       "and name = 'mate_table'").fetchone():
+        raise Bad("board.db has no mate_table. Run init-pipeline")
+    pairs = con.execute("select a_ref, a_pin, b_ref, b_pin from mate_table "
+                        "order by a_ref, a_pin").fetchall()
+    held = lambda ref, pin: con.execute(
+        "select a_ref, a_pin from mate_table where (a_ref = ? and a_pin = ?)"
+        " or (b_ref = ? and b_pin = ?)", (ref, pin, ref, pin)).fetchone()
+    if args.check:
+        bad = 0
+        for a, ap, b, bp in pairs:
+            na, nb = pin_net(con, args.board, a, ap), \
+                pin_net(con, args.board, b, bp)
+            fault = ("no net" if na is None or nb is None
+                     else "nets differ" if na != nb else "")
+            bad += bool(fault)
+            print(f"{a}.{ap} {na or '—'}  {b}.{bp} {nb or '—'}"
+                  + (f"  {fault}" if fault else ""))
+        if bad:
+            raise Bad(f"{bad} of {len(pairs)} pair(s) fail the check")
+        print(f"{len(pairs)} pair(s), every pair on one net")
+        return
+    if args.drop:
+        if len(args.items) != 2:
+            raise Bad("mate --drop wants <ref> <pin>")
+        key = held(*args.items)
+        if key is None:
+            raise Bad(f"{args.items[0]} pin {args.items[1]} is in no pair")
+        con.execute("delete from mate_table where a_ref = ? and a_pin = ?",
+                    key)
+        con.commit()
+        print(f"{args.items[0]}.{args.items[1]}  pair removed")
+        return
+    if not args.items:
+        for a, ap, b, bp in pairs:
+            print(f"{a}.{ap}  {b}.{bp}")
+        return
+    if len(args.items) != 4:
+        raise Bad("mate wants <ref> <pin> <ref> <pin>, --drop <ref> <pin>, "
+                  "--check, or nothing")
+    a, ap, b, bp = args.items
+    boards = []
+    for ref, pin in ((a, ap), (b, bp)):
+        row = con.execute("select r.board, p.symbol from ref_table r join "
+                          "parts_table p using(ipn) where r.ref = ? and "
+                          "r.kind = 'part' limit 1", (ref,)).fetchone()
+        if row is None:
+            raise Bad(f"{ref} names no instance")
+        pins = symbol_pins(args.board, row[1])
+        if pins is not None and pin not in pins:
+            raise Bad(f"{ref} has no pin {pin}")
+        if held(ref, pin):
+            raise Bad(f"{ref} pin {pin} is already in a pair")
+        boards.append(row[0])
+    if not all(boards):
+        raise Bad(f"{a} or {b} is on no board; a pair joins two boards")
+    if boards[0] == boards[1]:
+        raise Bad(f"{a} and {b} are both on board {boards[0]}")
+    con.execute("insert into mate_table (a_ref, a_pin, b_ref, b_pin) "
+                "values (?,?,?,?)", (a, ap, b, bp))
+    con.commit()
+    print(f"{a}.{ap} ({boards[0]})  {b}.{bp} ({boards[1]})")
+
+
 # ------------------------------------------------------------- simulation
 
 RAIL = re.compile(r"^(-?\d+)V(\d*)(?:_.*)?$")
@@ -1202,6 +1280,14 @@ def main(argv):
     b.add_argument("--drop", action="store_true",
                    help="take the named nets out of any bus")
     b.set_defaults(run=bus)
+
+    mt = sub.add_parser("mate", help="pins that mate between boards")
+    mt.add_argument("items", nargs="*", help="<ref> <pin> <ref> <pin>")
+    mt.add_argument("--drop", action="store_true",
+                    help="remove the pair holding <ref> <pin>")
+    mt.add_argument("--check", action="store_true",
+                    help="report pairs whose pins carry different nets")
+    mt.set_defaults(run=mate)
 
     sm = sub.add_parser("sim", help="a simulation instance: add, set, drop, "
                         "show")

@@ -166,6 +166,14 @@ whose two pins carry different nets or an unconnected pin. Skills named:
 
 | # | Step | Status |
 |---|---|---|
-| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s5.2 | `init-pipeline.py` SCHEMA: `mate_table` — `a_ref`, `a_pin`, `b_ref`, `b_pin`, key (`a_ref`, `a_pin`). References by name, as `sim_net_table.block`; `table-write` checks them on add. An existing record gains it on the next init run, as a missing table | implemented |
+| s5.3 | `table-write.py`: verb `mate`, in the style of `bus`. `mate <ref> <pin> <ref> <pin>` records a pair; `mate --drop <ref> <pin>` removes the pair holding that pin; `mate` alone lists pairs; `mate --check` reports each pair whose two pins carry different nets or a pin with no net, and exits non-zero when it finds one. Add refused for a reference that names no instance, a pin its symbol lacks, a pin already mated, two references on the same board, or one with no board | implemented |
+| s5.4 | Docs: `board-build-tool.md` T2.1 row 1, a T2.6f for `mate_table`, a T2.9 row, T4.2 and T5.1 rows 1 and 8; `init-pipeline/SKILL.md` table count and list; `table-write/SKILL.md` usage, a `mate` section, the refusals | implemented |
+| s5.5 | Test on the scratch copy: init adds the table and keeps every row; mate a connector pin on rf to one on patch with the same net, one with a different net, one unconnected; list; check reports the two faults and exits non-zero; drop one; each refusal once | implemented |
+| s5.6 | Commit p5, code and docs together. Push | implemented |
 
 **Notes:**
+
+- n5.1 s5.5 on the scratch copy: init created `mate_table`; ref_table 490 and net_table 1032 rows before and after. Pairs J1.40–U20.1 (rf–tx, MISO both), J1.38–U20.12 (SCLK against ICM_CS), J1.3–U20.14 (J1.3 no net); list showed three; check named the two faults and exited 1. Dropped by either side's pin. Refused: unknown reference, J1 pin 999, a pin already paired, J1 to J1 on rf, AE1 with its board cleared, three arguments, `--drop` of a pin in no pair
+- n5.2 Seen while testing, present before this plan and left as found: `init-pipeline` reports net_table "rebuilt, rows kept" on every run of an existing record, and writes `poc1.kicad_pro` and `poc1.kicad_sch` into the design folder of a record that names two boards
