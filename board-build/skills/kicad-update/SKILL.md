@@ -14,7 +14,7 @@ record. The skill of stages 4 and 6.
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --template <board> <template.kicad_pcb>
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --template <board> <template.kicad_pcb> [--whole]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --push
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
@@ -141,6 +141,13 @@ it, no footprint, track, via, zone or drawing. The template project's
 `.kicad_dru` is copied beside when there is one. It refuses a record that
 names fewer than two boards, a board the record does not name, and a
 board whose PCB exists. Footprints arrive by Update PCB from Schematic.
+
+`--whole` with `--template` copies the template PCB entire — footprints,
+tracks, vias, zones, drawings — so a board split out of another starts
+from its layout, for the User to cut down. The template is not changed.
+The next `--push` gives this board's footprints their sheet paths; the
+footprints of the other boards are reported as not in the record, and are
+the User's to delete.
 
 A page whose board changes in the record (`table-write board`) takes its
 file with it: the place run finds the page file in the folder it sits in

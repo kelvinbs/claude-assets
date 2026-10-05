@@ -2736,9 +2736,11 @@ TEMPLATE_KEEP = ("version", "generator", "generator_version", "general",
                  "paper", "title_block", "layers", "setup", "embedded_fonts")
 
 
-def board_from_template(board, project, con, name, template):
+def board_from_template(board, project, con, name, template, whole=False):
     """A board named in the record starts from another PCB: its stackup,
-    rules and board setup, and nothing on it. Returns the files written."""
+    rules and board setup, and nothing on it. With `whole`, everything on
+    it as well - footprints, tracks, zones, drawings - for the User to cut
+    down. Returns the files written."""
     roots = roots_of(board, project, con)
     if None in roots:
         raise Bad("the record names fewer than two boards; the project's own "
@@ -2761,7 +2763,8 @@ def board_from_template(board, project, con, name, template):
             kept.append(src[a:b])
     if not any(k.startswith("\t(layers") for k in kept):
         raise Bad(f"{template} does not read as a KiCad board")
-    dest.write_text("(kicad_pcb\n" + "\n".join(kept) + "\n)\n")
+    dest.write_text(src if whole
+                    else "(kicad_pcb\n" + "\n".join(kept) + "\n)\n")
     run = subprocess.run(["kicad-cli", "pcb", "upgrade", "--force",
                           str(dest)], capture_output=True, text=True)
     if run.returncode != 0:
@@ -2802,6 +2805,9 @@ def main(argv):
     ap.add_argument("--template", nargs=2, metavar=("BOARD", "PCB"),
                     help="start a board the record names from another "
                          "PCB: its stackup, rules and setup, nothing on it")
+    ap.add_argument("--whole", action="store_true",
+                    help="with --template: copy everything on the template "
+                         "PCB, footprints, tracks and zones included")
     ap.add_argument("--move", action="store_true",
                     help="place run: a symbol on a page other than its "
                          "record page leaves it and is drawn on its own")
@@ -2833,11 +2839,14 @@ def main(argv):
         raise Bad("project_table is empty. Run init-pipeline first")
     project = row[0]
 
+    if args.whole and not args.template:
+        raise Bad("--whole goes with --template")
     if args.template:
         con = connect(board)
         try:
             for path in board_from_template(board, project, con,
-                                            *args.template):
+                                            *args.template,
+                                            whole=args.whole):
                 print(f"{path.relative_to(board)}  written")
         finally:
             con.close()

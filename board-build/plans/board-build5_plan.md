@@ -131,9 +131,15 @@ template, not only its layers and setup. The project file is written as
 
 | # | Step | Status |
 |---|---|---|
-| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s4.2 | `kicad-update.py`: flag `--whole` on `--template` writes the template PCB entire; `--whole` alone refused | implemented |
+| s4.3 | Docs: `kicad-update/SKILL.md` usage and Boards; `board-build-tool.md` T5.1 row 9 | implemented |
+| s4.4 | Test on the p3 scratch split: `tx`, `rx`, `motherboard` from `poc1-board-rf.kicad_pcb` whole; counts against the template; template hash unchanged; refusals; push | implemented |
+| s4.5 | Commit p4, code and docs together | implemented |
 
 **Notes:**
+
+- n4.1 s4.4: each copy 339 footprints, 2048 segments, 58 zones, 1380 vias, as the template; template hash unchanged. A second `--template tx` refused, the PCB exists; `--whole` alone refused. Push rewrote paths on tx 42, motherboard 4 (TP1–TP4), rx 0: a PCB path omits the root, so a page that only changed board keeps its paths. Each copy reports the other boards' footprints as not in the record
 
 ---
 
