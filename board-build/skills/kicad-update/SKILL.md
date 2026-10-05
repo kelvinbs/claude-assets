@@ -14,6 +14,7 @@ record. The skill of stages 4 and 6.
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --template <board> <template.kicad_pcb>
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --push
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
@@ -131,6 +132,15 @@ the parts and the models stay in the design folder, shared and outside every
 project. Each folder gets its own `sym-lib-table` and `fp-lib-table`
 pointing at `${KIPRJMOD}/../../lib`. A record naming one board or none keeps everything in
 the design folder, as before.
+
+`--template <board> <template.kicad_pcb>` starts a board the record names
+from another PCB: `<project>-board-<board>.kicad_pcb` in its folder takes
+the template's layers and setup — the stackup with them — and nothing on
+it, no footprint, track, via, zone or drawing. The template project's
+`board` and `net_settings` go into the board's project file, and its
+`.kicad_dru` is copied beside when there is one. It refuses a record that
+names fewer than two boards, a board the record does not name, and a
+board whose PCB exists. Footprints arrive by Update PCB from Schematic.
 
 A net that reaches both boards is two nets, one per side, meeting at
 whatever part the design puts on the joint. That is what the netlist reads,

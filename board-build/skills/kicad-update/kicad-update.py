@@ -2,6 +2,7 @@
 """kicad-update — carry the record onto the pages, and the pages back.
 
     kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
+    kicad-update.py <board-dir> --template <board> <template.kicad_pcb>
 
 The skill of stages 4 and 6. Every instance in `ref_table` that carries a
 page and whose part carries a symbol is drawn on that page, in the order of
@@ -2697,6 +2698,65 @@ def write_project_file(board, project, stem=None, folder=None):
     return True
 
 
+# ------------------------------------------------------------- board template
+
+# what a new board takes from its template: the file's header and setup.
+# The stackup is inside `setup`. Footprints, tracks, zones and drawings stay
+TEMPLATE_KEEP = ("version", "generator", "generator_version", "general",
+                 "paper", "title_block", "layers", "setup", "embedded_fonts")
+
+
+def board_from_template(board, project, con, name, template):
+    """A board named in the record starts from another PCB: its stackup,
+    rules and board setup, and nothing on it. Returns the files written."""
+    roots = roots_of(board, project, con)
+    if None in roots:
+        raise Bad("the record names fewer than two boards; the project's own "
+                  f"{project}.kicad_pcb is the board")
+    if name not in roots:
+        raise Bad(f"the record names no board '{name}': "
+                  + " ".join(sorted(roots)))
+    src_path = Path(template)
+    if not src_path.is_file():
+        raise Bad(f"{template} is not a file")
+    info = roots[name]
+    dest = info["dir"] / f"{info['stem']}.kicad_pcb"
+    if dest.exists():
+        raise Bad(f"{dest} exists; a template starts a board, it does not "
+                  "overwrite one")
+    src = src_path.read_text()
+    kept = []
+    for head in TEMPLATE_KEEP:
+        for a, b in top_blocks(src, f"({head}"):
+            kept.append(src[a:b])
+    if not any(k.startswith("\t(layers") for k in kept):
+        raise Bad(f"{template} does not read as a KiCad board")
+    dest.write_text("(kicad_pcb\n" + "\n".join(kept) + "\n)\n")
+    run = subprocess.run(["kicad-cli", "pcb", "upgrade", "--force",
+                          str(dest)], capture_output=True, text=True)
+    if run.returncode != 0:
+        dest.unlink()
+        raise Bad(f"kicad-cli could not normalize {dest}: "
+                  + (run.stderr or run.stdout).strip())
+    written = [dest]
+    pro = src_path.with_suffix(".kicad_pro")
+    if pro.exists():
+        write_project_file(board, project, info["stem"], folder=info["dir"])
+        mine = info["dir"] / f"{info['stem']}.kicad_pro"
+        data, theirs = json.loads(mine.read_text()), json.loads(pro.read_text())
+        for key in ("board", "net_settings"):
+            if key in theirs:
+                data[key] = theirs[key]
+        mine.write_text(json.dumps(data, indent=2) + "\n")
+        written.append(mine)
+    dru = src_path.with_suffix(".kicad_dru")
+    mine = info["dir"] / f"{info['stem']}.kicad_dru"
+    if dru.exists() and not mine.exists():
+        mine.write_text(dru.read_text())
+        written.append(mine)
+    return written
+
+
 # ------------------------------------------------------------------------ run
 
 def main(argv):
@@ -2709,6 +2769,9 @@ def main(argv):
     ap.add_argument("--rename", nargs=2, metavar=("OLD", "NEW"),
                     help="rename a part: parts_table.name, the library "
                          "symbol, every sheet lib_id, one pass")
+    ap.add_argument("--template", nargs=2, metavar=("BOARD", "PCB"),
+                    help="start a board the record names from another "
+                         "PCB: its stackup, rules and setup, nothing on it")
     ap.add_argument("--move", action="store_true",
                     help="place run: a symbol on a page other than its "
                          "record page leaves it and is drawn on its own")
@@ -2739,6 +2802,16 @@ def main(argv):
     if not row:
         raise Bad("project_table is empty. Run init-pipeline first")
     project = row[0]
+
+    if args.template:
+        con = connect(board)
+        try:
+            for path in board_from_template(board, project, con,
+                                            *args.template):
+                print(f"{path.relative_to(board)}  written")
+        finally:
+            con.close()
+        return 0
 
     if args.rename:
         old, new = args.rename

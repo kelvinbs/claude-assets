@@ -140,9 +140,15 @@ named: `init-pipeline`, `kicad-update`.
 
 | # | Step | Status |
 |---|---|---|
-| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | not started |
+| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
+| s4.2 | Decided: `kicad-update`, because it names and makes the board folders (`<project>-board-<board>` under `design/kicad files/`). Flag `--template BOARD PCB`. Writes `<stem>.kicad_pcb` in the board's folder from the template's header, general, paper, title block, layers and setup — the stackup lives in setup — and nothing else: no footprint, track, via, zone or drawing. The template project's `board` and `net_settings` go into the board's `.kicad_pro`, written then if absent; its `.kicad_dru` is copied beside when present. Normalized by `kicad-cli pcb upgrade`. Refused when the record names fewer than two boards, names no such board, the template is not a file, or the board's PCB exists | implemented |
+| s4.3 | Docs: `kicad-update/SKILL.md` usage and a `--template` note in Boards; `board-build-tool.md` T5.1 row 9 | implemented |
+| s4.4 | Test on the scratch copy: put a page on a third board, `--template` it from the RF board's PCB; check the PCB holds layers and the stackup and no footprint, track, via or zone; the project file carries the RF board's design settings; a place run then writes the board's sheets and leaves the PCB alone. Each refusal once | implemented |
+| s4.5 | Commit p4, code and docs together. Push | implemented |
 
 **Notes:**
+
+- n4.1 s4.4 on the scratch copy: page Motion put on a third board, tx; `--template tx` from the RF board's PCB wrote `poc1-board-tx.kicad_pcb` with version, general, paper, layers, setup and the stackup, and no footprint, segment, via, zone or drawing; its project file took the RF project's `board` design settings and `net_settings`. A place run then wrote the tx root and its Motion page and left the PCB byte for byte; push reported 0 footprints there. Refused: board tx before the record named it, rf whose PCB exists, a template that is not a file, tx a second time, a record with no boards
 
 ---
 
