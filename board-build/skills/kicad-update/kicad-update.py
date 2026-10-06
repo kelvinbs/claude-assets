@@ -3152,8 +3152,8 @@ def main(argv):
                 continue
             con.execute("update ref_table set unit = 1 where ipn = ? "
                         "and unit is null", (ipn,))
-            for i1, ref, page, parent, sym in con.execute(
-                    "select id, ref, page, parent, sym_uuid from ref_table "
+            for i1, ref, page, parent, sym, brd in con.execute(
+                    "select id, ref, page, parent, sym_uuid, board from ref_table "
                     "where ipn = ? and unit = 1 and kind = 'part'",
                     (ipn,)).fetchall():
                 for unit in range(2, units + 1):
@@ -3162,12 +3162,14 @@ def main(argv):
                         "and kind = 'part'", (ref, unit)).fetchone()
                     if have:
                         continue
+                    # each unit is its own symbol on the sheet, so its own
+                    # uuid (T2.4); it sits on its package's board
                     con.execute(
                         "insert into ref_table (id, sym_uuid, kind, ipn, "
-                        "parent, ref, page, unit) "
-                        "values (?,?,'part',?,?,?,?,?)",
-                        (str(uuid.uuid4()), sym, ipn, parent, ref, page,
-                         unit))
+                        "parent, ref, page, unit, board) "
+                        "values (?,?,'part',?,?,?,?,?,?)",
+                        (str(uuid.uuid4()), str(uuid.uuid4()), ipn, parent,
+                         ref, page, unit, brd))
                     minted += 1
         con.commit()
         if minted:
