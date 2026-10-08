@@ -232,7 +232,8 @@ wires are on these pages.
   emptied. The sheets carry the aliases.
 
 Close the editor before running. KiCad holds the file in memory and will
-write it back over anything added underneath it.
+write it back over anything added underneath it. Confirm no `kicad` process
+remains before the run. A quit request can be ignored while a dialog is open.
 
 ## The return direction
 

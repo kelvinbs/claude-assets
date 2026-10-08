@@ -44,6 +44,9 @@
   activity. Period.
 - ERC and DRC: the tool does not run the checks, but may set up the
   checks to be performed.
+- The PCB is reached only through KiCad's IPC API, kicad-python, with the
+  board open in KiCad. The standalone `pcbnew` module is not used: it can
+  crash and truncate the file.
 - On a failure — or when a skill does not cover the work:
   - Abort the stage
   - Report the bug
@@ -189,6 +192,9 @@
 - What a part costs is not one number. A vendor quotes a ladder, and the
   build size decides which rung applies. `price_table` holds the ladder, so
   the survey is taken once and any build size reads off it.
+- A survey row is taken only for the part's exact MPN. A different MPN is
+  a different part.
+- One vendor per part, JLCPCB unless the part says otherwise.
 
 **T2.6 — `price_table`**
 
