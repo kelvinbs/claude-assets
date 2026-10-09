@@ -53,11 +53,11 @@ follow on the next `kicad-update --push`, as they do for `net` today.
 
 | # | Step | Status |
 |---|---|---|
-| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s1.2 | `table-write.py`: verb `rename-net <old> <new> [--merge]` — every `net_table`, `bus_table` and `sim_net_table` row naming `<old>` takes `<new>`. Refused when `<old>` is named nowhere, and when `<new>` is already in use without `--merge`. With `--merge`, a row whose key would collide keeps the row already under `<new>` and drops the `<old>` row. Verb `drop-net <name>` — every row naming the net leaves the three tables. Refused when the net is named nowhere. Both print what changed per table. Usage list in the module docstring | implemented |
-| s1.3 | `table-write/SKILL.md`: the two verbs in the usage block, a section each, the refusals in "What it refuses". `board-build-tool.md` T5.1 row 8: function and out columns name the net edits and the tables written | implemented |
-| s1.4 | Test on a scratch copy of `radar/builds/poc1/design/`: rename, rename onto a used name refused, rename with `--merge`, drop, both refusals on an unknown net, then `kicad-update --push` and check the sheet labels carry the new name and the dropped net's labels are gone | implemented |
-| s1.5 | Commit p1, code and docs together. Push | implemented |
+| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s1.2 | `table-write.py`: verb `rename-net <old> <new> [--merge]` — every `net_table`, `bus_table` and `sim_net_table` row naming `<old>` takes `<new>`. Refused when `<old>` is named nowhere, and when `<new>` is already in use without `--merge`. With `--merge`, a row whose key would collide keeps the row already under `<new>` and drops the `<old>` row. Verb `drop-net <name>` — every row naming the net leaves the three tables. Refused when the net is named nowhere. Both print what changed per table. Usage list in the module docstring | abandoned |
+| s1.3 | `table-write/SKILL.md`: the two verbs in the usage block, a section each, the refusals in "What it refuses". `board-build-tool.md` T5.1 row 8: function and out columns name the net edits and the tables written | abandoned |
+| s1.4 | Test on a scratch copy of `radar/builds/poc1/design/`: rename, rename onto a used name refused, rename with `--merge`, drop, both refusals on an unknown net, then `kicad-update --push` and check the sheet labels carry the new name and the dropped net's labels are gone | abandoned |
+| s1.5 | Commit p1, code and docs together. Push | abandoned |
 
 **Notes:**
 
@@ -78,12 +78,12 @@ with its pin labels, and the packer lays it there. Skills named:
 
 | # | Step | Status |
 |---|---|---|
-| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s2.2 | `table-write.py`: verb `move <ref> --page P`. Every row of the reference takes the new page and the new page's board, and its place is cleared. A parent that is a room leaves with the old page: the instance takes the room's own parent. Reference, ids, symbol UUID and nets kept. Refused for a reference that names no instance, a class-B sheet instance, a drawing in a sub-sheet, a sub-sheet page as target, and the page it is already on | implemented |
-| s2.3 | `kicad-update.py`: flag `--move` on the place run. A symbol found on a page other than its record page is removed from that page's file, its uuid then counting as not placed, so the run draws it on its record page. Without the flag the run reports it as today | implemented |
-| s2.4 | Docs: `table-write/SKILL.md` usage, a `move` section, refusals; `kicad-update/SKILL.md` usage, the return-direction row, a `--move` note that wires to the old place are left dangling and a footprint on the old board's PCB is reported there; `board-build-tool.md` T5.1 rows 8 and 9 | implemented |
-| s2.5 | Test on the scratch copy: move a part to another page on the same board, `kicad-update --move`, then `--push`; check the symbol left the old file, is drawn on the new page with its reference and uuid, its labels follow, a second run reports zeros. Each refusal once | implemented |
-| s2.6 | Commit p2, code and docs together. Push | implemented |
+| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s2.2 | `table-write.py`: verb `move <ref> --page P`. Every row of the reference takes the new page and the new page's board, and its place is cleared. A parent that is a room leaves with the old page: the instance takes the room's own parent. Reference, ids, symbol UUID and nets kept. Refused for a reference that names no instance, a class-B sheet instance, a drawing in a sub-sheet, a sub-sheet page as target, and the page it is already on | abandoned |
+| s2.3 | `kicad-update.py`: flag `--move` on the place run. A symbol found on a page other than its record page is removed from that page's file, its uuid then counting as not placed, so the run draws it on its record page. Without the flag the run reports it as today | abandoned |
+| s2.4 | Docs: `table-write/SKILL.md` usage, a `move` section, refusals; `kicad-update/SKILL.md` usage, the return-direction row, a `--move` note that wires to the old place are left dangling and a footprint on the old board's PCB is reported there; `board-build-tool.md` T5.1 rows 8 and 9 | abandoned |
+| s2.5 | Test on the scratch copy: move a part to another page on the same board, `kicad-update --move`, then `--push`; check the symbol left the old file, is drawn on the new page with its reference and uuid, its labels follow, a second run reports zeros. Each refusal once | abandoned |
+| s2.6 | Commit p2, code and docs together. Push | abandoned |
 
 **Notes:**
 
@@ -111,12 +111,12 @@ existing row:
 
 | # | Step | Status |
 |---|---|---|
-| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s3.2 | `table-write.py`: verb `change-part <ref> <part>`, the part named as IPN, name or MPN. Every row of the drawing — every unit, every sub-sheet instance sharing its symbol uuid — takes the target IPN; nothing else in those rows changes. Refused when the reference names no instance, the part names no row, the part is the one it has, either part has no symbol, or the two symbols' pins differ. Pins are read from the project library `lib/<project>.kicad_sym`, pin number to unit, and must match exactly | implemented |
-| s3.3 | `kicad-update.py --push`: a placed symbol whose `lib_id` differs from its record part's symbol takes the record's `lib_id`, and the page's `lib_symbols` gains that symbol's definition when it lacks it. Then the existing field push writes Value, Footprint and the rest, and the labels are drawn at the new symbol's pin ends | implemented |
-| s3.4 | Docs: `table-write/SKILL.md` usage, a `change-part` section, the refusals, and the opening line on what it reads — the project library's pins for `change-part`, read only; `kicad-update/SKILL.md` push row names the `lib_id`; `board-build-tool.md` T5.1 row 8 | implemented |
-| s3.5 | Test on the scratch copy: change a 0402 resistor's value, and a capacitor from 0402 to 0603 or another package the record holds; push; check the sheet symbol keeps uuid, reference and position, takes the new `lib_id`, Value and Footprint, the page carries the new definition, labels sit on the pins, the PCB footprint keeps its path. The footprint swap in the PCB is KiCad's Update PCB from Schematic, a GUI action; it is listed for the User to confirm in KiCad. Each refusal once | implemented |
-| s3.6 | Commit p3, code and docs together. Push | implemented |
+| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s3.2 | `table-write.py`: verb `change-part <ref> <part>`, the part named as IPN, name or MPN. Every row of the drawing — every unit, every sub-sheet instance sharing its symbol uuid — takes the target IPN; nothing else in those rows changes. Refused when the reference names no instance, the part names no row, the part is the one it has, either part has no symbol, or the two symbols' pins differ. Pins are read from the project library `lib/<project>.kicad_sym`, pin number to unit, and must match exactly | abandoned |
+| s3.3 | `kicad-update.py --push`: a placed symbol whose `lib_id` differs from its record part's symbol takes the record's `lib_id`, and the page's `lib_symbols` gains that symbol's definition when it lacks it. Then the existing field push writes Value, Footprint and the rest, and the labels are drawn at the new symbol's pin ends | abandoned |
+| s3.4 | Docs: `table-write/SKILL.md` usage, a `change-part` section, the refusals, and the opening line on what it reads — the project library's pins for `change-part`, read only; `kicad-update/SKILL.md` push row names the `lib_id`; `board-build-tool.md` T5.1 row 8 | abandoned |
+| s3.5 | Test on the scratch copy: change a 0402 resistor's value, and a capacitor from 0402 to 0603 or another package the record holds; push; check the sheet symbol keeps uuid, reference and position, takes the new `lib_id`, Value and Footprint, the page carries the new definition, labels sit on the pins, the PCB footprint keeps its path. The footprint swap in the PCB is KiCad's Update PCB from Schematic, a GUI action; it is listed for the User to confirm in KiCad. Each refusal once | abandoned |
+| s3.6 | Commit p3, code and docs together. Push | abandoned |
 
 **Notes:**
 
@@ -140,11 +140,11 @@ named: `init-pipeline`, `kicad-update`.
 
 | # | Step | Status |
 |---|---|---|
-| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s4.2 | Decided: `kicad-update`, because it names and makes the board folders (`<project>-board-<board>` under `design/kicad files/`). Flag `--template BOARD PCB`. Writes `<stem>.kicad_pcb` in the board's folder from the template's header, general, paper, title block, layers and setup — the stackup lives in setup — and nothing else: no footprint, track, via, zone or drawing. The template project's `board` and `net_settings` go into the board's `.kicad_pro`, written then if absent; its `.kicad_dru` is copied beside when present. Normalized by `kicad-cli pcb upgrade`. Refused when the record names fewer than two boards, names no such board, the template is not a file, or the board's PCB exists | implemented |
-| s4.3 | Docs: `kicad-update/SKILL.md` usage and a `--template` note in Boards; `board-build-tool.md` T5.1 row 9 | implemented |
-| s4.4 | Test on the scratch copy: put a page on a third board, `--template` it from the RF board's PCB; check the PCB holds layers and the stackup and no footprint, track, via or zone; the project file carries the RF board's design settings; a place run then writes the board's sheets and leaves the PCB alone. Each refusal once | implemented |
-| s4.5 | Commit p4, code and docs together. Push | implemented |
+| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s4.2 | Decided: `kicad-update`, because it names and makes the board folders (`<project>-board-<board>` under `design/kicad files/`). Flag `--template BOARD PCB`. Writes `<stem>.kicad_pcb` in the board's folder from the template's header, general, paper, title block, layers and setup — the stackup lives in setup — and nothing else: no footprint, track, via, zone or drawing. The template project's `board` and `net_settings` go into the board's `.kicad_pro`, written then if absent; its `.kicad_dru` is copied beside when present. Normalized by `kicad-cli pcb upgrade`. Refused when the record names fewer than two boards, names no such board, the template is not a file, or the board's PCB exists | abandoned |
+| s4.3 | Docs: `kicad-update/SKILL.md` usage and a `--template` note in Boards; `board-build-tool.md` T5.1 row 9 | abandoned |
+| s4.4 | Test on the scratch copy: put a page on a third board, `--template` it from the RF board's PCB; check the PCB holds layers and the stackup and no footprint, track, via or zone; the project file carries the RF board's design settings; a place run then writes the board's sheets and leaves the PCB alone. Each refusal once | abandoned |
+| s4.5 | Commit p4, code and docs together. Push | abandoned |
 
 **Notes:**
 
@@ -166,12 +166,12 @@ whose two pins carry different nets or an unconnected pin. Skills named:
 
 | # | Step | Status |
 |---|---|---|
-| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s5.2 | `init-pipeline.py` SCHEMA: `mate_table` — `a_ref`, `a_pin`, `b_ref`, `b_pin`, key (`a_ref`, `a_pin`). References by name, as `sim_net_table.block`; `table-write` checks them on add. An existing record gains it on the next init run, as a missing table | implemented |
-| s5.3 | `table-write.py`: verb `mate`, in the style of `bus`. `mate <ref> <pin> <ref> <pin>` records a pair; `mate --drop <ref> <pin>` removes the pair holding that pin; `mate` alone lists pairs; `mate --check` reports each pair whose two pins carry different nets or a pin with no net, and exits non-zero when it finds one. Add refused for a reference that names no instance, a pin its symbol lacks, a pin already mated, two references on the same board, or one with no board | implemented |
-| s5.4 | Docs: `board-build-tool.md` T2.1 row 1, a T2.6f for `mate_table`, a T2.9 row, T4.2 and T5.1 rows 1 and 8; `init-pipeline/SKILL.md` table count and list; `table-write/SKILL.md` usage, a `mate` section, the refusals | implemented |
-| s5.5 | Test on the scratch copy: init adds the table and keeps every row; mate a connector pin on rf to one on patch with the same net, one with a different net, one unconnected; list; check reports the two faults and exits non-zero; drop one; each refusal once | implemented |
-| s5.6 | Commit p5, code and docs together. Push | implemented |
+| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s5.2 | `init-pipeline.py` SCHEMA: `mate_table` — `a_ref`, `a_pin`, `b_ref`, `b_pin`, key (`a_ref`, `a_pin`). References by name, as `sim_net_table.block`; `table-write` checks them on add. An existing record gains it on the next init run, as a missing table | abandoned |
+| s5.3 | `table-write.py`: verb `mate`, in the style of `bus`. `mate <ref> <pin> <ref> <pin>` records a pair; `mate --drop <ref> <pin>` removes the pair holding that pin; `mate` alone lists pairs; `mate --check` reports each pair whose two pins carry different nets or a pin with no net, and exits non-zero when it finds one. Add refused for a reference that names no instance, a pin its symbol lacks, a pin already mated, two references on the same board, or one with no board | abandoned |
+| s5.4 | Docs: `board-build-tool.md` T2.1 row 1, a T2.6f for `mate_table`, a T2.9 row, T4.2 and T5.1 rows 1 and 8; `init-pipeline/SKILL.md` table count and list; `table-write/SKILL.md` usage, a `mate` section, the refusals | abandoned |
+| s5.5 | Test on the scratch copy: init adds the table and keeps every row; mate a connector pin on rf to one on patch with the same net, one with a different net, one unconnected; list; check reports the two faults and exits non-zero; drop one; each refusal once | abandoned |
+| s5.6 | Commit p5, code and docs together. Push | abandoned |
 
 **Notes:**
 

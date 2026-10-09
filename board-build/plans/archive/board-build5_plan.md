@@ -54,11 +54,11 @@ not written, and the run says so. The board projects under
 
 | # | Step | Status |
 |---|---|---|
-| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s1.2 | `init-pipeline.py`: read the boards `ref_table` names after the tables are made; two or more and the project, root sheet and board files are not made, and the run says so | implemented |
-| s1.3 | `init-pipeline/SKILL.md`, The KiCad project: the split-record rule | implemented |
-| s1.4 | Test on the scratch copy: split record gains `mate_table`, rows kept, no KiCad file in `design/`; a fresh single-board folder still gets all three | implemented |
-| s1.5 | Commit p1, code and docs together | implemented |
+| s1.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s1.2 | `init-pipeline.py`: read the boards `ref_table` names after the tables are made; two or more and the project, root sheet and board files are not made, and the run says so | abandoned |
+| s1.3 | `init-pipeline/SKILL.md`, The KiCad project: the split-record rule | abandoned |
+| s1.4 | Test on the scratch copy: split record gains `mate_table`, rows kept, no KiCad file in `design/`; a fresh single-board folder still gets all three | abandoned |
+| s1.5 | Commit p1, code and docs together | abandoned |
 
 **Notes:**
 
@@ -79,12 +79,12 @@ page. A new verb drops an empty room by name and page. Skill named:
 
 | # | Step | Status |
 |---|---|---|
-| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s2.2 | `table-write.py` `move`: the row's room chain found or made on the new page under the same holder; rooms it leaves empty dropped, upward | implemented |
-| s2.3 | `table-write.py`: `room --under <name>` resolves on the instance's page and refuses two of that name; verb `drop-room <name> --page P [--under]` | implemented |
-| s2.4 | Docs: `table-write/SKILL.md` usage, `room`, `drop-room`, `move`, refusals; `board-build-tool.md` T5.1 row 8 | implemented |
-| s2.5 | Test on the scratch copy: move the whole TX tree, AE7 and AE8 to page `TX`; structure before and after compared; `--under` and `drop-room` cases and refusals | implemented |
-| s2.6 | Commit p2, code and docs together | implemented |
+| s2.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s2.2 | `table-write.py` `move`: the row's room chain found or made on the new page under the same holder; rooms it leaves empty dropped, upward | abandoned |
+| s2.3 | `table-write.py`: `room --under <name>` resolves on the instance's page and refuses two of that name; verb `drop-room <name> --page P [--under]` | abandoned |
+| s2.4 | Docs: `table-write/SKILL.md` usage, `room`, `drop-room`, `move`, refusals; `board-build-tool.md` T5.1 row 8 | abandoned |
+| s2.5 | Test on the scratch copy: move the whole TX tree, AE7 and AE8 to page `TX`; structure before and after compared; `--under` and `drop-room` cases and refusals | abandoned |
+| s2.6 | Commit p2, code and docs together | abandoned |
 
 **Notes:**
 
@@ -105,12 +105,12 @@ and reports it. No second copy is left. Skill named: `kicad-update`.
 
 | # | Step | Status |
 |---|---|---|
-| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s3.2 | `kicad-update.py`: `relocate_pages` on the place run moves a page file into its record board's folder and reports it; two files for one page refused | implemented |
-| s3.3 | `kicad-update.py`: `page_files(record=True)` on the place run, so pages of a board whose root is not yet written are read back. Push keeps the root-only map: the sim fittings walk every sheet file and take only their own root's pages | implemented |
-| s3.4 | Docs: `kicad-update/SKILL.md`, Boards | implemented |
-| s3.5 | Test on the scratch copy: the radar_2 p3 split end to end — init, TX tree to `TX`, TP1–TP4 to `Baseband`, boards by page, place with `--move`, push, place again | implemented |
-| s3.6 | Commit p3, code and docs together | implemented |
+| s3.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s3.2 | `kicad-update.py`: `relocate_pages` on the place run moves a page file into its record board's folder and reports it; two files for one page refused | abandoned |
+| s3.3 | `kicad-update.py`: `page_files(record=True)` on the place run, so pages of a board whose root is not yet written are read back. Push keeps the root-only map: the sim fittings walk every sheet file and take only their own root's pages | abandoned |
+| s3.4 | Docs: `kicad-update/SKILL.md`, Boards | abandoned |
+| s3.5 | Test on the scratch copy: the radar_2 p3 split end to end — init, TX tree to `TX`, TP1–TP4 to `Baseband`, boards by page, place with `--move`, push, place again | abandoned |
+| s3.6 | Commit p3, code and docs together | abandoned |
 
 **Notes:**
 
@@ -131,11 +131,11 @@ template, not only its layers and setup. The project file is written as
 
 | # | Step | Status |
 |---|---|---|
-| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s4.2 | `kicad-update.py`: flag `--whole` on `--template` writes the template PCB entire; `--whole` alone refused | implemented |
-| s4.3 | Docs: `kicad-update/SKILL.md` usage and Boards; `board-build-tool.md` T5.1 row 9 | implemented |
-| s4.4 | Test on the p3 scratch split: `tx`, `rx`, `motherboard` from `poc1-board-rf.kicad_pcb` whole; counts against the template; template hash unchanged; refusals; push | implemented |
-| s4.5 | Commit p4, code and docs together | implemented |
+| s4.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s4.2 | `kicad-update.py`: flag `--whole` on `--template` writes the template PCB entire; `--whole` alone refused | abandoned |
+| s4.3 | Docs: `kicad-update/SKILL.md` usage and Boards; `board-build-tool.md` T5.1 row 9 | abandoned |
+| s4.4 | Test on the p3 scratch split: `tx`, `rx`, `motherboard` from `poc1-board-rf.kicad_pcb` whole; counts against the template; template hash unchanged; refusals; push | abandoned |
+| s4.5 | Commit p4, code and docs together | abandoned |
 
 **Notes:**
 
@@ -154,12 +154,12 @@ removed. Skill named: `table-write`.
 
 | # | Step | Status |
 |---|---|---|
-| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | implemented |
-| s5.2 | `table-write.py`: verb `drop-part <part>`: refuses a part in use, naming the instances; deletes the part and its price rows; reports symbol, footprint, part file left | implemented |
-| s5.3 | `table-write.py` `next_ipn`: the mark is the highest IPN in the record, the part files and the library's `ipn` fields | implemented |
-| s5.4 | Docs: `table-write/SKILL.md` usage, `drop-part`, refusals, Numbering; `board-build-tool.md` T5.1 row 8 | implemented |
-| s5.5 | Test on the scratch copy: drop W0021 while U35 uses it, refused; `change-part U35 W0020`; drop W0021 by name; again, refused; next W part is W0022 | implemented |
-| s5.6 | Commit p5, code and docs together | implemented |
+| s5.1 | Consider the goal and approach of this phase and the project, and the project history (notes). Note how this phase fits into the larger context. Consider this phase scope in relation to the scope of other phases in this plan. Then write steps to accomplish the goal via the approach in support of that larger context. | abandoned |
+| s5.2 | `table-write.py`: verb `drop-part <part>`: refuses a part in use, naming the instances; deletes the part and its price rows; reports symbol, footprint, part file left | abandoned |
+| s5.3 | `table-write.py` `next_ipn`: the mark is the highest IPN in the record, the part files and the library's `ipn` fields | abandoned |
+| s5.4 | Docs: `table-write/SKILL.md` usage, `drop-part`, refusals, Numbering; `board-build-tool.md` T5.1 row 8 | abandoned |
+| s5.5 | Test on the scratch copy: drop W0021 while U35 uses it, refused; `change-part U35 W0020`; drop W0021 by name; again, refused; next W part is W0022 | abandoned |
+| s5.6 | Commit p5, code and docs together | abandoned |
 
 **Notes:**
 

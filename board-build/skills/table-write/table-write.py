@@ -59,6 +59,7 @@ CLASSES = {
     "L": ("inductor", "L"),
     "M": ("mixer", "U"),
     "P": ("power", "U"),
+    "Q": ("transistor", "Q"),
     "R": ("resistor", "R"),
     "S": ("sensor", "U"),
     "T": ("test point", "TP"),

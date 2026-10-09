@@ -385,6 +385,7 @@
 | 9 | `L` | Inductor, ferrite |
 | 10 | `M` | Mixer |
 | 11 | `P` | Regulator, converter |
+| 11a | `Q` | Transistor, MOSFET |
 | 12 | `R` | Resistor |
 | 13 | `S` | Sensor |
 | 14 | `T` | Test point, cal standard |
