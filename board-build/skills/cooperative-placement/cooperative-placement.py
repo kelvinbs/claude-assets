@@ -41,14 +41,16 @@ the geometry:
   nearest the pads they share a net with, `gap` clear of what is laid.
   A net on more than half the scope's parts, ground or a rail, pulls
   nothing.
-- The blocks are set along the flow from the anchor, `block_gap` apart,
-  each pushed forward until clear of every footprint outside the scope.
+- The blocks are set along the flow from the anchor, `block_gap` apart.
+  A block that hits a footprint outside the scope goes to the nearest
+  clear spot forward along the flow or away across it.
 - One read of the board, one `update_items`, one read back. The read back
   checks every part outside the scope is where it was, and every pad
   inside it is where the plan put it. Front-side footprints only.
 """
 
 import argparse
+import functools
 import json
 import math
 import os
@@ -176,6 +178,16 @@ def ring():
     return _RING
 
 
+@functools.lru_cache(None)
+def shifts(signs, reach=200.0, step=0.5):
+    """Offsets (along, across), along >= 0, nearest first."""
+    n = int(reach / step)
+    pts = [(i * step, sg * j * step) for i in range(n + 1) for j in range(n + 1)
+           for sg in signs if not (j == 0 and sg < 0) and i * i + j * j <= n * n]
+    pts.sort(key=lambda p: (p[0] ** 2 + p[1] ** 2, p[0], abs(p[1])))
+    return pts
+
+
 # ---- one block ------------------------------------------------------------
 
 def lay_block(parts, parent, ignore, gap, back, fwd, d):
@@ -280,13 +292,17 @@ def plan(blocks, d, gap, block_gap, ignore, keepouts, start, align, anchor_nets)
             tc = val - min(cross(b)[0] for b in lboxes)
         else:
             tc = val - max(cross(b)[1] for b in lboxes)
-        ta = cursor + block_gap - lo
-        for _ in range(int(400 / STEP)):
-            tx, ty = d[0] * ta + e[0] * tc, d[1] * ta + e[1] * tc
+        ta0 = cursor + block_gap - lo
+        # blocked: the nearest clear spot forward along the flow, or away
+        # across it — away from the board for an edge anchor, either way
+        # for a line
+        signs = {"min": (1,), "max": (-1,), "origin": (1, -1)}[mode]
+        for da, dc in shifts(signs):
+            ta, tcc = ta0 + da, tc + dc
+            tx, ty = d[0] * ta + e[0] * tcc, d[1] * ta + e[1] * tcc
             moved = [(b[0] + tx, b[1] + ty, b[2] + tx, b[3] + ty) for b in lboxes]
             if all(clear(b, keepouts, gap) for b in moved):
                 break
-            ta += STEP
         else:
             raise ValueError(f"block of {parent} finds no clear place along the flow")
         for r, (x, y, deg) in local.items():
@@ -330,7 +346,7 @@ def resolve(con, key, within=None):
 
 def part_refs(con, ids, board):
     q = (f"select distinct ref from ref_table where id in ({','.join('?' * len(ids))}) "
-         f"and kind = 'part' and ref is not null and (board is null or ? is null or board = ?)")
+         f"and kind = 'part' and ref is not null and (? is null or board = ?)")
     refs = [r[0] for r in con.execute(q, (*ids, board, board))]
     return sorted(refs, key=lambda r: [int(t) if t.isdigit() else t
                                        for t in re.split(r"(\d+)", r)])
@@ -364,10 +380,16 @@ def flow(db, strategy_path, dry):
     stem = b.name.rsplit("/", 1)[-1].rsplit(".", 1)[0]
     board = stem.split("-board-", 1)[1] if "-board-" in stem else None
 
+    fps = list(b.get_footprints())
+    byref = {f.reference_field.text.value: f for f in fps}
+
     con = sqlite3.connect(db)
     try:
         scope_ids = set().union(*(subtree(con, t) for t in resolve(con, s["scope"])))
         scope = set(part_refs(con, list(scope_ids), board)) - skip
+        # a part with no footprint — a block's own symbol — is not placed
+        missing = sorted(scope - byref.keys())
+        scope -= set(missing)
         blocks, seen = [], set()
         for blk in s["blocks"]:
             key = blk["block"] if isinstance(blk, dict) else blk
@@ -401,11 +423,6 @@ def flow(db, strategy_path, dry):
     except ValueError as ex:
         raise Bad(str(ex))
 
-    fps = list(b.get_footprints())
-    byref = {f.reference_field.text.value: f for f in fps}
-    missing = sorted(scope - byref.keys())
-    if missing:
-        raise Bad("not on the board: " + " ".join(missing))
     back = [r for r in scope if byref[r].layer != BoardLayer.BL_F_Cu]
     if back:
         raise Bad("not on the front: " + " ".join(sorted(back)))
@@ -516,15 +533,16 @@ def flow(db, strategy_path, dry):
     off = []
     for r in scope:
         x, y, deg = out[r]
-        want = {num: (px, py) for num, px, py, _ in parts[r].pads_at(x, y, deg)}
-        for p in after[r].definition.pads:
-            wx, wy = want[p.number]
+        want = parts[r].pads_at(x, y, deg)
+        for p, (_, wx, wy, _) in zip(after[r].definition.pads, want):
             if abs(mm(p.position.x) - wx) > 0.002 or abs(mm(p.position.y) - wy) > 0.002:
                 off.append(r)
                 break
     b.clear_selection()
     b.add_to_selection([after[r] for r in scope])
     line = f"{s['scope']}: {len(scope)} parts placed along the flow and selected"
+    if missing:
+        line += "; no footprint: " + " ".join(missing)
     if shifted:
         line += "; MOVED OUTSIDE THE SCOPE: " + " ".join(sorted(shifted))
     if off:

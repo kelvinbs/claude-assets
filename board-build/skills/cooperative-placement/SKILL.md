@@ -100,7 +100,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
   `direction` or `blocks`
 - Flow: a block that repeats a part, a part of the scope no block holds,
   a block with no single parent part and no `parent` named
-- Flow: a part of the scope not on the board, or not on the front
+- Flow: a part of the scope not on the front
 - Flow: a part or block with no clear place, T6.3
 
 ## 6 — Flow placement
@@ -134,6 +134,8 @@ never moved.
 
 - Every part of the scope on the board is in exactly one block, or in
   `except`. No orphan
+- A part of the scope with no footprint on the board — a block's own
+  symbol — is left out and named on the last line
 - A block is resolved inside the scope only: a room name used elsewhere on
   the record does not reach in
 
@@ -145,7 +147,7 @@ never moved.
 | 2 | Parent | at the block's origin, turned so its pads on earlier blocks' nets, and the anchor's for the first block, face back along the flow, and its pads on later blocks' nets face forward |
 | 3 | Children | one at a time, the one with most pads on nets already laid first. Each is tried at 0, 90, 180, 270, and set at the clear spot, `gap` from all laid, where its pads are nearest the laid pads of the same nets. A net on more than half the scope's parts — ground, a rail — pulls nothing. Search grid 0.25 mm, reach 40 mm |
 | 4 | Blocks | each block's near edge `block_gap` past the last block's far edge along the flow. Across the flow: the parent's origin on the anchor's line for `ref` and `at`; the block's edge `block_gap` off the board for `edge` |
-| 5 | Keep-outs | every footprint outside the scope, and the board outline for `edge`. A block that hits one moves forward along the flow until clear |
+| 5 | Keep-outs | every footprint outside the scope, and the board outline for `edge`. A block that hits one goes to the nearest clear spot forward along the flow or away across it — away from the board for `edge`, either side for `ref` and `at` |
 | 6 | Write | one `update_items` for every part of the scope. `--dry-run` writes nothing and prints the table |
 | 7 | Check | one read back: every part outside the scope where it was, every pad of the scope where the plan put it. A failure is named on the last line |
 | 8 | Finish | the scope's parts selected |
