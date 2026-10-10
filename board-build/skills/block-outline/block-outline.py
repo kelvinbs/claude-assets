@@ -24,6 +24,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -90,6 +91,47 @@ def group(con, key, board):
     return refs
 
 
+KICAD = 'first process whose bundle identifier is "org.kicad.kicad"'
+SCH = 'first window whose name contains "Schematic Editor"'
+
+
+def osa(*lines):
+    """Run AppleScript lines through System Events on KiCad's process."""
+    args = []
+    for line in ('tell application "System Events" to tell ' + KICAD,
+                 *lines, 'end tell'):
+        args += ["-e", line]
+    run = subprocess.run(["osascript", *args], capture_output=True, text=True)
+    return run.returncode, run.stdout.strip()
+
+
+def sch_open():
+    """The Schematic Editor's window is on screen. Its lock file is not
+    proof: a crash leaves the lock behind."""
+    code, out = osa(f'  return exists ({SCH})')
+    if code != 0:
+        raise Bad("cannot read KiCad's windows through System Events")
+    return out == "true"
+
+
+def close_schematic():
+    """Save and close the Schematic Editor window, macOS, through System
+    Events: raise it, Cmd+S only once it is the front window, then its own
+    close button, never Cmd+W. Waits up to 15 s for the window to go."""
+    osa('  set frontmost to true',
+        f'  perform action "AXRaise" of ({SCH})',
+        '  delay 0.5',
+        '  if name of front window contains "Schematic Editor" then',
+        '    keystroke "s" using command down',
+        '    delay 2',
+        f'    click (first button of ({SCH}) whose subrole is "AXCloseButton")',
+        '  end if')
+    for _ in range(30):
+        if not sch_open():
+            return
+        time.sleep(0.5)
+
+
 def main():
     ensure_kipy()
     from kipy import KiCad
@@ -114,11 +156,13 @@ def main():
     board = stem.split("-board-", 1)[1] if "-board-" in stem else None
     # KiCad 10 segfaults in the Schematic Editor's API handler,
     # checkForBusy(), on a board delete while the Schematic Editor is open
-    # (radar_2 crash-incidents 1.3, 1.4). Its lock file says it is open.
-    for d in (Path(a.board_dir) / "kicad files" / stem, Path(a.board_dir)):
-        if list(d.glob("~*.kicad_sch.lck")):
-            raise Bad("the Schematic Editor is open. Close it: a board edit "
-                      "with it open crashes KiCad")
+    # (radar_2 crash-incidents 1.3, 1.4). Its window says it is open.
+    if sch_open():
+        close_schematic()
+        if sch_open():
+            raise Bad("the Schematic Editor is still open after save and "
+                      "close: a board edit with it open crashes KiCad")
+        print("Schematic Editor saved and closed")
 
     con = sqlite3.connect(db)
     groups = [(n, group(con, n, board)) for n in a.names]

@@ -43,6 +43,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/block-outline/block-outline.py <board-dir> 
 | 4 | Re-run | a name's label on User.Comments and the rectangle whose corner sits under it are removed before the new box is drawn |
 | 5 | Table of contents | one text, `Contents` and under it every box label on User.Comments, sorted; 1 mm, left-aligned, top 40 mm left of the board outline's top left corner. Generated on every run; with no names, only it is generated |
 | 6 | Calls | one read of the board, one remove, one create |
+| 7 | Schematic Editor | saved and closed first when its window is on screen, macOS System Events: raised, Cmd+S, its close button. The lock file is not read; a crash leaves it behind. A board delete with it open crashes KiCad 10, in the Schematic Editor's API handler |
 
 - A group with no footprint on the board is named on the line, and no box
   is drawn for it.
@@ -53,6 +54,5 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/block-outline/block-outline.py <board-dir> 
 - A name that is neither a room nor a ref on the open board
 - A name held by unrelated nodes, T1 row 4
 - No board open in KiCad
-- The Schematic Editor open, read from its lock file: a board delete with it
-  open crashes KiCad 10, in the Schematic Editor's API handler
+- The Schematic Editor still open after the tool saved and closed it
 - An open board with no outline on Edge.Cuts
