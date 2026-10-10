@@ -11,7 +11,7 @@ Create or modify a part. The skill of Update parts.
 |---|---|
 | `board.db` — `parts_table`, `ref_table`, `net_table`; the part files' pins | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
 
-Part fields reach KiCad by `kicad-update --push`. It writes no KiCad file; `change-part` reads the project library for the two symbols' pins. Of the sourcing tables it touches only
+Part fields reach KiCad when the schematics are regenerated: delete, regenerate with `kicad-update`, open again (`board-build-tool.md` §1.4a). It writes no KiCad file; `change-part` reads the project library for the two symbols' pins. Of the sourcing tables it touches only
 `init-pipeline` must have run first.
 
 It sets `PRAGMA foreign_keys = ON` on every connection, because SQLite leaves
@@ -152,8 +152,8 @@ multi-unit package the pin picks the unit: the part file's `units` says
 which unit draws it, and the row goes on that unit's drawing. A reference
 names the package, so `net U14 5` reaches U14B without naming it.
 `--none` clears it. The sheet takes a label at that pin on the next
-`kicad-update` place or push — local or hierarchical per T2.6c, never
-global — and loses it on the push after the row goes. On a sub-sheet
+regeneration — local or hierarchical per T2.6c, never global — and
+loses it on the regeneration after the row goes. On a sub-sheet
 instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 `{RAILS}`; the net is what it joins on the page above.
 
@@ -161,7 +161,7 @@ instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
 
 Renames a net in every row that names it: `net_table`, `bus_table` and
 `sim_net_table`. The pins keep their places; the sheet labels take the
-new name on the next `kicad-update --push`. A name already in use is
+new name on the next regeneration. A name already in use is
 refused unless `--merge` is given; with it the two nets become one, and a
 row whose key would collide — the net's bus, a simulation's source — keeps
 the row already under the new name. It prints what changed per table.
@@ -170,7 +170,7 @@ the row already under the new name. It prints what changed per table.
 
 Removes a net from every row that names it: its pins carry no net, it
 leaves its bus, and its simulation source goes. Their labels leave the
-sheet on the next `kicad-update --push`. It prints what went per table.
+sheet on the next regeneration. It prints what went per table.
 
 ## room
 
@@ -209,9 +209,7 @@ an outside `output` pin drives, per the part file, gets `ac 1`; the rest
 are printed with no source. `GND` is ground and gets nothing. `sim set
 <name> <net> <source>` sets or adds a source, `--none` removes it,
 `--directive` replaces the spice line. `sim drop` removes the instance
-and its rows. `sim show` lists every instance. `kicad-update --push`
-draws the sources and the directive, and marks everything outside the
-blocks excluded from simulation.
+and its rows. `sim show` lists every instance.
 
 ## board
 
@@ -246,8 +244,8 @@ Every row of the drawing takes the IPN: every unit, and in a sub-sheet
 every instance sharing its symbol. Nothing else in those rows changes —
 the reference, the ids, the symbol uuid, the nets, the parent and the
 room are kept. The two parts' symbols must carry the same pins on the same
-units, read from `lib/<project>.kicad_sym`. `kicad-update --push` then
-gives the symbol the new `lib_id` and fields; KiCad's Update PCB from
+units, read from `lib/<project>.kicad_sym`. Regeneration then
+draws the symbol with the new `lib_id` and fields; KiCad's Update PCB from
 Schematic keeps the footprint where it is, or swaps it in place when the
 footprint differs.
 

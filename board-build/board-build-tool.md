@@ -50,6 +50,16 @@
   - The tool is unusable until fixed
   - The runtime agent is not authorized to fix the tool
 
+### 1.4a — Changing the design
+
+- The record is changed first, by `table-write`.
+- The schematic is changed in three steps, and no other way:
+  1. Delete the board's schematic files, `*.kicad_sch`
+  2. Regenerate them: `kicad-update`, the place run
+  3. Open the schematic again in KiCad
+- The PCB is never deleted. It is modified in place, live, when
+  necessary.
+
 ### 1.5 — How it is organized
 
 - The tool lives in `tools/board-build/`.
@@ -62,7 +72,7 @@
 - The design keys to an **IPN** — an internal part number.
 - The MPN is a column on the part — a prototype buys one part one way.
 - Parameters flow database to design: a field is edited in the database and
-  pushed.
+  the schematics regenerated, §1.4a.
 
 ### 2.2 — Where the data lives
 
@@ -72,14 +82,14 @@
 |---|---|---|
 | 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `part_notes`, `ipn` |
-| 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn`; on the board, each footprint's sheet path, rewritten on push |
+| 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
-- `board.db` is master. Part fields push to the library symbol; instance
-  data pushes to the sheet; pull reads library fields back into the
-  record.
+- `board.db` is master. Instance data reaches the sheet when the
+  schematics are regenerated, §1.4a; pull reads library fields back into
+  the record.
 - The schematic returns an instance the User placed on it — its existence
   and its `Reference`, nothing else. The tool deletes on neither side.
-- Instances take the record's fields on push, as the library symbol does.
+- Instances take the record's fields when they are drawn.
 - Table names end in `_table`; keys carry the bare word.
 **T2.2 — Progress queries**
 
@@ -155,7 +165,7 @@
   fitting, never a key.
 - **There is no `path` column.** A node's sheet path is the chain of its
   sheet-instance ancestors, which is what walking `parent` gives.
-  `kicad-update` emits it on push. A drawing in a sub-sheet is one node
+  `kicad-update` emits it on place. A drawing in a sub-sheet is one node
   per instance, each with its own `id` and its own `ref`.
 - `unit` numbers a package's units from 1; every unit is its own node
   under the same `ref`.
@@ -234,13 +244,12 @@
 - A sheet instance has pins too: the nets its sub-sheet exports, named by
   the pin. A row on a sheet instance names what the pin joins on the page
   it sits on. A bus pin is named `{BUS}`.
-- `kicad-update` writes a label at the pin end from it, on place and on
-  push — a local `label`, or a `hierarchical_label` when the net leaves
-  the sheet file (T2.6c). Never a global label. Push deletes every label
-  on the page first, wherever it sits, so a moved symbol, a moved or
-  cleared net, leaves nothing behind.
-- A label typed by hand lasts until the next push. The record is the
-  only source of a label.
+- `kicad-update` writes a label at the pin end from it, on place — a
+  local `label`, or a `hierarchical_label` when the net leaves the sheet
+  file (T2.6c). Never a global label. A changed net reaches the sheet by
+  regeneration, §1.4a, so nothing stale is left behind.
+- A label typed by hand lasts until the next regeneration. The record is
+  the only source of a label.
 - The record names nets; it is not the netlist. Wires, junctions and
   pins placed to touch are the User's, drawn in KiCad, never drawn,
   moved or deleted by the tool. KiCad's netlist is the design's; the
@@ -290,8 +299,8 @@
 
 - A simulation instance: what KiCad runs when the User presses Run. `kind`
   is `ac`, `tran`, `dc` or `op`; `directive` is the spice line the sheet
-  carries as text, a default by kind until set. One instance is pushed
-  at a time: the directive is one per project.
+  carries as text, a default by kind until set. One instance at a time:
+  the directive is one per project.
 
 **T2.6e — `sim_net_table`**
 
@@ -305,23 +314,15 @@
 - What an instance covers. A block row names a block instance by its
   reference, `net` `''`; the block's descendants by the parent chain are
   the simulated parts. A source row names a boundary net, `block` `''`,
-  and the source `kicad-update` draws on it: `dc 3.3`, `ac 1`. A boundary
+  and its source: `dc 3.3`, `ac 1`. A boundary
   net is one a simulated part shares with a part outside the blocks.
   `table-write sim add` fills the source rows: a rail named as a voltage
   gets `dc`, a net an outside output pin drives gets `ac 1`, the rest are
   reported with no source for the User to set. `''` not null, so the key
   holds.
-- The models file, `models/<project>.sp`, is written by `kicad-update`
-  from `parts_table` rows whose `sim_model` is `opamp`: one subcircuit
-  per part, one `kicad_builtin_opamp` per channel with POLE = gbw / aol,
-  GAIN = aol, ROUT = rout, and a series resistor at each in+ sized so
-  4kTR = en², the noise. Node order is pin-number order; the pin map is
-  read from the part file's pin names, `IN_A+`, `IN_A-`, `OUT_A`, `V+`,
-  `V-`.
 - `rnet` is a resistor between named pin pairs and nothing else: a switch
   in one position, a jumper. `sim_params` `r=<ohm> pins=<a>:<b>,<c>:<d>`,
-  names from the part file. The subcircuit joins the models file the same
-  way.
+  names from the part file.
 
 **T2.6f — `mate_table`**
 
@@ -422,9 +423,6 @@
 | 12b | bus breakout | each file a bus leaves | `bus_table` |
 | 12c | `bus_alias` blocks | every `*.kicad_sch` | `bus_table`. Written last in a run: `kicad-cli sch upgrade` drops the block |
 | 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
-| 13 | `Sim.Device`, `Sim.Params`; `Sim.Library`, `Sim.Name`, `Sim.Pins` | the instance, every unit, inside the active simulation's blocks | `parts_table.sim_model`, `sim_params`, T2.3; an op-amp's subcircuit from `models/<project>.sp`, T2.6e. Outside the blocks the fields go |
-| 13a | `exclude_from_sim` | the instance | `no` inside the active simulation's blocks and on a part with fields; `yes` on everything else while a simulation is active; `no` everywhere with none |
-| 13b | source symbols `VS1` `VS2`, a label at each pin, the sim room and the directive text | the page of the first block | `sim_table`, `sim_net_table`. Tool fittings, `in_bom no`, `on_board no`, redrawn every push, gone when the instance is dropped |
 
 - `pinout_checked` stays in the record. It is not a project field and does
   not reach the library or the sheets.
@@ -458,7 +456,7 @@
   marked `hand` with the same parent part and the same parts under it,
   matched one to one by part in reference order: the family template.
 - `--pull` writes a place only where the symbol is not where the record
-  has it, and marks it `hand`; `--push` never writes one. Arrange by hand
+  has it, and marks it `hand`. Arrange by hand
   in KiCad, pull, and the arrangement is the record's. `table-write
   unplace` clears a place, and the packer lays that part next time the
   page is placed afresh.
@@ -495,7 +493,6 @@
 | 6 | `design/lib/` | symbols, footprints, `3d/` models |
 | 7 | `design/datasheets/` | manufacturer datasheets |
 | 8 | `design/parts/` | part files, `<IPN>-<name>.json` — datasheet facts and copy provenance: `pins`, `units`, `symbol_donor`, `pages` at stage 3; `package`, `package_dims`, `footprint_donor` at stage 5. Keys per `datasheet-read.md` T1 |
-| 8a | `design/models/` | `<project>.sp`, the simulation models, written by `kicad-update --push` from the record, T2.6e. Generated |
 | 8b | `design/placement/` | `<scope>.json`, the flow-placement strategies, `cooperative-placement` §6. Kept: a re-run gives the same placement |
 | 9 | `design/out/` | generated exports |
 
@@ -584,9 +581,9 @@ One skill, one run — T4.2.
 - Each run reports what it left untouched.
 - A symbol the User placed on a sheet enters `ref_table` under its own
   uuid, with its `Reference`. No other field returns from a sheet.
-- Push rewrites library-symbol and instance fields from the record; pull
-  reads library fields back into it. Place leaves a placed instance's
-  fields alone; push refreshes them.
+- Pull reads library fields back into the record. Place leaves a placed
+  instance's fields alone; a field change reaches the sheet by
+  regeneration, §1.4a.
 
 ### 4.4 — The RF-simulation file
 
@@ -626,7 +623,7 @@ One skill, one run — T4.2.
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 8 | `table-write` | Create or modify part; delete a part no instance uses; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; drop an empty room; record a vendor price survey; tag a simulation | Record row, net, mating pins, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
-| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
+| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 | 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles and labels on User.Comments, live; nothing saved |

@@ -549,7 +549,7 @@ def net(con, args):
     """Name the net on one pin of one instance, or clear it. Upsert on
     (id, pin). The pin picks the drawing: on a multi-unit package the
     unit that carries it, per the part file (T2.6a). The sheet takes a
-    label at that pin on the next place or push."""
+    label at that pin on the next regeneration."""
     u = unit_of_pin(con, args.board, args.ref, args.pin)
     if args.none:
         n = con.execute("delete from net_table where id = ? and pin = ?",
@@ -612,7 +612,7 @@ def rename_net(con, args):
 
 def drop_net(con, args):
     """Remove a net from every row that names it: its pins lose their
-    label on the next push, it leaves its bus, and its simulation source
+    label on the next regeneration, it leaves its bus, and its simulation source
     goes."""
     if not any(net_rows(con, args.name).values()):
         raise Bad(f"no net named {args.name}")

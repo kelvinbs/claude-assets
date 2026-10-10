@@ -1,35 +1,42 @@
 ---
 name: kicad-update
-description: Place instances on the sheets, push record fields to library and instances, pull library fields back. Stages 4 and 6.
+description: Regenerate the sheets from the record, pull library fields back. Stages 4 and 6.
 ---
 
 # kicad-update
 
-Place instances, push record to library fields, pull library fields to
-record. The skill of stages 4 and 6.
+Place instances, pull library fields to record. The skill of stages 4
+and 6.
+
+## Changing the schematic — the only way
+
+1. Delete the board's schematic files, `*.kicad_sch`
+2. Regenerate them: this skill's place run, no flags
+3. Open the schematic again in KiCad
+
+The record is changed first, by `table-write`. The PCB is never deleted:
+it is modified in place, live, when necessary.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`lib/<project>.kicad_sym` — the fields, on push<br>`board.db` — `ref_table`; `parts_table` on pull |
+| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --template <board> <template.kicad_pcb> [--whole]
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --push
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
 
-## The three verbs
+## The two verbs
 
 | Verb | Direction | Does |
 |---|---|---|
 | place, the default | record to sheets | rewrites the root; draws missing drawings with a label on every pin `net_table` names, sheet symbols for sub-sheet instances, a breakout for every bus that leaves a page; enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--push` | record to library, sheets and board | rewrites the root; rewrites every library symbol's fields, and every placed drawing's, from the record — T2.11, with the per-instance block, one path and reference per instance. A drawing whose part changed (`table-write change-part`) takes the part's `lib_id` and `ipn`, and its page the symbol's definition. Then the labels: every label on the page is deleted, wherever it sits, and every `net_table` row written back as one at the pin's current place; sheet symbols get their pins, stubs and labels afresh; the port area is redrawn. Then the simulation, T2.6d: the models file, `Sim.*` fields on every instance in the active instance's blocks and `exclude_from_sim` on everything else, the sources and the directive drawn in a sim room on the block's page. Then the board: every footprint whose Reference the record holds takes its symbol's sheet path; one the record does not hold is reported. Graphics, positions, wires and routing untouched |
 | `--pull` | library and pages to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `part_notes`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's. Then every symbol and sheet symbol that is not where the record has it: its place into `ref_table.x`, `y`, `rot`, marked `hand`; the run says how many. One where the tool left it is not written |
 
 The User's UI for part data is the Symbol Editor: edit the field there,
-then `--pull`. Claude's is `table-write`, then `--push`. Instances take
-changed fields on the next `--push`.
+then `--pull`. Claude's is `table-write`, then regeneration — delete,
+regenerate, open again.
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
 the parts on the page so there is something to wire.
@@ -67,8 +74,8 @@ the same name. A net in a bus leaves as the bus.
 
 | Drawn | Where | Kept where the User left it |
 |---|---|---|
-| local label at a pin end | every drawing's named pin, where the pin is now | no — every label on the page is deleted and written afresh on push |
-| sheet symbol, pins down the right edge, a stub and a local label at each pin | a sub-sheet instance, on the page that placed it | position yes; pins and fittings rewritten on push |
+| local label at a pin end | every drawing's named pin, where the pin is now | no — the page is regenerated |
+| sheet symbol, pins down the right edge, a stub and a local label at each pin | a sub-sheet instance, on the page that placed it | no — the page is regenerated |
 | port — hierarchical label, stub, local label | the port area, one per leaving net | no — the port area is the tool's, top right, redrawn every run |
 | bus breakout — hierarchical bus label, bus, an entry per member the file uses, a local label at each | the port area, one per bus that leaves | no — as above |
 | the root — a sheet symbol per root page, a stub and a root label at every pin | `<project>.kicad_sch` | no — the root is the tool's |
@@ -87,33 +94,6 @@ sch upgrade` drops the block. `schematic.bus_aliases` in
 it went stale, and the KiCad GUI clears it on open. Without an alias a bus
 never expands: every member, `GND` and the rails included, stays local to
 its page and the netlist joins nothing.
-
-## Simulation
-
-`table-write sim add` tags blocks; push makes the sheets simulate in
-KiCad's own simulator, Inspect, Simulator, Run. What push writes:
-
-| What | Where | From |
-|---|---|---|
-| `models/<project>.sp` | the design folder | every part with `sim_model` `opamp`: one subcircuit, nodes in pin-number order, one single-pole op-amp per channel with POLE = gbw / aol, GAIN = aol, ROUT = rout, and a series resistor at in+ with 4kTR = en², the noise. The op-amp is copied into the file, so nothing points outside the project |
-| `Sim.Device` `Sim.Params` | a passive inside the blocks, every unit | `sim_model` or the class letter; `sim_params` or `value` made spice, `1.13 kOhm` to `1.13k` |
-| `Sim.Device SUBCKT` `Sim.Library` `Sim.Name` `Sim.Pins` | an op-amp inside the blocks, every unit | the models file, `${KIPRJMOD}/models/<project>.sp`; the pin map from the part file, `1=n1 2=n2 ...` |
-| the same | an `rnet` part inside the blocks | the models file: a resistor between each named pin pair, `r=0.5 pins=S1A:D1,S2A:D2`, the rest open. A switch in one position |
-| `exclude_from_sim yes` | every instance outside the blocks, and one inside with no model | the exporter writes a junk line, `J6 __J6`, for a symbol with no model and no exclusion, and ngspice stops on it |
-| `VS1` `VS2` ..., a label at each pin | the sim room on the first block's page, below what is drawn | `sim_net_table` source rows: `dc <V>` a VDC with `dc=<V>`; `ac <V>` a VSIN with `ac=<V>`. `VDC` and `VSIN` copied from `Simulation_SPICE` into the project library once |
-| the directive as text, `.ac dec 100 1 10meg` | the sim room | `sim_table.directive` |
-
-- The blocks' parts are the block instances and their descendants by
-  the parent chain. Pin names that do not read as an op-amp's, or a
-  `value` that is not a spice value, stop the push or skip the part,
-  named.
-- One instance at a time. Two rows in `sim_table` stop the push.
-- The sim room is the tool's: removed and redrawn every push, byte for
-  byte the same when nothing changed. Place and pull skip its symbols.
-- No instance in the record: every `Sim.*` field goes, every
-  `exclude_from_sim` is `no`, the room is gone. The sheet is as it was.
-- Node `GND` is ground to ngspice. A net named as a rail, `3V3`, gets a
-  DC source from `sim add`; the rest is the User's, `table-write sim set`.
 
 ## Boards
 
@@ -145,9 +125,7 @@ board whose PCB exists. Footprints arrive by Update PCB from Schematic.
 `--whole` with `--template` copies the template PCB entire — footprints,
 tracks, vias, zones, drawings — so a board split out of another starts
 from its layout, for the User to cut down. The template is not changed.
-The next `--push` gives this board's footprints their sheet paths; the
-footprints of the other boards are reported as not in the record, and are
-the User's to delete.
+The footprints of the other boards are the User's to delete.
 
 A page whose board changes in the record (`table-write board`) takes its
 file with it: the place run finds the page file in the folder it sits in
@@ -258,10 +236,9 @@ order re-enters the symbol on the next run.
 
 `--move` follows `table-write move`. The symbol block leaves the old page
 file and the run draws it on the record's page, same uuid and reference,
-its labels on the next push. Wires the User drew to its old place stay
-on the old page, unjoined. Moved to another board, its footprint stays on
-the old board's PCB, where push reports it as not in the record; the new
-board takes it by Update PCB from Schematic.
+with its labels. Wires the User drew to its old place stay on the old
+page, unjoined. Moved to another board, its footprint stays on the old
+board's PCB; the new board takes it by Update PCB from Schematic.
 
 `--assign` is the one judgment the skill has. The script decides nothing
 about which part a symbol is; it reports the symbol and applies the answer.
