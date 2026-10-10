@@ -2,7 +2,7 @@
 """cooperative-placement — gather one block's footprints for the User to place.
 
     cooperative-placement.py <board-dir> <room|ref> [--except REF ...] [--gap MM] [--width MM]
-    cooperative-placement.py <board-dir> --flow <strategy.json> [--dry-run | --outline]
+    cooperative-placement.py <board-dir> --flow <strategy.json> [--dry-run]
 
 The User places parts on the board one block at a time. This script is
 Claude's half: it names the block from the record, finds its footprints in
@@ -49,9 +49,6 @@ the geometry:
 - One read of the board, one `update_items`, one read back. The read back
   checks every part outside the scope is where it was, and every pad
   inside it is where the plan put it. Front-side footprints only.
-- Each top block is boxed on User.Comments and labelled with its name;
-  the boxes a run drew before go first. `--outline` draws them around the
-  blocks where they stand, and moves nothing.
 """
 
 import argparse
@@ -386,53 +383,9 @@ def part_refs(con, ids, board):
                                        for t in re.split(r"(\d+)", r)])
 
 
-# ---- block outlines -----------------------------------------------------------
-
-LABEL_UP = 300_000   # nm, label baseline above its box
-
-
-def outline(b, boxes):
-    """Draw a box on User.Comments around each block, its name at the top
-    left. `boxes`: [(name, (x0, y0, x1, y1) mm)]. The boxes and labels a
-    run drew before for these names go first: a label whose name is one of
-    them, and the rectangle whose corner sits under it."""
-    from kipy.board_types import BoardRectangle, BoardText
-    from kipy.geometry import Vector2
-    from kipy.proto.board.board_types_pb2 import BoardLayer
-    from kipy.proto.common.types.enums_pb2 import HA_LEFT, VA_BOTTOM
-
-    names = {n for n, _ in boxes}
-    old = [t for t in b.get_text() if isinstance(t, BoardText)
-           and t.layer == BoardLayer.BL_Cmts_User and t.value in names]
-    corners = {(t.position.x, t.position.y + LABEL_UP) for t in old}
-    old += [r for r in b.get_shapes() if isinstance(r, BoardRectangle)
-            and r.layer == BoardLayer.BL_Cmts_User
-            and (r.top_left.x, r.top_left.y) in corners]
-    if old:
-        b.remove_items(old)
-    new = []
-    for name, (x0, y0, x1, y1) in boxes:
-        tl = Vector2.from_xy(round((x0 - 0.5) * NM), round((y0 - 0.5) * NM))
-        r = BoardRectangle()
-        r.layer = BoardLayer.BL_Cmts_User
-        r.top_left = tl
-        r.bottom_right = Vector2.from_xy(round((x1 + 0.5) * NM), round((y1 + 0.5) * NM))
-        r.attributes.stroke.width = 100_000
-        t = BoardText()
-        t.layer = BoardLayer.BL_Cmts_User
-        t.value = name
-        t.position = Vector2.from_xy(tl.x, tl.y - LABEL_UP)
-        t.attributes.size = Vector2.from_xy(NM, NM)
-        t.attributes.stroke_width = 150_000
-        t.attributes.horizontal_alignment = HA_LEFT
-        t.attributes.vertical_alignment = VA_BOTTOM
-        new += [r, t]
-    b.create_items(new)
-
-
 # ---- the run -------------------------------------------------------------------
 
-def flow(db, strategy_path, dry, only_outline=False):
+def flow(db, strategy_path, dry):
     from kipy import KiCad
     from kipy.geometry import Angle, Vector2
     from kipy.proto.board.board_types_pb2 import BoardLayer
@@ -562,18 +515,6 @@ def flow(db, strategy_path, dry, only_outline=False):
     keep = [(mm(bb.pos.x), mm(bb.pos.y), mm(bb.pos.x + bb.size.x), mm(bb.pos.y + bb.size.y))
             for r, bb in box.items() if r not in scope and bb is not None]
 
-    def span(boxes):
-        return (min(q[0] for q in boxes), min(q[1] for q in boxes),
-                max(q[2] for q in boxes), max(q[3] for q in boxes))
-
-    if only_outline:
-        outline(b, [(n["key"], span([(mm(box[r].pos.x), mm(box[r].pos.y),
-                                       mm(box[r].pos.x + box[r].size.x),
-                                       mm(box[r].pos.y + box[r].size.y))
-                                      for r in n["refs"]])) for n in blocks])
-        print(f"{s['scope']}: {len(blocks)} blocks outlined on User.Comments")
-        return
-
     an = s["anchor"]
     e = (abs(d[1]), abs(d[0]))
     anchor_nets = set()
@@ -653,11 +594,9 @@ def flow(db, strategy_path, dry, only_outline=False):
             if abs(mm(p.position.x) - wx) > 0.002 or abs(mm(p.position.y) - wy) > 0.002:
                 off.append(r)
                 break
-    outline(b, [(n["key"], span([parts[r].box_at(*out[r]) for r in n["refs"]]))
-                for n in blocks])
     b.clear_selection()
     b.add_to_selection([after[r] for r in scope])
-    line = f"{s['scope']}: {len(scope)} parts placed along the flow, outlined on User.Comments and selected"
+    line = f"{s['scope']}: {len(scope)} parts placed along the flow and selected"
     if missing:
         line += "; no footprint: " + " ".join(missing)
     if shifted:
@@ -677,14 +616,13 @@ def main():
     ap.add_argument("--width", type=float, default=16.0)
     ap.add_argument("--flow")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--outline", action="store_true")
     a = ap.parse_args()
 
     db = Path(a.board_dir) / "board.db"
     if not db.exists():
         raise Bad(f"no record at {db}")
     if a.flow:
-        flow(db, Path(a.flow), a.dry_run, a.outline)
+        flow(db, Path(a.flow), a.dry_run)
         return
     if not a.key:
         raise Bad("name a block, or give --flow")
