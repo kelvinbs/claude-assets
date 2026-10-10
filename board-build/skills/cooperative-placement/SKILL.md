@@ -15,7 +15,7 @@ time; Claude gathers each block for the User. The skill of stage 6, beside
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> <room|ref> [--except REF ...] [--gap MM] [--width MM]
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> --flow <strategy.json> [--dry-run]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> --flow <strategy.json> [--dry-run | --outline]
 ```
 
 ## 1 — The mode
@@ -153,5 +153,8 @@ never moved.
 | 5 | Keep-outs | every footprint outside the scope, and the board outline for `edge`. A block that hits one goes to the nearest clear spot, forward along the flow first — a step across costs three along — away from the board for `edge`, either side for `ref` and `at` |
 | 6 | Write | one `update_items` for every part of the scope. `--dry-run` writes nothing and prints the table |
 | 7 | Check | one read back: every part outside the scope where it was, every pad of the scope where the plan put it. A failure is named on the last line |
-| 8 | Finish | the scope's parts selected |
+| 8 | Outline | each top block boxed on User.Comments, 0.5 mm outside its parts, its name at the box's top left. The boxes and labels a run drew before for those names are removed first |
+| 9 | Finish | the scope's parts selected |
+
+- `--outline` draws row 8 around the blocks where they stand now, and moves nothing
 
