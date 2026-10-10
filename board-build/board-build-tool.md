@@ -544,7 +544,7 @@
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`patch-wizard` | — |
-| 6 | Update PCB | `kicad-update`<br>`cooperative-placement` | Placement, block by block; routes |
+| 6 | Update PCB | `kicad-update`<br>`cooperative-placement`<br>`block-outline` | Placement, block by block; routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
@@ -629,6 +629,7 @@ One skill, one run — T4.2.
 | 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
+| 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles and labels on User.Comments, live; nothing saved |
 
 ### 5.3 — Layout
 
