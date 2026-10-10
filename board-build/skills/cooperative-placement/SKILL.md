@@ -1,6 +1,6 @@
 ---
 name: cooperative-placement
-description: Cooperative parts placement — gather one block's footprints above the board's upper right corner, packed and selected, for the User to place. Stage 6.
+description: Cooperative parts placement — gather one block's footprints above the board's upper right corner, packed and selected, for the User to place; or place a scope's parts block by block along a flow from an LLM-written strategy. Stage 6.
 ---
 
 # cooperative-placement
@@ -11,10 +11,11 @@ time; Claude gathers each block for the User. The skill of stage 6, beside
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `ref_table`<br>the board open in KiCad, live | the board open in KiCad — footprint positions and the selection. Nothing saved |
+| `board.db` — `ref_table`<br>the board open in KiCad, live<br>the strategy, §6 | the board open in KiCad — footprint positions, rotations and the selection. Nothing saved |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> <room|ref> [--except REF ...] [--gap MM] [--width MM]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement.py <board-dir> --flow <strategy.json> [--dry-run]
 ```
 
 ## 1 — The mode
@@ -86,6 +87,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
   board call reaches it first and crashes KiCad in
   `API_HANDLER_EDITOR::checkForBusy()`: seen 2026-09-24 on `BeginCommit`
   and `UpdateItems`. A crash leaves the restore dialog on the next launch.
+- So the Schematic Editor, once opened, stays open until KiCad quits.
+  Open or never opened, the script runs clean. Claude never closes it.
 
 ## 5 — What it refuses
 
@@ -93,3 +96,58 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
 - A name that is neither a room nor a ref
 - A name held by unrelated rooms, T2 row 4
 - No board open in KiCad, or no Edge.Cuts on it
+- Flow, §6: a strategy that does not parse, or lacks `scope`, `anchor`,
+  `direction` or `blocks`
+- Flow: a block that repeats a part, a part of the scope no block holds,
+  a block with no single parent part and no `parent` named
+- Flow: a part of the scope not on the board, or not on the front
+- Flow: a part or block with no clear place, T6.3
+
+## 6 — Flow placement
+
+Places a scope's parts on the board, block by block along a flow. The LLM
+writes the strategy; the script does the geometry. Out-of-scope parts are
+never moved.
+
+**T6.1 — The process**
+
+| # | Who | Does |
+|---|---|---|
+| 1 | User | Names a scope — a room or a part — and, when it is not plain, the flow: the primary current path, the signal flow, or another |
+| 2 | Claude | Reads the scope from the record, its rooms, parents and nets, and the datasheets where a part's role is not plain |
+| 3 | Claude | Writes the strategy, T6.2, to `<board-dir>/placement/<scope>.json`. The strategy is kept: a re-run gives the same placement |
+| 4 | Claude | Runs the script with `--flow`. Nothing else touches the board |
+| 5 | Claude | Replies with the script's table and its last line |
+| 6 | User | Reviews, moves what is wrong by hand, saves |
+
+**T6.2 — The strategy**
+
+| # | Key | Holds | Default |
+|---|---|---|---|
+| 1 | `scope` | the room or ref whose parts are placed, everything under it by `parent` | required |
+| 2 | `anchor` | where the flow starts: `{"ref": "J5"}` a footprint outside the scope, `{"at": [x, y]}` in mm, or `{"edge": "below"}` — `below`, `above`, `left`, `right` of Edge.Cuts | required |
+| 3 | `direction` | the way the flow runs: `R`, `L`, `U`, `D`. `below` and `above` take `R` or `L`; `left` and `right` take `U` or `D` | required |
+| 4 | `blocks` | the blocks in flow order: each `{"block": "<room or ref>", "parent": "<ref>"}`. `parent` may be left out when the block names a part, or holds one part directly | required |
+| 5 | `ignore_nets` | nets that pull nothing — ground, and rails every part touches | `["GND"]` |
+| 6 | `except` | refs of the scope left where they are; kept clear of as obstacles | `[]` |
+| 7 | `gap` | clearance between parts, mm | 0.5 |
+| 8 | `block_gap` | clearance between blocks, and from the anchor, mm | 2.0 |
+
+- Every part of the scope on the board is in exactly one block, or in
+  `except`. No orphan
+- A block is resolved inside the scope only: a room name used elsewhere on
+  the record does not reach in
+
+**T6.3 — The geometry**
+
+| # | Step | Rule |
+|---|---|---|
+| 1 | Read | one read of the footprints, their pads, nets and bounding boxes without text. Pads and boxes are taken back to each footprint's own frame |
+| 2 | Parent | at the block's origin, turned so its pads on earlier blocks' nets, and the anchor's for the first block, face back along the flow, and its pads on later blocks' nets face forward |
+| 3 | Children | one at a time, the one with most pads on nets already laid first. Each is tried at 0, 90, 180, 270, and set at the clear spot, `gap` from all laid, where its pads are nearest the laid pads of the same nets. Search grid 0.25 mm, reach 40 mm |
+| 4 | Blocks | each block's near edge `block_gap` past the last block's far edge along the flow. Across the flow: the parent's origin on the anchor's line for `ref` and `at`; the block's edge `block_gap` off the board for `edge` |
+| 5 | Keep-outs | every footprint outside the scope, and the board outline for `edge`. A block that hits one moves forward along the flow until clear |
+| 6 | Write | one `update_items` for every part of the scope. `--dry-run` writes nothing and prints the table |
+| 7 | Check | one read back: every part outside the scope where it was, every pad of the scope where the plan put it. A failure is named on the last line |
+| 8 | Finish | the scope's parts selected |
+

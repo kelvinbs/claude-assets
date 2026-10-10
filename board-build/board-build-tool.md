@@ -496,6 +496,7 @@
 | 7 | `design/datasheets/` | manufacturer datasheets |
 | 8 | `design/parts/` | part files, `<IPN>-<name>.json` — datasheet facts and copy provenance: `pins`, `units`, `symbol_donor`, `pages` at stage 3; `package`, `package_dims`, `footprint_donor` at stage 5. Keys per `datasheet-read.md` T1 |
 | 8a | `design/models/` | `<project>.sp`, the simulation models, written by `kicad-update --push` from the record, T2.6e. Generated |
+| 8b | `design/placement/` | `<scope>.json`, the flow-placement strategies, `cooperative-placement` §6. Kept: a re-run gives the same placement |
 | 9 | `design/out/` | generated exports |
 
 ### 3.2 — Assets
@@ -627,7 +628,7 @@ One skill, one run — T4.2.
 | 8 | `table-write` | Create or modify part; delete a part no instance uses; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; drop an empty room; record a vendor price survey; tag a simulation | Record row, net, mating pins, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
 | 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; push record to library fields; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
-| 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place | `board.db` — `ref_table`<br>the board open in KiCad, live | footprint positions and the selection, live; nothing saved |
+| 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 
 ### 5.3 — Layout
 
