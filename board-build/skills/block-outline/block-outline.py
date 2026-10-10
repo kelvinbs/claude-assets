@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """block-outline — box each named group of parts on the open board.
 
-    block-outline.py <board-dir> <room|ref> [<room|ref> ...]
+    block-outline.py <board-dir> [<room|ref> ...]
 
 Each name is a room by `ref_table.name`, or a part by `ref`, on the open
 board, and everything under it by `parent`. Rooms of the same name nested
@@ -13,6 +13,10 @@ A box drawn before for a name is replaced: the label on User.Comments
 whose text is the name, and the rectangle whose corner sits under it.
 One read of the board, one remove, one create. Nothing is moved. Nothing
 is saved; the User saves.
+
+The table of contents: one text on User.Comments left of the board
+outline, `Contents` and under it every box label on the layer, sorted.
+Generated on every run, with no names given as well.
 """
 
 import argparse
@@ -28,6 +32,8 @@ PY = VENV / "bin" / "python"
 NM = 1_000_000
 MARGIN = 500_000      # nm, box outside the parts
 LABEL_UP = 300_000    # nm, label baseline above the box
+KEY = "Contents"      # the table of contents' first line, and how it is found
+KEY_GAP = 40 * NM     # nm, its left edge left of the board outline
 
 
 class Bad(SystemExit):
@@ -90,11 +96,11 @@ def main():
     from kipy.board_types import BoardRectangle, BoardText
     from kipy.geometry import Vector2
     from kipy.proto.board.board_types_pb2 import BoardLayer
-    from kipy.proto.common.types.enums_pb2 import HA_LEFT, VA_BOTTOM
+    from kipy.proto.common.types.enums_pb2 import HA_LEFT, VA_BOTTOM, VA_TOP
 
     ap = argparse.ArgumentParser()
     ap.add_argument("board_dir")
-    ap.add_argument("names", nargs="+")
+    ap.add_argument("names", nargs="*")
     a = ap.parse_args()
 
     db = Path(a.board_dir) / "board.db"
@@ -115,12 +121,22 @@ def main():
     box = {f.reference_field.text.value: bb for f, bb in zip(fps, bbs) if bb is not None}
 
     names = {n for n, _ in groups}
-    old = [t for t in b.get_text() if isinstance(t, BoardText)
-           and t.layer == BoardLayer.BL_Cmts_User and t.value in names]
+    texts = [t for t in b.get_text() if isinstance(t, BoardText)
+             and t.layer == BoardLayer.BL_Cmts_User]
+    keys = [t for t in texts if t.value.split("\n", 1)[0] == KEY]
+    labels = [t for t in texts if t not in keys]
+    old = [t for t in labels if t.value in names]
     corners = {(t.position.x, t.position.y + LABEL_UP) for t in old}
-    old += [r for r in b.get_shapes() if isinstance(r, BoardRectangle)
+    shapes = list(b.get_shapes())
+    old += [r for r in shapes if isinstance(r, BoardRectangle)
             and r.layer == BoardLayer.BL_Cmts_User
             and (r.top_left.x, r.top_left.y) in corners]
+    edge = [q for q in b.get_item_bounding_box(
+        [s for s in shapes if s.layer == BoardLayer.BL_Edge_Cuts])
+        if q is not None]
+    if not edge:
+        raise Bad("the open board has no outline on Edge.Cuts")
+    old += keys
     if old:
         b.remove_items(old)
 
@@ -148,10 +164,25 @@ def main():
         t.attributes.horizontal_alignment = HA_LEFT
         t.attributes.vertical_alignment = VA_BOTTOM
         new += [r, t]
-    if new:
-        b.create_items(new)
+    drawn = len(new) // 2
 
-    line = f"{len(new) // 2} boxes drawn on User.Comments"
+    listed = sorted({t.value for t in labels if t.value not in names}
+                    | {n for n, _ in groups if n not in empty},
+                    key=str.casefold)
+    k = BoardText()
+    k.layer = BoardLayer.BL_Cmts_User
+    k.value = "\n".join([KEY, *listed])
+    k.position = Vector2.from_xy(min(q.pos.x for q in edge) - KEY_GAP,
+                                 min(q.pos.y for q in edge))
+    k.attributes.size = Vector2.from_xy(NM, NM)
+    k.attributes.stroke_width = 150_000
+    k.attributes.horizontal_alignment = HA_LEFT
+    k.attributes.vertical_alignment = VA_TOP
+    new.append(k)
+    b.create_items(new)
+
+    line = (f"{drawn} boxes drawn on User.Comments; contents list "
+            f"{len(listed)} labels")
     if old:
         line += f", {len(old)} old items replaced"
     if empty:
