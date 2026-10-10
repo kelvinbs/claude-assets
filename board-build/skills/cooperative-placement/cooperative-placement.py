@@ -33,9 +33,11 @@ a flow, from a strategy the LLM writes — SKILL §6. The strategy holds the
 judgment: scope, anchor, direction, blocks in flow order. The script holds
 the geometry:
 
-- Each block is laid out in its own frame. Its parent goes at the origin,
-  turned so its pads on the nets of earlier blocks face back along the
-  flow and its pads on the nets of later blocks face forward.
+- Each block is laid out in its own frame. A block with sub-blocks is the
+  same operation one level down: its sub-blocks in order along the flow,
+  then its other parts around them. A block without has its parent at the
+  origin, turned so its pads on the nets of earlier blocks face back along
+  the flow and its pads on the nets of later blocks face forward.
 - The block's other parts follow one at a time, most connected to what is
   laid first. Each is turned 0, 90, 180 or 270 and set where its pads are
   nearest the pads they share a net with, `gap` clear of what is laid.
@@ -180,21 +182,24 @@ def ring():
 
 @functools.lru_cache(None)
 def shifts(signs, reach=200.0, step=0.5):
-    """Offsets (along, across), along >= 0, nearest first."""
+    """Offsets (along, across), along >= 0, nearest first; across costs
+    three times along, so a block keeps to the line where it can."""
     n = int(reach / step)
     pts = [(i * step, sg * j * step) for i in range(n + 1) for j in range(n + 1)
            for sg in signs if not (j == 0 and sg < 0) and i * i + j * j <= n * n]
-    pts.sort(key=lambda p: (p[0] ** 2 + p[1] ** 2, p[0], abs(p[1])))
+    pts.sort(key=lambda p: (p[0] + 3 * abs(p[1]), abs(p[1]), p[0]))
     return pts
 
 
 # ---- one block ------------------------------------------------------------
 
-def lay_block(parts, parent, ignore, gap, back, fwd, d):
-    """Place `parts` around `parent` at the origin. Returns {ref: (x, y, deg)}."""
-    by = {p.ref: p for p in parts}
-    par = by[parent]
+def netset(node, by, ignore):
+    return {net for r in node["refs"] for *_, net in by[r].pads if net and net not in ignore}
 
+
+def orient(par, back, fwd, d):
+    """The turn that faces `par`'s pads on `back` nets back along `d`, and
+    on `fwd` nets forward."""
     def facing(deg):
         s = 0.0
         for _, x, y, net in par.pads_at(0, 0, deg):
@@ -204,12 +209,16 @@ def lay_block(parts, parent, ignore, gap, back, fwd, d):
             if net in fwd:
                 s += a
         return s
-    pdeg = max((0, 90, 180, 270), key=lambda g: (round(facing(g), 6), -g))
-    laid = {parent: (0.0, 0.0, pdeg)}
-    boxes = [par.box_at(0, 0, pdeg)]
-    pads = [(net, x, y) for _, x, y, net in par.pads_at(0, 0, pdeg) if net and net not in ignore]
+    return max((0, 90, 180, 270), key=lambda g: (round(facing(g), 6), -g))
 
-    rest = [p for p in parts if p.ref != parent]
+
+def lay_rest(laid, by, rest, ignore, gap):
+    """Add `rest` to `laid` one at a time, most connected first, each turned
+    and set where its pads are nearest the laid pads of the same nets."""
+    boxes = [by[r].box_at(*v) for r, v in laid.items()]
+    pads = [(net, x, y) for r, v in laid.items() for _, x, y, net in by[r].pads_at(*v)
+            if net and net not in ignore]
+    rest = [by[r] for r in rest]
     while rest:
         nets_laid = {n for n, _, _ in pads}
 
@@ -221,8 +230,9 @@ def lay_block(parts, parent, ignore, gap, back, fwd, d):
                 if net and net not in ignore and net in nets_laid]
         partners = {n: [(x, y) for m, x, y in pads if m == n] for _, _, n in mine}
         if mine:
-            tx = sum(x for n in partners for x, _ in partners[n]) / sum(map(len, partners.values()))
-            ty = sum(y for n in partners for _, y in partners[n]) / sum(map(len, partners.values()))
+            k = sum(map(len, partners.values()))
+            tx = sum(x for n in partners for x, _ in partners[n]) / k
+            ty = sum(y for n in partners for _, y in partners[n]) / k
         else:
             tx = ty = 0.0
 
@@ -262,41 +272,62 @@ def lay_block(parts, parent, ignore, gap, back, fwd, d):
     return laid
 
 
-def plan(blocks, d, gap, block_gap, ignore, keepouts, start, align, anchor_nets):
-    """Set laid-out blocks along the flow. `blocks`: [(parts, parent)].
+def lay_node(node, by, ignore, gap, block_gap, back, fwd):
+    """Lay a block in its own frame. A block with sub-blocks is the same
+    operation one level down: its sub-blocks in order along its direction,
+    then its other parts around them. A block without is its parent at the
+    origin and its other parts around it. Returns {ref: (x, y, deg)}."""
+    d = node["d"]
+    if not node["kids"]:
+        par = node["parent"]
+        laid = {par: (0.0, 0.0, orient(by[par], back, fwd, d))}
+        return lay_rest(laid, by, [r for r in node["refs"] if r != par], ignore, gap)
+    nets = [netset(k, by, ignore) for k in node["kids"]]
+    laid, cursor = {}, None
+    for i, k in enumerate(node["kids"]):
+        loc = lay_node(k, by, ignore, gap, block_gap,
+                       back.union(*nets[:i]), fwd.union(*nets[i + 1:]))
+        span = [along(by[r].box_at(*v), d) for r, v in loc.items()]
+        ta = 0.0 if cursor is None else cursor + block_gap - min(a for a, _ in span)
+        for r, (x, y, g) in loc.items():
+            laid[r] = (x + d[0] * ta, y + d[1] * ta, g)
+        cursor = ta + max(b for _, b in span)
+    return lay_rest(laid, by, [r for r in node["refs"] if r not in laid], ignore, gap)
+
+
+def along(b, d):
+    v = [x * d[0] + y * d[1] for x, y in ((b[0], b[1]), (b[2], b[3]))]
+    return min(v), max(v)
+
+
+def plan(nodes, by, d, gap, block_gap, ignore, keepouts, start, align, anchor_nets):
+    """Set the top blocks along the flow, their parents on one line.
     `align`: ('origin'|'min'|'max', cross value). Returns {ref: (x, y, deg)}."""
     e = (abs(d[1]), abs(d[0]))
-    nets = [{net for p in parts for *_, net in p.pads if net and net not in ignore}
-            for parts, _ in blocks]
-    out = {}
-    cursor = start
-    for i, (parts, parent) in enumerate(blocks):
-        back = set(anchor_nets if i == 0 else ()).union(*nets[:i]) - ignore
-        fwd = set().union(*nets[i + 1:]) - ignore
-        local = lay_block(parts, parent, ignore, gap, back, fwd, d)
-        by = {p.ref: p for p in parts}
-        lboxes = [by[r].box_at(*local[r]) for r in local]
+    nets = [netset(n, by, ignore) for n in nodes]
+    locs = []
+    for i, n in enumerate(nodes):
+        back = set(anchor_nets if i == 0 else ()).union(*nets[:i])
+        fwd = set().union(*nets[i + 1:])
+        loc = lay_node(n, by, ignore, gap, block_gap, back, fwd)
+        locs.append((loc, [by[r].box_at(*v) for r, v in loc.items()]))
 
-        def along(b):
-            cs = [(b[0], b[1]), (b[2], b[3])]
-            v = [x * d[0] + y * d[1] for x, y in cs]
-            return min(v), max(v)
-
-        def cross(b):
-            return b[0] * e[0] + b[1] * e[1], b[2] * e[0] + b[3] * e[1]
-        lo = min(along(b)[0] for b in lboxes)
-        mode, val = align
-        if mode == "origin":
-            tc = val
-        elif mode == "min":
-            tc = val - min(cross(b)[0] for b in lboxes)
-        else:
-            tc = val - max(cross(b)[1] for b in lboxes)
-        ta0 = cursor + block_gap - lo
-        # blocked: the nearest clear spot forward along the flow, or away
-        # across it — away from the board for an edge anchor, either way
-        # for a line
-        signs = {"min": (1,), "max": (-1,), "origin": (1, -1)}[mode]
+    def cross(b):
+        return b[0] * e[0] + b[1] * e[1], b[2] * e[0] + b[3] * e[1]
+    mode, val = align
+    every = [b for _, bs in locs for b in bs]
+    if mode == "origin":
+        tc = val
+    elif mode == "min":
+        tc = val - min(cross(b)[0] for b in every)
+    else:
+        tc = val - max(cross(b)[1] for b in every)
+    # blocked: the nearest clear spot, forward along the flow first, else
+    # away across it — from the board for an edge anchor, either way for a line
+    signs = {"min": (1,), "max": (-1,), "origin": (1, -1)}[mode]
+    out, cursor = {}, start
+    for n, (loc, lboxes) in zip(nodes, locs):
+        ta0 = cursor + block_gap - min(along(b, d)[0] for b in lboxes)
         for da, dc in shifts(signs):
             ta, tcc = ta0 + da, tc + dc
             tx, ty = d[0] * ta + e[0] * tcc, d[1] * ta + e[1] * tcc
@@ -304,10 +335,10 @@ def plan(blocks, d, gap, block_gap, ignore, keepouts, start, align, anchor_nets)
             if all(clear(b, keepouts, gap) for b in moved):
                 break
         else:
-            raise ValueError(f"block of {parent} finds no clear place along the flow")
-        for r, (x, y, deg) in local.items():
+            raise ValueError(f"block {n['key']} finds no clear place along the flow")
+        for r, (x, y, deg) in loc.items():
             out[r] = (x + tx, y + ty, deg)
-        cursor = max(along(b)[1] for b in moved)
+        cursor = max(along(b, d)[1] for b in moved)
     return out
 
 
@@ -369,8 +400,8 @@ def flow(db, strategy_path, dry):
     if s["direction"] not in DIRS:
         raise Bad(f"direction {s['direction']!r} is not one of R L U D")
     d = DIRS[s["direction"]]
-    gap = float(s.get("gap", 0.5))
-    block_gap = float(s.get("block_gap", 2.0))
+    gap = float(s.get("gap", 1.0))
+    block_gap = float(s.get("block_gap", 3.0))
     skip = set(s.get("except", []))
 
     try:
@@ -390,33 +421,58 @@ def flow(db, strategy_path, dry):
         # a part with no footprint — a block's own symbol — is not placed
         missing = sorted(scope - byref.keys())
         scope -= set(missing)
-        blocks, seen = [], set()
-        for blk in s["blocks"]:
-            key = blk["block"] if isinstance(blk, dict) else blk
-            ids = set().union(*(subtree(con, t) for t in resolve(con, key, scope_ids)))
-            refs = [r for r in part_refs(con, list(ids), board) if r in scope]
+        def build(spec, within, pool, dd):
+            spec = {"block": spec} if isinstance(spec, str) else spec
+            if "direction" in spec:
+                if spec["direction"] not in DIRS:
+                    raise ValueError(f"direction {spec['direction']!r} is not one of R L U D")
+                dd = DIRS[spec["direction"]]
+            if "part" in spec:
+                r = spec["part"]
+                if r not in pool:
+                    raise ValueError(f"part {r!r} is not in its block")
+                return {"key": r, "refs": [r], "parent": r, "kids": [], "d": dd}
+            key = spec["block"]
+            tops = resolve(con, key, within)
+            ids = set().union(*(subtree(con, t) for t in tops))
+            refs = [r for r in part_refs(con, list(ids), board) if r in pool]
             if not refs:
                 raise ValueError(f"block {key!r} has no parts on board {board!r}")
-            dup = seen.intersection(refs)
-            if dup:
-                raise ValueError(f"block {key!r} repeats {' '.join(sorted(dup))}")
-            seen.update(refs)
-            par = blk.get("parent") if isinstance(blk, dict) else None
+            kids, seen = [], set()
+            for ks in spec.get("blocks", []):
+                k = build(ks, ids, set(refs), dd)
+                dup = seen.intersection(k["refs"])
+                if dup:
+                    raise ValueError(f"block {key!r} repeats {' '.join(sorted(dup))}")
+                seen.update(k["refs"])
+                kids.append(k)
+            par = spec.get("parent")
             if par and par not in refs:
                 raise ValueError(f"parent {par!r} is not in block {key!r}")
-            if not par:
+            if not par and not kids:
                 par = key if key in refs else None
-            if not par:
-                tops = resolve(con, key, scope_ids)
-                direct = sorted({r[0] for r in con.execute(
-                    f"select ref from ref_table where kind = 'part' and ref is not null "
-                    f"and parent in ({','.join('?' * len(tops))})", tops)
-                    if r[0] in refs})
-                if len(direct) != 1:
-                    raise ValueError(f"block {key!r} has no single parent part; "
-                                     f"name one with \"parent\"")
-                par = direct[0]
-            blocks.append((key, refs, par))
+                if not par:
+                    direct = sorted({r[0] for r in con.execute(
+                        f"select ref from ref_table where kind = 'part' and ref is not null "
+                        f"and parent in ({','.join('?' * len(tops))})", tops)
+                        if r[0] in refs})
+                    if len(direct) != 1:
+                        raise ValueError(f"block {key!r} has no single parent part; "
+                                         f"name one with \"parent\", or give it blocks")
+                    par = direct[0]
+            if par and kids and par not in seen:
+                kids.insert(0, {"key": par, "refs": [par], "parent": par, "kids": [], "d": dd})
+                seen.add(par)
+            return {"key": key, "refs": refs, "parent": par, "kids": kids, "d": dd}
+
+        blocks, seen = [], set()
+        for spec in s["blocks"]:
+            n = build(spec, scope_ids, scope, d)
+            dup = seen.intersection(n["refs"])
+            if dup:
+                raise ValueError(f"block {n['key']!r} repeats {' '.join(sorted(dup))}")
+            seen.update(n["refs"])
+            blocks.append(n)
         left = scope - seen
         if left:
             raise ValueError("no block holds " + " ".join(sorted(left)))
@@ -497,16 +553,16 @@ def flow(db, strategy_path, dry):
         raise Bad("anchor takes ref, at or edge")
 
     try:
-        out = plan([([parts[r] for r in refs], par) for _, refs, par in blocks],
-                   d, gap, block_gap, ignore, keep, start, align, anchor_nets - ignore)
+        out = plan(blocks, parts, d, gap, block_gap, ignore, keep, start, align,
+                   anchor_nets - ignore)
     except ValueError as ex:
         raise Bad(str(ex))
 
     rows = []
-    for key, refs, par in blocks:
-        for r in [par] + [r for r in refs if r != par]:
+    for n in blocks:
+        for r in sorted(n["refs"], key=lambda r: out[r][0] * d[0] + out[r][1] * d[1]):
             x, y, deg = out[r]
-            rows.append((key, r, x, y, deg))
+            rows.append((n["key"], r, x, y, deg))
     print("| # | Block | Ref | X mm | Y mm | Rot |")
     print("|---|---|---|---|---|---|")
     for i, (key, r, x, y, deg) in enumerate(rows, 1):
