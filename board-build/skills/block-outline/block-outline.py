@@ -112,6 +112,13 @@ def main():
         raise Bad(f"no board open in KiCad: {e}")
     stem = Path(b.name).stem
     board = stem.split("-board-", 1)[1] if "-board-" in stem else None
+    # KiCad 10 segfaults in the Schematic Editor's API handler,
+    # checkForBusy(), on a board delete while the Schematic Editor is open
+    # (radar_2 crash-incidents 1.3, 1.4). Its lock file says it is open.
+    for d in (Path(a.board_dir) / "kicad files" / stem, Path(a.board_dir)):
+        if list(d.glob("~*.kicad_sch.lck")):
+            raise Bad("the Schematic Editor is open. Close it: a board edit "
+                      "with it open crashes KiCad")
 
     con = sqlite3.connect(db)
     groups = [(n, group(con, n, board)) for n in a.names]

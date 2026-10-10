@@ -53,4 +53,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/block-outline/block-outline.py <board-dir> 
 - A name that is neither a room nor a ref on the open board
 - A name held by unrelated nodes, T1 row 4
 - No board open in KiCad
+- The Schematic Editor open, read from its lock file: a board delete with it
+  open crashes KiCad 10, in the Schematic Editor's API handler
 - An open board with no outline on Edge.Cuts
