@@ -201,7 +201,8 @@
   the survey is taken once and any build size reads off it.
 - A survey row is taken only for the part's exact MPN. A different MPN is
   a different part.
-- One vendor per part, JLCPCB unless the part says otherwise.
+- One vendor per part: JLCPCB or LCSC. They share part numbers; LCSC's
+  product page publishes the price ladder, JLCPCB's does not.
 
 **T2.6 — `price_table`**
 
