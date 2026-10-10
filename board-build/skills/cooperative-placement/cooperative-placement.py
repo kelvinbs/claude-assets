@@ -18,10 +18,7 @@ they are.
 
 The board is live: KiCad's IPC API, through `kicad-python` in the tool's
 own venv, `.venv` at the plugin root, made on first run. KiCad and the
-board stay open. No commit is opened. KiCad 10.0.5 keeps the schematic
-editor's API handler after that editor is closed, and a board call that
-reaches it crashes KiCad; so the Schematic Editor is not closed while
-KiCad runs.
+board stay open. No commit is opened.
 
 Pack: footprints by bounding box without text, tallest first, into rows no
 wider than `--width`, `--gap` apart on both axes. The cluster's lower right
