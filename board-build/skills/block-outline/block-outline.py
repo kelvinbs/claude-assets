@@ -178,6 +178,9 @@ def main():
     k.attributes.stroke_width = 150_000
     k.attributes.horizontal_alignment = HA_LEFT
     k.attributes.vertical_alignment = VA_TOP
+    # the API's defaults draw every line on the first: one line, spacing 0
+    k.attributes.multiline = True
+    k.attributes.line_spacing = 1.0
     new.append(k)
     b.create_items(new)
 
