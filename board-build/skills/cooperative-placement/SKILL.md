@@ -82,13 +82,6 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/cooperative-placement/cooperative-placement
   kept out of git.
 - The API server must be on in KiCad's preferences.
 - No commit is opened.
-- KiCad 10.0.5 keeps the schematic editor's API handler registered after
-  the Schematic Editor window closes. Its frame is gone, and the next
-  board call reaches it first and crashes KiCad in
-  `API_HANDLER_EDITOR::checkForBusy()`: seen 2026-09-24 on `BeginCommit`
-  and `UpdateItems`. A crash leaves the restore dialog on the next launch.
-- So the Schematic Editor, once opened, stays open until KiCad quits.
-  Open or never opened, the script runs clean. Claude never closes it.
 
 ## 5 — What it refuses
 
