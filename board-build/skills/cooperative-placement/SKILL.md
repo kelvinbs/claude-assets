@@ -128,10 +128,9 @@ never moved.
 | 2 | `anchor` | where the flow starts: `{"ref": "J5"}` a footprint outside the scope, `{"at": [x, y]}` in mm, or `{"edge": "below"}` — `below`, `above`, `left`, `right` of Edge.Cuts | required |
 | 3 | `direction` | the way the flow runs: `R`, `L`, `U`, `D`. `below` and `above` take `R` or `L`; `left` and `right` take `U` or `D` | required |
 | 4 | `blocks` | the blocks in flow order: each `{"block": "<room or ref>", "parent": "<ref>"}`. `parent` may be left out when the block names a part, or holds one part directly | required |
-| 5 | `ignore_nets` | nets that pull nothing — ground, and rails every part touches | `["GND"]` |
-| 6 | `except` | refs of the scope left where they are; kept clear of as obstacles | `[]` |
-| 7 | `gap` | clearance between parts, mm | 0.5 |
-| 8 | `block_gap` | clearance between blocks, and from the anchor, mm | 2.0 |
+| 5 | `except` | refs of the scope left where they are; kept clear of as obstacles | `[]` |
+| 6 | `gap` | clearance between parts, mm | 0.5 |
+| 7 | `block_gap` | clearance between blocks, and from the anchor, mm | 2.0 |
 
 - Every part of the scope on the board is in exactly one block, or in
   `except`. No orphan
@@ -144,7 +143,7 @@ never moved.
 |---|---|---|
 | 1 | Read | one read of the footprints, their pads, nets and bounding boxes without text. Pads and boxes are taken back to each footprint's own frame |
 | 2 | Parent | at the block's origin, turned so its pads on earlier blocks' nets, and the anchor's for the first block, face back along the flow, and its pads on later blocks' nets face forward |
-| 3 | Children | one at a time, the one with most pads on nets already laid first. Each is tried at 0, 90, 180, 270, and set at the clear spot, `gap` from all laid, where its pads are nearest the laid pads of the same nets. Search grid 0.25 mm, reach 40 mm |
+| 3 | Children | one at a time, the one with most pads on nets already laid first. Each is tried at 0, 90, 180, 270, and set at the clear spot, `gap` from all laid, where its pads are nearest the laid pads of the same nets. A net on more than half the scope's parts — ground, a rail — pulls nothing. Search grid 0.25 mm, reach 40 mm |
 | 4 | Blocks | each block's near edge `block_gap` past the last block's far edge along the flow. Across the flow: the parent's origin on the anchor's line for `ref` and `at`; the block's edge `block_gap` off the board for `edge` |
 | 5 | Keep-outs | every footprint outside the scope, and the board outline for `edge`. A block that hits one moves forward along the flow until clear |
 | 6 | Write | one `update_items` for every part of the scope. `--dry-run` writes nothing and prints the table |

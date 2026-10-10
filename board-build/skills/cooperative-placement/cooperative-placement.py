@@ -39,6 +39,8 @@ the geometry:
 - The block's other parts follow one at a time, most connected to what is
   laid first. Each is turned 0, 90, 180 or 270 and set where its pads are
   nearest the pads they share a net with, `gap` clear of what is laid.
+  A net on more than half the scope's parts, ground or a rail, pulls
+  nothing.
 - The blocks are set along the flow from the anchor, `block_gap` apart,
   each pushed forward until clear of every footprint outside the scope.
 - One read of the board, one `update_items`, one read back. The read back
@@ -353,7 +355,6 @@ def flow(db, strategy_path, dry):
     d = DIRS[s["direction"]]
     gap = float(s.get("gap", 0.5))
     block_gap = float(s.get("block_gap", 2.0))
-    ignore = set(s.get("ignore_nets", ["GND"]))
     skip = set(s.get("except", []))
 
     try:
@@ -428,6 +429,15 @@ def flow(db, strategy_path, dry):
             (bb.pos.x, bb.pos.y + bb.size.y), (bb.pos.x + bb.size.x, bb.pos.y + bb.size.y))]
         parts[r] = Part(r, pads, (min(c[0] for c in cs), min(c[1] for c in cs),
                                   max(c[0] for c in cs), max(c[1] for c in cs)))
+
+    # A net on more than half the scope's parts, ground or a rail, says
+    # nothing about where a part goes; it pulls nothing.
+    on = {}
+    for r, pt in parts.items():
+        for *_, net in pt.pads:
+            if net:
+                on.setdefault(net, set()).add(r)
+    ignore = {n for n, rs in on.items() if len(rs) > max(2, len(parts) / 2)}
 
     keep = [(mm(bb.pos.x), mm(bb.pos.y), mm(bb.pos.x + bb.size.x), mm(bb.pos.y + bb.size.y))
             for r, bb in box.items() if r not in scope and bb is not None]
