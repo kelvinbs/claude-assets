@@ -542,7 +542,7 @@
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`patch-wizard` | — |
-| 6 | Update PCB | `kicad-update`<br>`cooperative-placement`<br>`block-outline` | Placement, block by block; routes |
+| 6 | Update PCB | `kicad-update`<br>`cooperative-placement`<br>`block-outline`<br>`bga-fanout` | Placement, block by block; routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
@@ -628,6 +628,7 @@ One skill, one run — T4.2.
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 | 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name; generate the table of contents of every box | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles, labels and the table of contents on User.Comments, live; nothing saved |
+| 13 | `bga-fanout` | Fan out a ball grid array on the open board: a via in every connected ball; every signal to the courtyard line on the signal layer; the rest through the escape layer, a GND via beside each layer change; power balls strapped | the board open in KiCad, live | vias and tracks around the part, live; saved only with `--save` |
 
 ### 5.3 — Layout
 
