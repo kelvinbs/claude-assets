@@ -570,7 +570,8 @@ def net(con, args):
 
 # the tables that name a net, and the key a renamed row keeps beside it
 NET_TABLES = (("net_table", ("id", "pin")), ("bus_table", ()),
-              ("sim_net_table", ("name", "block")))
+              ("sim_net_table", ("name", "block")),
+              ("netclass_net_table", ()))
 
 
 def net_rows(con, name):
@@ -981,6 +982,60 @@ def bus(con, args):
         con.execute("insert into bus_table (net, bus) values (?,?) "
                     "on conflict(net) do update set bus = excluded.bus",
                     (n, args.name))
+        print(f"{args.name}  {n}")
+    con.commit()
+
+
+NETCLASS_FIELDS = ("track_width", "clearance", "diff_pair_width",
+                   "diff_pair_gap")
+
+
+def netclass(con, args):
+    """Define a net class and put nets in it. `netclass` alone lists.
+    `netclass NAME --track-width 0.09 ...` sets the class's widths in mm.
+    `netclass NAME NET...` puts the nets in NAME, moving any that were
+    elsewhere. `--drop NET...` takes them out of any class; `--drop NAME`
+    with no nets, when NAME is a class, removes the class."""
+    if args.drop:
+        names = [args.name] + args.nets if args.name else args.nets
+        if args.name and not args.nets and con.execute(
+                "select 1 from netclass_table where name = ?",
+                (args.name,)).fetchone():
+            con.execute("delete from netclass_table where name = ?",
+                        (args.name,))
+            print(f"{args.name}  class removed")
+        else:
+            for n in names:
+                k = con.execute("delete from netclass_net_table where net = ?",
+                                (n,)).rowcount
+                print(f"{n}  {'out of its class' if k else 'was in no class'}")
+        con.commit()
+        return
+    if not args.name:
+        for row in con.execute(f"select name, {', '.join(NETCLASS_FIELDS)} "
+                               "from netclass_table order by name"):
+            print(f"{row[0]}  " + "  ".join(
+                f"{f}={v}" for f, v in zip(NETCLASS_FIELDS, row[1:])
+                if v is not None))
+        for c, n in con.execute("select netclass, net from netclass_net_table "
+                                "order by netclass, net"):
+            print(f"{c}  {n}")
+        return
+    con.execute("insert into netclass_table (name) values (?) "
+                "on conflict(name) do nothing", (args.name,))
+    for f in NETCLASS_FIELDS:
+        v = getattr(args, f)
+        if v is not None:
+            con.execute(f"update netclass_table set {f} = ? where name = ?",
+                        (v, args.name))
+            print(f"{args.name}  {f} = {v}")
+    for n in args.nets:
+        if not con.execute("select 1 from net_table where net = ?",
+                           (n,)).fetchone():
+            raise Bad(f"no net named {n}")
+        con.execute("insert into netclass_net_table (net, netclass) "
+                    "values (?,?) on conflict(net) do update "
+                    "set netclass = excluded.netclass", (n, args.name))
         print(f"{args.name}  {n}")
     con.commit()
 
@@ -1409,6 +1464,17 @@ def main(argv):
     b.add_argument("--drop", action="store_true",
                    help="take the named nets out of any bus")
     b.set_defaults(run=bus)
+
+    nc = sub.add_parser("netclass", help="define a net class, put nets in it")
+    nc.add_argument("name", nargs="?", help="the class")
+    nc.add_argument("nets", nargs="*", help="member nets")
+    for f in NETCLASS_FIELDS:
+        nc.add_argument(f"--{f.replace('_', '-')}", dest=f, type=float,
+                        help="mm")
+    nc.add_argument("--drop", action="store_true",
+                    help="take the named nets out of any class, or remove "
+                    "the named class")
+    nc.set_defaults(run=netclass)
 
     mt = sub.add_parser("mate", help="pins that mate between boards")
     mt.add_argument("items", nargs="*", help="<ref> <pin> <ref> <pin>")

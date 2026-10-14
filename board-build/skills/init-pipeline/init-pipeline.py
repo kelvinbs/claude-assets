@@ -161,6 +161,23 @@ SCHEMA = {
             "b_pin         TEXT NOT NULL",
             "PRIMARY KEY (a_ref, a_pin)",
         ),
+        # T2.6g — the net classes: widths and gaps in mm. kicad-update
+        # writes them into the project file's net_settings, where the
+        # schematic and the PCB both read them
+        "netclass_table": (
+            "name          TEXT PRIMARY KEY NOT NULL",
+            "track_width   REAL",
+            "clearance     REAL",
+            "diff_pair_width REAL",
+            "diff_pair_gap REAL",
+        ),
+        # T2.6h — a net's class. A net is in at most one class; the
+        # project file takes one exact-name pattern per row
+        "netclass_net_table": (
+            "net           TEXT PRIMARY KEY NOT NULL",
+            "netclass      TEXT NOT NULL REFERENCES netclass_table(name)"
+            " ON DELETE CASCADE",
+        ),
     },
 }
 

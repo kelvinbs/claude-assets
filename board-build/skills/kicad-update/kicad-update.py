@@ -1322,6 +1322,54 @@ def write_bus_aliases(board, project, model):
     return changed
 
 
+NETCLASS_FIELDS = ("track_width", "clearance", "diff_pair_width",
+                   "diff_pair_gap")
+
+
+def write_netclasses(board, roots):
+    """netclass_table and netclass_net_table into every root's .kicad_pro
+    `net_settings`, which Schematic Setup and Board Setup both show. The
+    record is master: every class but Default and every pattern is
+    replaced. A class starts from Default and takes the record's widths;
+    a net takes the pattern `*/NET`, its name under any sheet path."""
+    con = connect(board)
+    try:
+        have = {r[0] for r in con.execute(
+            "select name from sqlite_master where type = 'table'")}
+        if not {"netclass_table", "netclass_net_table"} <= have:
+            return 0
+        classes = con.execute(f"select name, {', '.join(NETCLASS_FIELDS)} "
+                              "from netclass_table order by name").fetchall()
+        members = con.execute("select net, netclass from netclass_net_table "
+                              "order by netclass, net").fetchall()
+    finally:
+        con.close()
+    changed = 0
+    for info in roots.values():
+        pro = info["dir"] / f"{info['stem']}.kicad_pro"
+        if not pro.exists():
+            continue
+        data = json.loads(pro.read_text())
+        ns = data.setdefault("net_settings", {})
+        default = next((c for c in ns.get("classes", [])
+                        if c.get("name") == "Default"), {"name": "Default"})
+        out = [default]
+        for i, (name, *vals) in enumerate(classes):
+            c = dict(default, name=name, priority=i)
+            for f, v in zip(NETCLASS_FIELDS, vals):
+                if v is not None:
+                    c[f] = v
+            out.append(c)
+        before = json.dumps(ns, sort_keys=True)
+        ns["classes"] = out
+        ns["netclass_patterns"] = [{"netclass": c, "pattern": f"*/{n}"}
+                                   for n, c in members]
+        if json.dumps(ns, sort_keys=True) != before:
+            pro.write_text(json.dumps(data, indent=2) + "\n")
+            changed += 1
+    return changed
+
+
 def pull_fields(con, library, nickname):
     """Library to record: Description, Value, Footprint, part_notes, Manufacturer,
     Datasheet to `parts_table`. MPN is reported on mismatch, never
@@ -2409,6 +2457,8 @@ def main(argv):
     # last: normalizing a sheet after this drops the aliases
     wrote = write_bus_aliases(board, project, model)
     print(f"    bus aliases written into {wrote} sheet(s)")
+    print(f"    net classes written into {write_netclasses(board, roots)} "
+          "project file(s)")
 
     if entered:
         print(f"\n{len(entered)} symbol(s) entered in ref_table from the "
