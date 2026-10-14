@@ -1,25 +1,60 @@
 ---
 name: bga-fanout
-description: Fan out a ball grid array on the open board — a via in every connected ball, every signal to the courtyard line on the signal layer, the rest through the escape layer with a GND via beside each layer change, power balls strapped. Stage 6.
+description: Fan out a ball grid array on the open board in steps — a via in every connected ball, power balls strapped on F.Cu, signal nets grouped by the part they serve, then one group at a time routed toward that part to end vias on the courtyard edge, each with a GND via toward the part. Stage 6.
 ---
 
 # bga-fanout
 
-Fans out one ball grid array on the board open in KiCad. The User routes
-on from the courtyard line, and picks up the power and GND vias with plane
+Fans out one ball grid array on the board open in KiCad, in steps. The User
+routes on from the end vias, and picks up the power and GND vias with plane
 shapes.
 
 | Reads | Writes |
 |---|---|
-| the board open in KiCad, live | the board open in KiCad — vias and tracks around the part. Saved only with `--save` |
+| the board open in KiCad, live<br>`<board-dir>/fanout/<ref>.json` | the board open in KiCad — vias and tracks around the part. Saved only with `--save`<br>`<board-dir>/fanout/<ref>.json`, by Claude |
 
 ```
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> [--straps-only] [--save] [--dry-run]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> vias   [--save] [--dry-run]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> straps [--save] [--dry-run]
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> groups
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> route --group NAME [--band MM] [--save] [--dry-run]
 ```
 
-## 1 — Geometry
+## 1 — Steps
 
-**T1 — Defaults**
+**T1 — The steps, in order**
+
+| # | Step | By | What it does |
+|---|---|---|---|
+| 1 | `vias` | script | A via in every connected ball that has none: signal, power, GND |
+| 2 | `straps` | script | Adjacent balls of one power net strapped on F.Cu where clearance allows, on no other layer. Orthogonal first, a diagonal only to join two groups; widened up to 0.5 mm. The part's straps are removed and redrawn |
+| 3 | `groups` | script | Lists each signal net with the parts at its other end and the side each part sits on |
+| 4 | Grouping | Claude | Groups the signal nets by the part they serve, judged from step 3 and the record: a net through a resistor or to two parts goes with the part it serves. Gives each group a direction, the side its part sits on. Writes `<board-dir>/fanout/<ref>.json`, T3, and shows the groups to the User |
+| 5 | `route --group NAME` | script | Routes one group, T2. Run once per group |
+
+## 2 — Routing a group
+
+**T2 — The rules**
+
+| # | Item | Rule |
+|---|---|---|
+| 1 | Layers | F.Cu or In2.Cu. A trace stays on one layer from its ball via to its end via |
+| 2 | Direction | A trace heads only in its group's direction, never back. On a straight side, N, S, E or W, it may move across the direction, up to `--band` from its ball, 1.6 mm by default |
+| 3 | End | Every trace ends in a via on the courtyard edge of the side it faces, or on a column 0.8 mm further out when the edge is full. Rows 0.8 mm apart, alternate columns offset 0.4 mm |
+| 4 | GND via | One per end via, 0.40 mm from it toward the part, on the normal to the courtyard edge |
+| 5 | Negotiation | The group's nets share cells and end vias; an overlap costs more each pass until none remain |
+| 6 | Re-run | The group's own tracks on F.Cu and In2.Cu, its end vias and their GND vias are removed first. Nothing else is touched |
+| 7 | Report | Each net: layer, end via, drift across the direction |
+
+**T3 — `fanout/<ref>.json`**
+
+```json
+{"groups": [{"name": "ADC", "dir": "W", "nets": ["/ADC_SDIO", "/ADC_SEN"]}]}
+```
+
+- `dir` is one of N, S, E, W, NE, NW, SE, SW.
+
+**T4 — Defaults**
 
 | # | Item | Value | Option |
 |---|---|---|---|
@@ -28,42 +63,19 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> 
 | 3 | Copper clearance | 0.10 mm | `--clearance` |
 | 4 | Hole clearance | 0.20 mm | `--hole-clearance` |
 | 5 | Hole to hole | 0.22 mm | `--hole-to-hole` |
-| 6 | Signal layer | In2.Cu | `--signal-layer` |
-| 7 | Escape layer | In4.Cu | `--escape-layer` |
-| 7a | Strap layer | F.Cu. No option: straps go on no other layer | — |
-| 8 | Fence | the courtyard, F.Courtyard | `--fence`, `--fence-max` |
-| 9 | Power nets | `^/?\+?\d+V\d*$` | `--power` |
-| 10 | Grid | 0.1 mm; bends 0°, 45°, 90° | — |
+| 6 | Power nets | `^/?\+?\d+V\d*$` | `--power` |
+| 7 | Grid | 0.1 mm; bends 0°, 45°, 90° | — |
 
-- The board setup must allow T1 rows 1–5; the tool does not change it.
-
-## 2 — What it draws
-
-**T2 — The fan-out**
-
-| # | Item | Rule |
-|---|---|---|
-| 1 | Ball via | In pad, on every connected ball: signal, power, GND |
-| 2 | Signal | Ends on the signal layer, on the fence line |
-| 3 | Escape | A signal the signal layer cannot hold runs on the escape layer to a layer-change via inside the courtyard, then on the signal layer to the fence line |
-| 4 | GND via | One per layer-change via. The minimum via spacing, centre to centre: 0.40 mm at the T1 defaults. On the normal to the nearest courtyard edge, on its inner side |
-| 5 | Direction | Traces head out. A step inward costs extra; inward only where nothing else fits |
-| 6 | Negotiation | Signals share grid cells on both layers; an overlap costs more each pass until none remain. The escape layer costs a little more, so it is used only as needed |
-| 7 | Power | Adjacent balls of one net strapped on F.Cu where clearance allows, on no other layer. Orthogonal first, a diagonal only to join two groups; widened up to 0.5 mm. No power trace on the escape layer |
-| 8 | Re-run | The part's fan-out tracks on both layers, its straps, its ball vias and the GND vias around it are removed first |
-| 8a | Straps only | `--straps-only`: the part's straps are removed and redrawn. Nothing else is touched. A strap is a power track whose two ends sit on adjacent balls of its net, on F.Cu or, from an older run, on the signal layer |
-| 9 | Calls | One read of the board, one remove, one create. KiCad's busy answer is retried |
-| 10 | Schematic Editor | Saved and closed first when its window is on screen, as `block-outline` T2 row 7 |
-| 11 | Report | Signals fanned out, layer changes, inward excursions over 0.3 mm, straps, pairs without clearance not strapped |
-
-- The fence moves out by half a pitch only up to `--fence-max`.
+- The board setup must allow T4 rows 1–5; the tool does not change it.
 - Check after: DRC errors at the part, `kicad-cli pcb drc`.
+- The Schematic Editor is saved and closed first when its window is on screen, as `block-outline` T2 row 7. A board edit with it open crashes KiCad.
 
 ## 3 — What it refuses
 
 - No board open in KiCad
 - No footprint `<ref>` on the open board
-- No courtyard on F.Courtyard and no `--fence`
+- No courtyard on F.Courtyard
 - No GND ball
-- No fan-out without overlaps with the fence up to `--fence-max`
+- `route`: no `fanout/<ref>.json`, no such group, a net with no signal ball on the part, a ball with no via
+- `route`: no conflict-free fan-out toward the direction within the band
 - The Schematic Editor still open after the tool saved and closed it
