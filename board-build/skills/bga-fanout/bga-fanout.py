@@ -522,7 +522,8 @@ def main():
             if occ[L][c][k] == 0:
                 del occ[L][c][k]
 
-    def astar(net, L, start, pres):
+    def astar(net, L, start, pres, allow=None, site_ok=None):
+        """allow: the only cells the path may use; site_ok: which end sites it may take."""
         k = nid[net]
         bx, by = start
         band = int(round(a.band / G))
@@ -534,7 +535,8 @@ def main():
             n_o = sum(v for kk, v in o.items() if kk != k) if o else 0
             return (1 + hist[L][c]) * (1 + pres * n_o)
 
-        goals = {c for c, sts in goal_of.items() if any(net in usable[s] for s in sts) and not off_band(c)}
+        fit = lambda st: net in usable[st] and (site_ok is None or site_ok(st))
+        goals = {c for c, sts in goal_of.items() if any(fit(s) for s in sts) and not off_band(c)}
         if not goals:
             return None
         gl = list(goals)
@@ -553,12 +555,12 @@ def main():
                 path = path[::-1]
                 cells = set(path)
                 for st in goal_of[c]:
-                    if net in usable[st] and not (cells & gnd_disk[st]):
+                    if fit(st) and not (cells & gnd_disk[st]):
                         return path, st, g
             for nd in MOVES:
                 di, dj = D8[nd]
                 n = (c[0] + di, c[1] + dj)
-                if not (0 <= n[0] < S and 0 <= n[1] < S) or blocked(n) or off_band(n):
+                if not (0 <= n[0] < S and 0 <= n[1] < S) or blocked(n) or off_band(n) or (allow is not None and n not in allow):
                     continue
                 if di and dj and (blocked((c[0] + di, c[1])) or blocked((c[0], c[1] + dj))):
                     continue
@@ -570,27 +572,73 @@ def main():
                     heapq.heappush(pq, (g2 + h(n), g2, n, nd))
         return None
 
-    order = sorted(mine, key=lambda bl: -((bl[2] - CX) * dvx + (bl[3] - CY) * dvy))   # nearest the edge first
+    # differential pairs: <stem>_P and <stem>_N both in the group. A pair takes one layer,
+    # the N trace runs beside the P trace with nothing between, the end vias are neighbours
+    byname = {bl[1].name: bl for bl in mine}
+    pairs = {}
+    for n in byname:
+        m = re.match(r'(.+)_P$', n)
+        if m and m.group(1) + '_N' in byname:
+            pairs[n] = m.group(1) + '_N'
+    paired = set(pairs) | set(pairs.values())
+    units = [(byname[p], byname[n]) for p, n in pairs.items()] + [(bl,) for bl in mine if bl[1].name not in paired]
+    unit_of = {bl[1].name: u for u in units for bl in u}
+    CPL = 2 * R_TRK - G                     # P to N centre lines: no third trace fits between
+    SPAN = max(max(abs(bl[2] - CX), abs(bl[3] - CY)) for bl in balls) + pitch / 2
+    infield = lambda c: max(abs(xy(*c)[0] - CX), abs(xy(*c)[1] - CY)) < SPAN
+    CPL_IN = pitch + G                      # in the ball field: the next channel, a ball row between
+    ESC = pitch * 1.5                       # free of the coupling this close to the N ball
+
+    def route_unit(u, pres):
+        if len(u) == 1:
+            bl = u[0]
+            best = None
+            for L in LAY:
+                r = astar(bl[1].name, L, ij(bl[2], bl[3]), pres)
+                if r and (best is None or r[2] < best[0]):
+                    best = (r[2], {bl[1].name: (L, r[0], r[1])})
+            return best and best[1]
+        bp, bn = u
+        best = None
+        for L in LAY:
+            rp = astar(bp[1].name, L, ij(bp[2], bp[3]), pres)
+            if not rp:
+                continue
+            add(bp[1].name, (L, rp[0], rp[1]), +1)
+            allow = set()
+            for c in rp[0]:
+                allow.update(disk(xy(*c), CPL))
+                allow.update(q for q in disk(xy(*c), CPL_IN) if infield(q))
+            allow.update(disk((bn[2], bn[3]), ESC))
+            allow.update(disk(rp[1][0], 0.8 + CPL))
+            same_edge = lambda st, sp=rp[1]: st[2] == sp[2] and math.dist(st[0], sp[0]) < 0.9 + 1e-6 and st[0] != sp[0]
+            rn = astar(bn[1].name, L, ij(bn[2], bn[3]), pres, allow, same_edge)
+            add(bp[1].name, (L, rp[0], rp[1]), -1)
+            if not rn:                      # the P route leaves no room beside it: make it cost more
+                for c in rp[0]:
+                    hist[L][c] += 0.5
+            if rn and (best is None or rp[2] + rn[2] < best[0]):
+                best = (rp[2] + rn[2], {bp[1].name: (L, rp[0], rp[1]), bn[1].name: (L, rn[0], rn[1])})
+        return best and best[1]
+
+    lead = lambda u: max((bl[2] - CX) * dvx + (bl[3] - CY) * dvy for bl in u)
+    order = sorted(units, key=lambda u: -lead(u))   # nearest the edge first
     pres = 0.5
     done = False
     conflicted, unrouted = set(), []
     for it in range(a.iters):
         t0 = time.time()
-        for bl in order:
-            net = bl[1].name
-            if net in route:
-                add(net, route[net], -1)
-                del route[net]
-            start = ij(bl[2], bl[3])
-            best = None
-            for L in LAY:
-                r = astar(net, L, start, pres)
-                if r and (best is None or r[2] < best[3]):
-                    best = (L, *r)
-            if best:
-                L, path, st, _ = best
-                route[net] = (L, path, st)
-                add(net, route[net], +1)
+        for u in order:
+            for bl in u:
+                net = bl[1].name
+                if net in route:
+                    add(net, route[net], -1)
+                    del route[net]
+            got = route_unit(u, pres)
+            if got:
+                for net, r in got.items():
+                    route[net] = r
+                    add(net, r, +1)
         # a net's centre line in another's footprint; two nets' vias closer than the via spacing
         conflicted = set()
         for net, r in route.items():
@@ -614,7 +662,8 @@ def main():
             break
         pres *= 1.6
         cs = conflicted | set(unrouted)
-        order = [bl for bl in order if bl[1].name in cs] + [bl for bl in order if bl[1].name not in cs]
+        hot = [u for u in order if any(bl[1].name in cs for bl in u)]
+        order = hot + [u for u in order if u not in hot]
     if not done:
         raise Bad(f'group {a.group}: no conflict-free fan-out toward {D} within {a.band} mm of drift; '
                   f'unrouted {", ".join(unrouted) or "none"}; in conflict {", ".join(sorted(conflicted)) or "none"}')
@@ -640,6 +689,8 @@ def main():
     print(f'\n| # | Net | Ball | Layer | End via, from centre | Drift |\n|---|---|---|---|---|---|')
     for k, (net, n, ln, p, dr) in enumerate(sorted(report), 1):
         print(f'| {k} | `{net}` | {n} | {ln} | {p[0] - CX:+.2f}, {p[1] - CY:+.2f} | {dr:.2f} |')
+    if pairs:
+        print('\npairs: ' + ', '.join(f'{p} / {n} on {LNAME[route[p][0]]}' for p, n in sorted(pairs.items())))
     print(f'\nremove {len(old_t)} tracks, {len(old_v)} end vias, {len(old_g)} GND vias; '
           f'create {sum(1 for c in create if isinstance(c, Track))} tracks, {2 * len(mine)} vias')
     write(old, create)

@@ -42,9 +42,10 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> 
 | 2 | Direction | A trace heads only in its group's direction, never back. On a straight side, N, S, E or W, it may move across the direction, up to `--band` from its ball, 1.6 mm by default |
 | 3 | End | Every trace ends in a via on the courtyard edge of the side it faces, or on a column 0.8 mm further out when the edge is full. Rows 0.8 mm apart, alternate columns offset 0.4 mm |
 | 4 | GND via | One per end via, 0.40 mm from it toward the part, on the normal to the courtyard edge |
+| 4a | Differential pairs | `<stem>_P` and `<stem>_N` both in the group are a pair. A pair takes one layer. Its two traces are adjacent: nothing between them — in the ball field one ball row at most, outside it the closest spacing. Its two end vias are neighbours on the same edge |
 | 5 | Negotiation | The group's nets share cells and end vias; an overlap costs more each pass until none remain |
 | 6 | Re-run | The group's own tracks on F.Cu and In2.Cu, its end vias and their GND vias are removed first. Nothing else is touched |
-| 7 | Report | Each net: layer, end via, drift across the direction |
+| 7 | Report | Each net: layer, end via, drift across the direction. Each pair and its layer |
 
 **T3 — `fanout/<ref>.json`**
 
