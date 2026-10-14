@@ -10,8 +10,9 @@ such via has a GND via at the minimum via spacing, on the normal to the
 nearest courtyard edge, on its inner side. Signals negotiate grid cells on
 both layers (PathFinder): overlaps cost more each pass until none remain.
 A step inward costs extra, so traces head out. Power balls of one net are
-strapped on the signal layer where clearance allows, widened up to
-0.5 mm; the power planes are the User's.
+strapped on the top layer where clearance allows, on the signal layer
+where it does not, widened up to 0.5 mm; the power planes are the User's.
+--straps-only redraws the straps and nothing else.
 
 One read of the board, one remove, one create. Saved only with --save.
 """
@@ -118,13 +119,15 @@ def main():
     ensure_kipy()
     retry_busy()
     from kipy import KiCad
-    from kipy.board_types import BoardLayer, Track, Via
+    from kipy.board_types import BoardLayer, PadStackShape, Track, Via
     from kipy.geometry import Vector2
 
     ap = argparse.ArgumentParser()
     ap.add_argument('board_dir'); ap.add_argument('ref')
     ap.add_argument('--signal-layer', default='In2.Cu')
     ap.add_argument('--escape-layer', default='In4.Cu')
+    ap.add_argument('--strap-layer', default='F.Cu')
+    ap.add_argument('--straps-only', action='store_true', help='redraw the power straps only')
     ap.add_argument('--fence', type=float, help='mm from centre; default the courtyard')
     ap.add_argument('--fence-max', type=float, help='mm; default the fence')
     ap.add_argument('--via', type=float, default=0.25)
@@ -154,7 +157,7 @@ def main():
     VV = round(max(VR + VD / 2, VH + HH), 3)    # via centre to via centre: the minimum, 0.40
     VH2 = VH + HH                               # via centre to via centre, same net: hole to hole
     G = 0.1
-    LS, LE = layer(a.signal_layer), layer(a.escape_layer)
+    LS, LE, LT = layer(a.signal_layer), layer(a.escape_layer), layer(a.strap_layer)
     POWER = re.compile(a.power)
 
     try:
@@ -206,12 +209,28 @@ def main():
     inR = lambda x, y: abs(x - CX) < R and abs(y - CY) < R
     nets = {bl[1].name for bl in balls}
     signets = {bl[1].name for bl in sig}
-    old_t = [t for t in b.get_tracks() if t.layer in (LS, LE) and t.net.name in nets
-             and inR(t.start.x / NM, t.start.y / NM) and inR(t.end.x / NM, t.end.y / NM)]
-    old_v = [v for v in b.get_vias()
-             if (round(v.position.x / NM, 3), round(v.position.y / NM, 3)) in ballpos
-             or (v.net.name in signets and inR(v.position.x / NM, v.position.y / NM))
-             or (isg(v.net.name) and span + pitch / 4 < max(abs(v.position.x / NM - CX), abs(v.position.y / NM - CY)) < R)]
+    ballnet = {(round(x, 3), round(y, 3)): net.name for _, net, x, y in balls}
+
+    def is_strap(t):
+        """A power strap: a track whose two ends sit on adjacent balls of its net."""
+        s0 = (round(t.start.x / NM, 3), round(t.start.y / NM, 3))
+        s1 = (round(t.end.x / NM, 3), round(t.end.y / NM, 3))
+        if not POWER.match(t.net.name) or not ballnet.get(s0) == ballnet.get(s1) == t.net.name:
+            return False
+        d = math.hypot(s1[0] - s0[0], s1[1] - s0[1])
+        return abs(d - pitch) < 0.01 or abs(d - pitch * math.sqrt(2)) < 0.01
+
+    old_s = [t for t in b.get_tracks() if t.layer in (LS, LT) and is_strap(t)]
+    if a.straps_only:
+        old_t, old_v = old_s, []
+    else:
+        old_t = [t for t in b.get_tracks() if t.layer in (LS, LE) and t.net.name in nets
+                 and inR(t.start.x / NM, t.start.y / NM) and inR(t.end.x / NM, t.end.y / NM)]
+        old_t += [t for t in old_s if t.id.value not in {o.id.value for o in old_t}]
+        old_v = [v for v in b.get_vias()
+                 if (round(v.position.x / NM, 3), round(v.position.y / NM, 3)) in ballpos
+                 or (v.net.name in signets and inR(v.position.x / NM, v.position.y / NM))
+                 or (isg(v.net.name) and span + pitch / 4 < max(abs(v.position.x / NM - CX), abs(v.position.y / NM - CY)) < R)]
     OLD = {o.id.value for o in old_t + old_v}
     keep_t = [t for t in b.get_tracks() if t.id.value not in OLD and (inR(t.start.x / NM, t.start.y / NM) or inR(t.end.x / NM, t.end.y / NM))]
     keep_v = [v for v in b.get_vias() if v.id.value not in OLD and inR(v.position.x / NM, v.position.y / NM)]
@@ -485,18 +504,21 @@ def main():
         return None, idx, xy, N
 
 
-    fence = a.fence
-    while True:
-        route, idx, xy, N = solve(fence)
-        if route or fence >= a.fence_max:
-            break
-        fence = round(fence + pitch / 2, 3)
-    if not route:
-        raise Bad(f'no conflict-free fan-out with the fence up to {a.fence_max} mm')
-    print(f'fence {fence}: all {len(route)} signals fanned out')
-    chb = {bl[1].name: max(abs(bl[2] - CX), abs(bl[3] - CY)) for bl in sig}
-    inw = sorted(((round(chb[n] - min(max(abs(xy(*c)[0] - CX), abs(xy(*c)[1] - CY)) for c in r[0] + r[1]), 2), n) for n, r in route.items()), reverse=True)
-    print('inward excursions over 0.3:', [w for w in inw if w[0] > 0.3])
+    if a.straps_only:
+        route = {}
+    else:
+        fence = a.fence
+        while True:
+            route, idx, xy, N = solve(fence)
+            if route or fence >= a.fence_max:
+                break
+            fence = round(fence + pitch / 2, 3)
+        if not route:
+            raise Bad(f'no conflict-free fan-out with the fence up to {a.fence_max} mm')
+        print(f'fence {fence}: all {len(route)} signals fanned out')
+        chb = {bl[1].name: max(abs(bl[2] - CX), abs(bl[3] - CY)) for bl in sig}
+        inw = sorted(((round(chb[n] - min(max(abs(xy(*c)[0] - CX), abs(xy(*c)[1] - CY)) for c in r[0] + r[1]), 2), n) for n, r in route.items()), reverse=True)
+        print('inward excursions over 0.3:', [w for w in inw if w[0] > 0.3])
 
 
     def corners(p):
@@ -522,7 +544,7 @@ def main():
         return v
 
 
-    tracks, vias = [], [mk_via(x, y, net) for _, net, x, y in balls]
+    tracks, vias = [], [] if a.straps_only else [mk_via(x, y, net) for _, net, x, y in balls]
     segs3 = []
     for net, (c3, c5, site, g) in route.items():
         for cells, ly in ((c3, LS), (c5, LE)):
@@ -538,8 +560,10 @@ def main():
             vias.append(mk_via(*xy(*site), netobj[net]))
             vias.append(mk_via(*g, GND))
 
-    # power straps on L3
-    vall = [(x, y, net.name) for _, net, x, y in balls] + [(v.position.x / NM, v.position.y / NM, v.net.name) for v in vias]
+    # power straps: on the strap layer where clearance allows, else on the signal layer
+    vall = [(x, y, net.name, VR) for _, net, x, y in balls] + \
+           [(v.position.x / NM, v.position.y / NM, v.net.name, VR) for v in vias] + \
+           [(x, y, nn, max(vr + CL, VH / 2 + HCL)) for x, y, nn, vr in fixed_v]
 
 
     def segd(p, q, r, s):
@@ -549,7 +573,22 @@ def main():
         return min(pd(*p, *r, *s), pd(*q, *r, *s), pd(*r, *p, *q), pd(*s, *p, *q))
 
 
-    segs3 += [((t.start.x / NM, t.start.y / NM), (t.end.x / NM, t.end.y / NM), t.width / NM, t.net.name) for t in keep_t if t.layer == LS]
+    segs = {LS: segs3}
+    segs.setdefault(LT, [])
+    for t in keep_t:
+        if t.layer in segs:
+            segs[t.layer].append(((t.start.x / NM, t.start.y / NM), (t.end.x / NM, t.end.y / NM), t.width / NM, t.net.name))
+
+
+    def pad_r(p, ly):
+        cl = p.padstack.copper_layer(ly) or (p.padstack.copper_layers[0] if p.padstack.copper_layers else None)
+        if cl is None or not cl.size.x:
+            return 1.0
+        if cl.shape == PadStackShape.PSS_CIRCLE:
+            return max(cl.size.x, cl.size.y) / 2 / NM
+        return math.hypot(cl.size.x, cl.size.y) / 2 / NM
+    pads = {ly: [(p.position.x / NM, p.position.y / NM, p.net.name, pad_r(p, ly)) for p in other_pads if ly in p.padstack.layers]
+            for ly in segs}
     par = {}
 
 
@@ -558,6 +597,12 @@ def main():
         while par[x] != x:
             par[x] = par[par[x]]; x = par[x]
         return x
+
+
+    def fits(ly, p0, p1, net):
+        return all(nn == net or pd(x, y, *p0, *p1) >= vr + TW / 2 for x, y, nn, vr in vall) and \
+               all(nn == net or pd(x, y, *p0, *p1) >= r + CL + TW / 2 for x, y, nn, r in pads[ly]) and \
+               all(nn == net or segd(p0, p1, s0, s1) >= TW / 2 + w / 2 + CL for s0, s1, w, nn in segs[ly])
 
 
     cand = []
@@ -573,12 +618,13 @@ def main():
     for kind, n1, n2, net, p0, p1 in sorted(cand, key=lambda c: c[0]):
         if kind == 1 and root(n1) == root(n2):
             continue
-        if all(nn == net.name or pd(x, y, *p0, *p1) >= VR + TW / 2 for x, y, nn in vall) and \
-           all(nn == net.name or segd(p0, p1, s0, s1) >= TW / 2 + w / 2 + CL for s0, s1, w, nn in segs3):
-            straps.append([p0, p1, TW, net]); segs3.append((p0, p1, TW, net.name)); par[root(n1)] = root(n2)
+        for ly in dict.fromkeys((LT, LS)):
+            if fits(ly, p0, p1, net.name):
+                straps.append([p0, p1, TW, net, ly]); segs[ly].append((p0, p1, TW, net.name)); par[root(n1)] = root(n2)
+                break
     for s in straps:
         lim = 0.25
-        for s0, s1, w, nn in segs3:
+        for s0, s1, w, nn in segs[s[4]]:
             if (s0, s1) == (s[0], s[1]):
                 continue
             d = segd(s[0], s[1], s0, s1)
@@ -590,16 +636,22 @@ def main():
                 lim = min(lim, d - w / 2)
             else:
                 lim = min(lim, (d - CL) / 2 if POWER.match(nn) else d - CL - w / 2)
-        for x, y, nn in vall:
+        for x, y, nn, vr in vall:
             if nn != s[3].name:
-                lim = min(lim, pd(x, y, *s[0], *s[1]) - VR)
+                lim = min(lim, pd(x, y, *s[0], *s[1]) - vr)
+        for x, y, nn, r in pads[s[4]]:
+            if nn != s[3].name:
+                lim = min(lim, pd(x, y, *s[0], *s[1]) - r - CL)
         s[2] = max(TW, math.floor(2 * lim * 100) / 100)
-    tracks += [mk_track(LS, p0, p1, w, net) for p0, p1, w, net in straps]
+    tracks += [mk_track(ly, p0, p1, w, net) for p0, p1, w, net, ly in straps]
+    on_t = sum(1 for s in straps if s[4] == LT)
+    print(f'straps: {on_t} on {a.strap_layer}, {len(straps) - on_t} on {a.signal_layer}')
     print(f'wipe {len(old_t)} tracks {len(old_v)} vias; create {len(vias)} vias ({sum(1 for r in route.values() if r[2])} layer changes, as many GND), {len(tracks)} tracks, {len(straps)} power straps')
     if a.dry_run:
         return
     b.remove_items(old_t + old_v)
-    b.create_items(vias)
+    if vias:
+        b.create_items(vias)
     b.create_items(tracks)
     if a.save:
         b.save(); print('saved')
