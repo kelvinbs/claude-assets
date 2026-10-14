@@ -146,7 +146,7 @@ def main():
 
     ap = argparse.ArgumentParser()
     ap.add_argument('board_dir'); ap.add_argument('ref')
-    ap.add_argument('step', choices=['groups', 'top', 'vias', 'straps', 'route'])
+    ap.add_argument('step', choices=['groups', 'top', 'vias', 'straps', 'route', 'clear'])
     ap.add_argument('--group', help='top, route: the group name in fanout/<ref>.json')
     ap.add_argument('--band', type=float, default=2.4, help='mm a trace may drift across its direction')
     ap.add_argument('--via', type=float, default=0.25)
@@ -182,8 +182,9 @@ def main():
                       "a board edit with it open crashes KiCad")
         print("Schematic Editor saved and closed")
 
-    LF, L2 = BoardLayer.BL_F_Cu, BoardLayer.BL_In2_Cu
-    LNAME = {LF: 'F.Cu', L2: 'In2.Cu'}
+    LF, L2, L4 = BoardLayer.BL_F_Cu, BoardLayer.BL_In2_Cu, BoardLayer.BL_In4_Cu
+    LNAME = {LF: 'F.Cu', L2: 'In2.Cu', L4: 'In4.Cu'}
+    ALLL = (LF, L2, L4)
     P = lambda o: (o.x / NM, o.y / NM)
     R3 = lambda p: (round(p[0], 3), round(p[1], 3))
     isg = lambda n: n.upper().endswith('GND')
@@ -359,6 +360,21 @@ def main():
         write(old, [mk_track(LF, p0, p1, w, net) for p0, p1, w, net in straps])
         return
 
+    # ------------------------------------------------------------------ clear
+    if a.step == 'clear':
+        signets = {bl[1].name for bl in sig}
+        strap = lambda t: POWER.match(t.net.name) and ballnet.get(R3(P(t.start))) == ballnet.get(R3(P(t.end))) == t.net.name
+        rm_t = [t for t in tracks if t.layer in ALLL and inR(P(t.start)) and inR(P(t.end))
+                and (t.net.name in signets or strap(t))]
+        rm_b = [v for v in allv if R3(P(v.position)) in ballpos]
+        rm_s = [v for v in allv if v.net.name in signets and R3(P(v.position)) not in ballpos and inR(P(v.position))]
+        sp = [P(v.position) for v in rm_s]
+        rm_g = [v for v in allv if isg(v.net.name) and R3(P(v.position)) not in ballpos
+                and any(abs(math.dist(P(v.position), q) - VV) < 0.005 for q in sp)]
+        print(f'clear: {len(rm_t)} tracks, {len(rm_b)} ball vias, {len(rm_s)} signal vias, {len(rm_g)} GND vias')
+        write(rm_t + rm_b + rm_s + rm_g, [])
+        return
+
     # ------------------------------------------------------------------ top, route
     gfile = Path(a.board_dir) / 'fanout' / f'{a.ref}.json'
     if not gfile.exists():
@@ -384,11 +400,12 @@ def main():
         bare = [bl[1].name for bl in gballs if not has_via(bl) and R3((bl[2], bl[3])) not in tends]
         if bare:
             raise Bad(f"group {a.group}: balls with no via and no route: {', '.join(bare)}; run vias first")
-        mine, LAY = [bl for bl in gballs if has_via(bl)], [LF, L2]
+        mine, LAY = [bl for bl in gballs if has_via(bl)], [LF, L2, L4]
+    ENDL = [L for L in LAY if L != L4]          # a trace ends on F.Cu or In2.Cu, never on In4.Cu
     tnets = {bl[1].name for bl in mine}
 
-    # this step's own earlier output for these nets: tracks, end vias, their GND vias
-    old_t = [t for t in tracks if t.net.name in tnets and t.layer in (LF, L2) and inR(P(t.start)) and inR(P(t.end))]
+    # this step's own earlier output for these nets: tracks, vias off the balls, their GND vias
+    old_t = [t for t in tracks if t.net.name in tnets and t.layer in ALLL and inR(P(t.start)) and inR(P(t.end))]
     old_v = [v for v in allv if v.net.name in tnets and R3(P(v.position)) not in ballpos and inR(P(v.position))]
     ev = [P(v.position) for v in old_v]
     old_g = [v for v in allv if isg(v.net.name) and R3(P(v.position)) not in ballpos
@@ -396,7 +413,7 @@ def main():
     old = old_t + old_v + old_g
     oldid = {o.id.value for o in old}
 
-    obs = {L: [] for L in (LF, L2)}     # (a, b, copper radius, net, kind)
+    obs = {L: [] for L in ALLL}     # (a, b, copper radius, net, kind)
     for t in tracks:
         if t.id.value not in oldid and t.layer in obs:
             for s, e in segs_of(t):
@@ -427,27 +444,23 @@ def main():
     disk = lambda p, r: cells_near(p, p, r)
 
     fixed = {L: defaultdict(set) for L in LAY}    # cell -> nets whose copper keeps a trace centre out
-    for L in LAY:
+    novia = defaultdict(set)                      # cell -> nets whose copper keeps a through via out
+    for L in ALLL:
         for s, e, r, nn, kind in obs[L]:
-            rr = r + CL + TW / 2 + M
-            if kind == 'via':
-                rr = max(rr, VH / 2 + HCL + TW / 2 + M)
-            for c in cells_near(s, e, rr):
-                fixed[L][c].add(nn)
-
-    def via_clear(p, net):
-        """A through via at p clears other nets' copper on F.Cu and In2.Cu."""
-        for L in obs:
-            for s, e, r, nn, kind in obs[L]:
-                if nn != net:
-                    need = r + VR if kind != 'via' else max(r + VD / 2 + CL, VH + HH)
-                    if pd(*p, *s, *e) < need - 1e-6:
-                        return False
-        return True
+            if L in fixed:
+                rr = r + CL + TW / 2 + M
+                if kind == 'via':
+                    rr = max(rr, VH / 2 + HCL + TW / 2 + M)
+                for c in cells_near(s, e, rr):
+                    fixed[L][c].add(nn)
+            rv = (r + VR if kind != 'via' else max(r + VD / 2 + CL, VH + HH)) + M
+            for c in cells_near(s, e, rv):
+                novia[c].add(nn)
+    via_ok = lambda p, net: not (novia.get(ij(*p), set()) - {net})
 
     # end sites outside the courtyard on each side the direction faces: columns from just
     # past the edge outward 0.8 mm apart, rows 0.8 mm apart, alternate columns offset 0.4.
-    # The GND via is 0.40 mm from the end via toward the part.
+    # Nearer costs less: the path is shorter. The GND via is 0.40 mm from the end via toward the part.
     edges = []
     if dvx < 0: edges.append(('W', CXL, (-1, 0)))
     if dvx > 0: edges.append(('E', CXR, (1, 0)))
@@ -465,8 +478,8 @@ def main():
                 t += 0.8
     usable = {}
     for st in sites:
-        if via_clear(st[1], GND.name):
-            ok = {bl[1].name for bl in mine if via_clear(st[0], bl[1].name)}
+        if via_ok(st[1], GND.name):
+            ok = {bl[1].name for bl in mine if via_ok(st[0], bl[1].name)}
             if ok:
                 usable[st] = ok
     print(f'{a.step} {a.group}: {len(mine)} nets toward {D} on {", ".join(LNAME[L] for L in LAY)}; '
@@ -490,15 +503,22 @@ def main():
     occ = {L: defaultdict(Counter) for L in LAY}
     hist = {L: defaultdict(float) for L in LAY}
     route = {}
+    infield = lambda c: max(abs(xy(*c)[0] - CX), abs(xy(*c)[1] - CY)) < SPAN
+    un = math.hypot(dvx, dvy)
+    back = (-dvx / un * VV, -dvy / un * VV)       # GND via offset from a layer-change via, toward the part
+    W4 = 2.0                                      # In4.Cu costs this much more per step: the plane is cut little
+    CHG = 8.0                                     # a layer change costs this much
 
+    # a route: {'runs': [(L, cells)], 'site': end site, 'chg': (via, GND via) or None}
     def footprint(net, r):
-        L, cells, st = r
         k = nid[net]
-        out = [(L, (c[0] + di, c[1] + dj), k) for c in cells for di, dj in D_TRK]
-        ce, cg = ij(*st[0]), ij(*st[1])
-        for LL in LAY:
-            out += [(LL, (ce[0] + di, ce[1] + dj), k) for di, dj in D_VIA]
-            out += [(LL, (cg[0] + di, cg[1] + dj), GID) for di, dj in D_VIA]
+        out = [(L, (c[0] + di, c[1] + dj), k) for L, cells in r['runs'] for c in cells for di, dj in D_TRK]
+        vias = [(r['site'][0], k), (r['site'][1], GID)]
+        if r['chg']:
+            vias += [(r['chg'][0], k), (r['chg'][1], GID)]
+        for p, kk in vias:
+            c0 = ij(*p)
+            out += [(LL, (c0[0] + di, c0[1] + dj), kk) for LL in LAY for di, dj in D_VIA]
         return out
 
     def add(net, r, sign):
@@ -507,13 +527,14 @@ def main():
             if occ[L][c][k] == 0:
                 del occ[L][c][k]
 
-    def astar(net, L, start, pres, allow=None, site_ok=None):
-        """Cheapest path for net on L from start to a usable end site; allow limits the cells."""
+    def astar(net, starts, start, pres, allow=None, site_ok=None):
+        """Cheapest route for net from its ball: on one of `starts`; from In4.Cu one change, outside
+        the ball field, to F.Cu or In2.Cu; ending at a usable site on F.Cu or In2.Cu."""
         k = nid[net]
         bx, by = start
         band = int(round(a.band / G))
         off_band = lambda c: straight and ((dvy and abs(c[0] - bx) > band) or (dvx and abs(c[1] - by) > band))
-        blocked = lambda c: bool(fixed[L].get(c, set()) - {net})
+        blocked = lambda L, c: bool(fixed[L].get(c, set()) - {net})
         fit = lambda st: net in usable[st] and (site_ok is None or site_ok(st))
         goals = {c for c, sts in goal_of.items() if not off_band(c) and any(fit(s) for s in sts)}
         if not goals:
@@ -521,41 +542,78 @@ def main():
         gl = list(goals)
         h = lambda c: min(abs(c[0] - g[0]) + abs(c[1] - g[1]) for g in gl) * 0.9
 
-        def cost(c):
+        def cost(L, c):
             o = occ[L].get(c)
             n_o = sum(v for kk, v in o.items() if kk != k) if o else 0
             return (1 + hist[L][c]) * (1 + pres * n_o)
 
-        pq = [(h(start), 0.0, start, -1)]
-        best = {(start, -1): 0.0}
-        prev = {}
+        def via_cost(c):
+            n_o = 0
+            for LL in LAY:
+                o = occ[LL].get(c)
+                n_o += sum(v for kk, v in o.items() if kk != k) if o else 0
+            return 1 + pres * n_o
+
+        pq, best, prev = [], {}, {}
+        for L in starts:
+            s0 = (L, start, -1)
+            best[s0] = 0.0
+            heapq.heappush(pq, (h(start), 0.0, s0))
         while pq:
-            f, g, c, d = heapq.heappop(pq)
-            if g > best.get((c, d), 1e18):
+            f, g, s_ = heapq.heappop(pq)
+            if g > best.get(s_, 1e18):
                 continue
-            if c in goals and c != start:
-                path = [c]; s_ = (c, d)
-                while s_ in prev:
-                    s_ = prev[s_]; path.append(s_[0])
+            L, c, d = s_
+            if L in ENDL and c in goals and c != start:
+                path = [s_]
+                while path[-1] in prev:
+                    path.append(prev[path[-1]])
                 path = path[::-1]
-                cells = set(path)
+                cells = {q[1] for q in path}
                 for st in goal_of[c]:
                     if fit(st) and not (cells & gnd_cells[st]):
                         return path, st, g
+            if L == L4 and not infield(c) and c != start:     # hand off to F.Cu or In2.Cu
+                pg = (xy(*c)[0] + back[0], xy(*c)[1] + back[1])
+                if via_ok(xy(*c), net) and via_ok(pg, GND.name):
+                    for LT in ENDL:
+                        if blocked(LT, c):
+                            continue
+                        ns = (LT, c, -1)
+                        g2 = g + CHG * via_cost(c)
+                        if g2 < best.get(ns, 1e18):
+                            best[ns] = g2; prev[ns] = s_
+                            heapq.heappush(pq, (g2 + h(c), g2, ns))
             for nd in MOVES:
                 di, dj = D8[nd]
                 n = (c[0] + di, c[1] + dj)
-                if not (0 <= n[0] < S and 0 <= n[1] < S) or blocked(n) or off_band(n) or \
+                if not (0 <= n[0] < S and 0 <= n[1] < S) or blocked(L, n) or off_band(n) or \
                         (allow is not None and n not in allow):
                     continue
-                if di and dj and (blocked((c[0] + di, c[1])) or blocked((c[0], c[1] + dj))):
+                if di and dj and (blocked(L, (c[0] + di, c[1])) or blocked(L, (c[0], c[1] + dj))):
+                    continue
+                if L == L4 and not infield(c):        # In4.Cu ends at the edge of the ball field
                     continue
                 across = di * dvx + dj * dvy == 0
-                g2 = g + (1.4142 if di and dj else 1) * (1.5 if across else 1) * cost(n) + (2 if d != -1 and nd != d else 0)
-                if g2 < best.get((n, nd), 1e18):
-                    best[(n, nd)] = g2; prev[(n, nd)] = (c, d)
-                    heapq.heappush(pq, (g2 + h(n), g2, n, nd))
+                g2 = g + (1.4142 if di and dj else 1) * (1.5 if across else 1) * (W4 if L == L4 else 1) * cost(L, n) \
+                    + (2 if d != -1 and nd != d else 0)
+                ns = (L, n, nd)
+                if g2 < best.get(ns, 1e18):
+                    best[ns] = g2; prev[ns] = s_
+                    heapq.heappush(pq, (g2 + h(n), g2, ns))
         return None
+
+    def as_route(path, st):
+        runs, chg = [], None
+        for L, c, d in path:
+            if runs and runs[-1][0] == L:
+                runs[-1][1].append(c)
+            else:
+                if runs:
+                    p = xy(*c)
+                    chg = (R3(p), R3((p[0] + back[0], p[1] + back[1])))
+                runs.append((L, [c]))
+        return {'runs': runs, 'site': st, 'chg': chg}
 
     # differential pairs: <stem>_P and <stem>_N both here. One layer, adjacent, end sites side by side
     byname = {bl[1].name: bl for bl in mine}
@@ -568,50 +626,53 @@ def main():
     units = [(byname[p], byname[n]) for p, n in pairs.items()] + [(bl,) for bl in mine if bl[1].name not in paired]
     CPL = 2 * R_TRK - G                 # outside the ball field: no third trace fits between
     CPL_IN = pitch + G                  # in the ball field: the next channel, one ball row between
-    infield = lambda c: max(abs(xy(*c)[0] - CX), abs(xy(*c)[1] - CY)) < SPAN
 
     def route_unit(u, pres):
-        best = None
         if len(u) == 1:
             bl = u[0]
-            for L in LAY:
-                r = astar(bl[1].name, L, ij(bl[2], bl[3]), pres)
-                if r and (best is None or r[2] < best[0]):
-                    best = (r[2], {bl[1].name: (L, r[0], r[1])})
-            return best and best[1]
+            r = astar(bl[1].name, LAY, ij(bl[2], bl[3]), pres)
+            return r and {bl[1].name: as_route(r[0], r[1])}
         bp, bn = u
-        for L in LAY:
-            rp = astar(bp[1].name, L, ij(bp[2], bp[3]), pres)
-            if not rp:
+        best = None
+        for L in ENDL:                  # a pair stays on one layer, never In4.Cu
+            rp = astar(bp[1].name, [L], ij(bp[2], bp[3]), pres)
+            if not rp or len({q[0] for q in rp[0]}) > 1:
                 continue
-            add(bp[1].name, (L, rp[0], rp[1]), +1)
+            routp = as_route(rp[0], rp[1])
+            add(bp[1].name, routp, +1)
             allow = set()
-            for c in rp[0]:
+            for c in routp['runs'][0][1]:
                 allow.update(disk(xy(*c), CPL))
                 allow.update(q for q in disk(xy(*c), CPL_IN) if infield(q))
             allow.update(disk((bn[2], bn[3]), pitch * 1.5))
             allow.update(disk(rp[1][0], 0.8 + CPL))
             beside = lambda st, sp=rp[1]: st[2] == sp[2] and st[0] != sp[0] and math.dist(st[0], sp[0]) < 0.9 + 1e-6
-            rn = astar(bn[1].name, L, ij(bn[2], bn[3]), pres, allow, beside)
-            add(bp[1].name, (L, rp[0], rp[1]), -1)
+            rn = astar(bn[1].name, [L], ij(bn[2], bn[3]), pres, allow, beside)
+            add(bp[1].name, routp, -1)
             if not rn:                  # no room beside the P trace: make that route cost more
-                for c in rp[0]:
+                for c in routp['runs'][0][1]:
                     hist[L][c] += 0.5
             elif best is None or rp[2] + rn[2] < best[0]:
-                best = (rp[2] + rn[2], {bp[1].name: (L, rp[0], rp[1]), bn[1].name: (L, rn[0], rn[1])})
+                best = (rp[2] + rn[2], {bp[1].name: routp, bn[1].name: as_route(rn[0], rn[1])})
         return best and best[1]
+
+    def vias_of(net, r):
+        out = [(net, r['site'][0]), (net + ' GND', r['site'][1])]
+        if r['chg']:
+            out += [(net, r['chg'][0]), (net + ' GND', r['chg'][1])]
+        return out
 
     def conflicts():
         """Nets whose centre line lies in another's footprint, or whose vias crowd another's."""
         bad = set()
         for net, r in route.items():
-            if any(any(x != nid[net] for x in occ[r[0]].get(c, {})) for c in r[1]):
+            if any(any(x != nid[net] for x in occ[L].get(c, {})) for L, cells in r['runs'] for c in cells):
                 bad.add(net)
-        vias = [(n, p) for n, r in route.items() for p in r[2][:2]]
-        for i, (n1, p1) in enumerate(vias):
-            for n2, p2 in vias[i + 1:]:
-                if n1 != n2 and math.dist(p1, p2) < VV - 1e-6:
-                    bad |= {n1, n2}
+        vs = [(net, p) for n_, r in route.items() for net, p in vias_of(n_, r)]
+        for i, (n1, p1) in enumerate(vs):
+            for n2, p2 in vs[i + 1:]:
+                if n1.split(' ')[0] != n2.split(' ')[0] and math.dist(p1, p2) < VV - 1e-6:
+                    bad |= {n1.split(' ')[0], n2.split(' ')[0]}
         return bad
 
     lead = lambda u: max((bl[2] - CX) * dvx + (bl[3] - CY) * dvy for bl in u)
@@ -652,12 +713,12 @@ def main():
             if bl[1].name in route:
                 add(bl[1].name, route.pop(bl[1].name), -1)
                 dropped.append(bl[1].name)
-    # a pair is both or neither
-    for p, n in pairs.items():
+    for p, n in pairs.items():         # a pair is both or neither
         for x, y in ((p, n), (n, p)):
             if x in route and y not in route:
                 add(x, route.pop(x), -1); dropped.append(x)
 
+    # ---- clean-up: pull each run taut, octilinear, never back, clear of all copper but its own net
     def corners(p):
         pts = [p[0]]
         for a_, c, d in zip(p, p[1:], p[2:]):
@@ -666,27 +727,134 @@ def main():
         pts.append(p[-1])
         return pts
 
+    poly = {}                          # net -> [(L, [points])]
+    for bl in mine:
+        net = bl[1].name
+        if net not in route:
+            continue
+        r = route[net]
+        runs = []
+        for k, (L, cells) in enumerate(r['runs']):
+            pts = [xy(*c) for c in corners(cells)] if len(cells) > 1 else [xy(*cells[0])] * 2
+            if k == 0:
+                pts[0] = (bl[2], bl[3])
+            if k == len(r['runs']) - 1:
+                pts[-1] = r['site'][0]
+            if k < len(r['runs']) - 1:
+                pts[-1] = r['chg'][0]
+            if k > 0:
+                pts[0] = r['chg'][0]
+            runs.append((L, pts))
+        poly[net] = runs
+
+    BK = 1.0
+    bucket = {L: defaultdict(list) for L in LAY}
+
+    def put(L, item):
+        s, e, w = item[0], item[1], item[2]
+        for bi in range(int((min(s[0], e[0]) - w) // BK), int((max(s[0], e[0]) + w) // BK) + 1):
+            for bj in range(int((min(s[1], e[1]) - w) // BK), int((max(s[1], e[1]) + w) // BK) + 1):
+                bucket[L][(bi, bj)].append(item)
+
+    for L in LAY:                       # fixed copper: (a, b, keep-out from a trace centre line, net)
+        for s, e, r, nn, kind in obs[L]:
+            kr = r + CL + TW / 2 if kind != 'via' else max(r + CL, VH / 2 + HCL) + TW / 2
+            put(L, (s, e, kr, nn, None))
+    for net, r in route.items():        # new vias, every layer
+        for nm, p in vias_of(net, r):
+            for L in LAY:
+                put(L, (p, p, VR + TW / 2, 'GND' if nm.endswith('GND') else net, None))
+    gen = Counter()                     # net -> generation of its traces now in the buckets
+
+    def put_runs(net):
+        gen[net] += 1
+        for L, pts in poly[net]:
+            for s, e in zip(pts, pts[1:]):
+                put(L, (s, e, TW + CL, net, (net, gen[net])))
+
+    for net in poly:
+        put_runs(net)
+
+    def clear_seg(L, s, e, net):
+        if (e[0] - s[0]) * dvx + (e[1] - s[1]) * dvy < -1e-9:
+            return False
+        if not straight and (e[0] - s[0]) * dvx + (e[1] - s[1]) * dvy == 0 and s != e:
+            return False
+        seen = set()
+        for bi in range(int((min(s[0], e[0]) - 0.6) // BK), int((max(s[0], e[0]) + 0.6) // BK) + 1):
+            for bj in range(int((min(s[1], e[1]) - 0.6) // BK), int((max(s[1], e[1]) + 0.6) // BK) + 1):
+                for it_ in bucket[L].get((bi, bj), ()):
+                    if id(it_) in seen:
+                        continue
+                    seen.add(id(it_))
+                    s2, e2, kr, nn, tag = it_
+                    if nn == net or (tag is not None and gen[tag[0]] != tag[1]):
+                        continue
+                    if segd(s, e, s2, e2) < kr - 1e-4:
+                        return False
+        return True
+
+    octi = lambda s, e: abs(e[0] - s[0]) < 1e-6 or abs(e[1] - s[1]) < 1e-6 or abs(abs(e[0] - s[0]) - abs(e[1] - s[1])) < 1e-6
+
+    def taut(L, pts, net):
+        out, i = [pts[0]], 0
+        while i < len(pts) - 1:
+            step = None
+            for j in range(len(pts) - 1, i, -1):
+                s, e = pts[i], pts[j]
+                if octi(s, e) and clear_seg(L, s, e, net):
+                    step = (j, [e]); break
+                dx, dy = e[0] - s[0], e[1] - s[1]
+                dd = min(abs(dx), abs(dy))
+                sx, sy = math.copysign(1, dx), math.copysign(1, dy)
+                for m in ((s[0] + sx * dd, s[1] + sy * dd), (e[0] - sx * dd, e[1] - sy * dd)):
+                    if clear_seg(L, s, m, net) and clear_seg(L, m, e, net):
+                        step = (j, [m, e]); break
+                if step:
+                    break
+            if not step:
+                step = (i + 1, [pts[i + 1]])
+            out += step[1]
+            i = step[0]
+        return [p for k, p in enumerate(out) if k == 0 or math.dist(p, out[k - 1]) > 1e-6]
+
+    before = sum(len(pts) - 1 for runs in poly.values() for L, pts in runs)
+    for _ in range(2):
+        for net in list(poly):
+            new = [(L, taut(L, pts, net)) for L, pts in poly[net]]
+            poly[net] = new
+            put_runs(net)
+    after = sum(len(pts) - 1 for runs in poly.values() for L, pts in runs)
+
     create, rows = [], []
     for bl in mine:
         net = bl[1].name
         if net not in route:
             continue
-        L, path, st = route[net]
-        pts = [xy(*c) for c in corners(path)]
-        pts[0] = (bl[2], bl[3]); pts[-1] = st[0]
-        create += [mk_track(L, p0, p1, TW, netobj[net]) for p0, p1 in zip(pts, pts[1:]) if p0 != p1]
-        create += [mk_via(st[0], netobj[net]), mk_via(st[1], GND)]
-        drift = max((abs(x - bl[2]) if not dvx else abs(y - bl[3]) if not dvy else 0) for x, y in pts)
-        rows.append((net, bl[0], LNAME[L], st[0], drift))
-    print('\n| # | Net | Ball | Layer | End via, from centre | Drift |\n|---|---|---|---|---|---|')
+        r = route[net]
+        for L, pts in poly[net]:
+            create += [mk_track(L, p0, p1, TW, netobj[net]) for p0, p1 in zip(pts, pts[1:]) if p0 != p1]
+        create += [mk_via(r['site'][0], netobj[net]), mk_via(r['site'][1], GND)]
+        if r['chg']:
+            create += [mk_via(r['chg'][0], netobj[net]), mk_via(r['chg'][1], GND)]
+        allp = [p for L, pts in poly[net] for p in pts]
+        drift = max((abs(x - bl[2]) if not dvx else abs(y - bl[3]) if not dvy else 0) for x, y in allp)
+        rows.append((net, bl[0], ' then '.join(LNAME[L] for L, _ in poly[net]), r['site'][0], drift))
+    print('\n| # | Net | Ball | Layers | End via, from centre | Drift |\n|---|---|---|---|---|---|')
     for k, (net, n, ln, p, dr) in enumerate(sorted(rows), 1):
         print(f'| {k} | `{net}` | {n} | {ln} | {p[0] - CX:+.2f}, {p[1] - CY:+.2f} | {dr:.2f} |')
     if pairs:
-        done = [f'{p}/{n[n.rfind("_"):]} {LNAME[route[p][0]]}' for p, n in sorted(pairs.items()) if p in route]
+        done = [f'{p}/{n[n.rfind("_"):]} {LNAME[route[p]["runs"][0][0]]}' for p, n in sorted(pairs.items()) if p in route]
         print('\npairs routed: ' + (', '.join(done) or 'none'))
-    print(f'\nrouted {len(rows)} of {len(mine)}; not routed: {", ".join(sorted(set(dropped))) or "none"}')
-    print(f'remove {len(old_t)} tracks, {len(old_v)} end vias, {len(old_g)} GND vias; '
-          f'create {sum(isinstance(c, Track) for c in create)} tracks, {2 * len(rows)} vias')
+    n4 = sum(1 for r in route.values() if r['chg'])
+    print(f'\nsegments: {before} before clean-up, {after} after; {n4} escapes on In4.Cu')
+    if a.step == 'top':
+        print(f'top: {len(rows)} of {len(mine)} on F.Cu; left for route: {", ".join(sorted(set(dropped))) or "none"}')
+    else:
+        verdict = 'PASS' if len(rows) == len(mine) else 'FAIL'
+        print(f'{verdict}: routed {len(rows)} of {len(mine)}; not routed: {", ".join(sorted(set(dropped))) or "none"}')
+    print(f'remove {len(old_t)} tracks, {len(old_v)} vias, {len(old_g)} GND vias; '
+          f'create {sum(isinstance(c, Track) for c in create)} tracks, {sum(isinstance(c, Via) for c in create)} vias')
     write(old, create)
 
 
