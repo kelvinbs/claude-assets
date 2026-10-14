@@ -30,7 +30,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> 
 | 5 | Hole to hole | 0.22 mm | `--hole-to-hole` |
 | 6 | Signal layer | In2.Cu | `--signal-layer` |
 | 7 | Escape layer | In4.Cu | `--escape-layer` |
-| 7a | Strap layer | F.Cu | `--strap-layer` |
+| 7a | Strap layer | F.Cu. No option: straps go on no other layer | — |
 | 8 | Fence | the courtyard, F.Courtyard | `--fence`, `--fence-max` |
 | 9 | Power nets | `^/?\+?\d+V\d*$` | `--power` |
 | 10 | Grid | 0.1 mm; bends 0°, 45°, 90° | — |
@@ -49,12 +49,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> 
 | 4 | GND via | One per layer-change via. The minimum via spacing, centre to centre: 0.40 mm at the T1 defaults. On the normal to the nearest courtyard edge, on its inner side |
 | 5 | Direction | Traces head out. A step inward costs extra; inward only where nothing else fits |
 | 6 | Negotiation | Signals share grid cells on both layers; an overlap costs more each pass until none remain. The escape layer costs a little more, so it is used only as needed |
-| 7 | Power | Adjacent balls of one net strapped on the strap layer where clearance allows, on the signal layer where it does not. Orthogonal first, a diagonal only to join two groups; widened up to 0.5 mm. No power trace on the escape layer |
+| 7 | Power | Adjacent balls of one net strapped on F.Cu where clearance allows, on no other layer. Orthogonal first, a diagonal only to join two groups; widened up to 0.5 mm. No power trace on the escape layer |
 | 8 | Re-run | The part's fan-out tracks on both layers, its straps, its ball vias and the GND vias around it are removed first |
-| 8a | Straps only | `--straps-only`: the part's straps are removed and redrawn. Nothing else is touched. A strap is a power track whose two ends sit on adjacent balls of its net, on the strap or signal layer |
+| 8a | Straps only | `--straps-only`: the part's straps are removed and redrawn. Nothing else is touched. A strap is a power track whose two ends sit on adjacent balls of its net, on F.Cu or, from an older run, on the signal layer |
 | 9 | Calls | One read of the board, one remove, one create. KiCad's busy answer is retried |
 | 10 | Schematic Editor | Saved and closed first when its window is on screen, as `block-outline` T2 row 7 |
-| 11 | Report | Signals fanned out, layer changes, inward excursions over 0.3 mm, straps per layer |
+| 11 | Report | Signals fanned out, layer changes, inward excursions over 0.3 mm, straps, pairs without clearance not strapped |
 
 - The fence moves out by half a pitch only up to `--fence-max`.
 - Check after: DRC errors at the part, `kicad-cli pcb drc`.

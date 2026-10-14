@@ -10,8 +10,8 @@ such via has a GND via at the minimum via spacing, on the normal to the
 nearest courtyard edge, on its inner side. Signals negotiate grid cells on
 both layers (PathFinder): overlaps cost more each pass until none remain.
 A step inward costs extra, so traces head out. Power balls of one net are
-strapped on the top layer where clearance allows, on the signal layer
-where it does not, widened up to 0.5 mm; the power planes are the User's.
+strapped on F.Cu where clearance allows and on no other layer, widened
+up to 0.5 mm; the power planes are the User's.
 --straps-only redraws the straps and nothing else.
 
 One read of the board, one remove, one create. Saved only with --save.
@@ -126,7 +126,6 @@ def main():
     ap.add_argument('board_dir'); ap.add_argument('ref')
     ap.add_argument('--signal-layer', default='In2.Cu')
     ap.add_argument('--escape-layer', default='In4.Cu')
-    ap.add_argument('--strap-layer', default='F.Cu')
     ap.add_argument('--straps-only', action='store_true', help='redraw the power straps only')
     ap.add_argument('--fence', type=float, help='mm from centre; default the courtyard')
     ap.add_argument('--fence-max', type=float, help='mm; default the fence')
@@ -157,7 +156,7 @@ def main():
     VV = round(max(VR + VD / 2, VH + HH), 3)    # via centre to via centre: the minimum, 0.40
     VH2 = VH + HH                               # via centre to via centre, same net: hole to hole
     G = 0.1
-    LS, LE, LT = layer(a.signal_layer), layer(a.escape_layer), layer(a.strap_layer)
+    LS, LE, LT = layer(a.signal_layer), layer(a.escape_layer), BoardLayer.BL_F_Cu
     POWER = re.compile(a.power)
 
     try:
@@ -560,7 +559,7 @@ def main():
             vias.append(mk_via(*xy(*site), netobj[net]))
             vias.append(mk_via(*g, GND))
 
-    # power straps: on the strap layer where clearance allows, else on the signal layer
+    # power straps: on F.Cu where clearance allows, on no other layer
     vall = [(x, y, net.name, VR) for _, net, x, y in balls] + \
            [(v.position.x / NM, v.position.y / NM, v.net.name, VR) for v in vias] + \
            [(x, y, nn, max(vr + CL, VH / 2 + HCL)) for x, y, nn, vr in fixed_v]
@@ -614,14 +613,14 @@ def main():
                     cand.append((0, n1, n2, net1, (x1, y1), (x2, y2)))
                 elif abs(d - pitch * math.sqrt(2)) < 0.01:
                     cand.append((1, n1, n2, net1, (x1, y1), (x2, y2)))
-    straps = []
+    straps, blocked_pairs = [], 0
     for kind, n1, n2, net, p0, p1 in sorted(cand, key=lambda c: c[0]):
         if kind == 1 and root(n1) == root(n2):
             continue
-        for ly in dict.fromkeys((LT, LS)):
-            if fits(ly, p0, p1, net.name):
-                straps.append([p0, p1, TW, net, ly]); segs[ly].append((p0, p1, TW, net.name)); par[root(n1)] = root(n2)
-                break
+        if fits(LT, p0, p1, net.name):
+            straps.append([p0, p1, TW, net, LT]); segs[LT].append((p0, p1, TW, net.name)); par[root(n1)] = root(n2)
+        else:
+            blocked_pairs += 1
     for s in straps:
         lim = 0.25
         for s0, s1, w, nn in segs[s[4]]:
@@ -644,8 +643,7 @@ def main():
                 lim = min(lim, pd(x, y, *s[0], *s[1]) - r - CL)
         s[2] = max(TW, math.floor(2 * lim * 100) / 100)
     tracks += [mk_track(ly, p0, p1, w, net) for p0, p1, w, net, ly in straps]
-    on_t = sum(1 for s in straps if s[4] == LT)
-    print(f'straps: {on_t} on {a.strap_layer}, {len(straps) - on_t} on {a.signal_layer}')
+    print(f'straps: {len(straps)} on F.Cu, {blocked_pairs} pairs without clearance, not strapped')
     print(f'wipe {len(old_t)} tracks {len(old_v)} vias; create {len(vias)} vias ({sum(1 for r in route.values() if r[2])} layer changes, as many GND), {len(tracks)} tracks, {len(straps)} power straps')
     if a.dry_run:
         return
