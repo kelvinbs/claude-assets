@@ -80,7 +80,7 @@
 
 | # | File | Holds |
 |---|---|---|
-| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
+| 1 | `board.db` | `project_table`, `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table`, `netclass_table`, `netclass_net_table` |
 | 2 | `lib/<project>.kicad_sym` | per IPN: `Value`, `Footprint`, `Description`, `Datasheet`, `Manufacturer`, `MPN`, `part_notes`, `ipn` |
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
@@ -342,6 +342,33 @@
   pins and reports a pair whose pins carry different nets, or a pin with
   none.
 
+**T2.6g — `netclass_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `name` | TEXT | Key | |
+| 2 | `track_width` | REAL | | Yes |
+| 3 | `clearance` | REAL | | Yes |
+| 4 | `diff_pair_width` | REAL | | Yes |
+| 5 | `diff_pair_gap` | REAL | | Yes |
+
+- A net class: the widths, in mm, KiCad's router and DRC hold its nets
+  to. A null column takes the project's Default class value.
+- Written by `table-write netclass`. `kicad-update` writes every class
+  into each board's `.kicad_pro` `net_settings` on every place run,
+  T2.11 row 12e. Default is the project's and is never written.
+
+**T2.6h — `netclass_net_table`**
+
+| # | Column | Type | Key | Null |
+|---|---|---|---|---|
+| 1 | `net` | TEXT | Key | |
+| 2 | `netclass` | TEXT | | |
+
+- A net is in at most one class. A net in no row is in Default.
+- The net is a `net_table` name. It reaches the project file as the
+  pattern `*/<net>`, its name under any sheet path.
+
 ### 2.5 — The relations
 
 **T2.9 — The relations**
@@ -356,6 +383,8 @@
 | 6 | `sim_net_table.name` | `sim_table.name` | Many-to-one | Cascade |
 | 7 | `sim_net_table.block` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the reference on add |
 | 8 | `mate_table.a_ref`, `mate_table.b_ref` | `ref_table.ref` | Many-to-one, by name | none — `table-write` checks the references on add |
+| 9 | `netclass_net_table.netclass` | `netclass_table.name` | Many-to-one | Cascade |
+| 10 | `netclass_net_table.net` | `net_table.net` | Many-to-one, by name | none — `table-write` checks the net on add |
 
 - Every skill sets `PRAGMA foreign_keys = ON`.
 
@@ -424,6 +453,7 @@
 | 12b | bus breakout | each file a bus leaves | `bus_table` |
 | 12c | `bus_alias` blocks | every `*.kicad_sch` | `bus_table`. Written last in a run: `kicad-cli sch upgrade` drops the block |
 | 12d | the root sheet | `<project>.kicad_sch` | the root pages and T2.6c |
+| 12e | net classes and their patterns | `<project>.kicad_pro` `net_settings` | `netclass_table`, `netclass_net_table`. Every class but Default and every pattern replaced on each place run |
 
 - `pinout_checked` stays in the record. It is not a project field and does
   not reach the library or the sheets.
@@ -561,7 +591,7 @@ One skill, one run — T4.2.
 
 | # | Makes |
 |---|---|
-| 1 | `board.db` and its nine tables |
+| 1 | `board.db` and its eleven tables |
 | 2 | `*.kicad_pro`, `*.kicad_sch`, `*.kicad_pcb`, `sym-lib-table`, `fp-lib-table`, `lib/<project>.kicad_sym`, `lib/<project>.pretty/` |
 
 - The project folder names the project — its name is stored at first
@@ -623,8 +653,8 @@ One skill, one run — T4.2.
 | 3 | `lib-index` | Index the KiCad symbol libraries | The installed `.kicad_sym` files | `lib/kicad-lib-index.json` |
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
-| 8 | `table-write` | Create or modify part; delete a part no instance uses; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; drop an empty room; record a vendor price survey; tag a simulation | Record row, net, mating pins, room, vendor quote, block references | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table` |
-| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`board.db` — `ref_table`, `parts_table` |
+| 8 | `table-write` | Create or modify part; delete a part no instance uses; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; drop an empty room; record a vendor price survey; tag a simulation; define a net class and put nets in it | Record row, net, mating pins, room, vendor quote, block references, net class widths | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table`, `netclass_table`, `netclass_net_table` |
+| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`*.kicad_pro` — `net_settings`, T2.11 row 12e<br>`board.db` — `ref_table`, `parts_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 | 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name; generate the table of contents of every box | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles, labels and the table of contents on User.Comments, live; nothing saved |

@@ -19,7 +19,7 @@ it is modified in place, live, when necessary.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current<br>`board.db` — `ref_table`; `parts_table` on pull |
+| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`, `netclass_table`, `netclass_net_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current; `net_settings` classes and patterns from the record on every place run<br>`board.db` — `ref_table`; `parts_table` on pull |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
@@ -138,6 +138,16 @@ symbols.
 A net that reaches both boards is two nets, one per side, meeting at
 whatever part the design puts on the joint. That is what the netlist reads,
 and it is the point of splitting.
+
+## Net classes
+
+Every place run writes `netclass_table` and `netclass_net_table` into
+each board's `.kicad_pro` `net_settings`, which Schematic Setup and Board
+Setup both show. The record is master: every class but Default and every
+pattern is replaced. A class starts from Default and takes the record's
+widths; a net takes the pattern `*/<net>`. The PCB picks the classes up
+on Update PCB from Schematic. The run reports how many project files
+changed.
 
 ## Sub-sheets
 

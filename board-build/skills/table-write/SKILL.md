@@ -1,6 +1,6 @@
 ---
 name: table-write
-description: Create or modify a part in board.db: add, set, place, parent, drop, show; tag a simulation: sim. Stage 2.
+description: Create or modify a part in board.db: add, set, place, parent, drop, show; tag a simulation: sim; define a net class: netclass. Stage 2.
 ---
 
 # table-write
@@ -9,7 +9,7 @@ Create or modify a part. The skill of Update parts.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`; the part files' pins | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table` |
+| `board.db` — `parts_table`, `ref_table`, `net_table`; the part files' pins | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table`, `netclass_table`, `netclass_net_table` |
 
 Part fields reach KiCad when the schematics are regenerated: delete, regenerate with `kicad-update`, open again (`board-build-tool.md` §1.4a). It writes no KiCad file; `change-part` reads the project library for the two symbols' pins. Of the sourcing tables it touches only
 `init-pipeline` must have run first.
@@ -30,6 +30,8 @@ table-write.py <board-dir> net    <ref> <pin> <name> | --none
 table-write.py <board-dir> rename-net <old> <new> [--merge]
 table-write.py <board-dir> drop-net <name>
 table-write.py <board-dir> bus    [<name> <net>... | --drop <net>...]
+table-write.py <board-dir> netclass [<name> [--track-width W] [--clearance C] [--diff-pair-width W] [--diff-pair-gap G] [<net>...]]
+table-write.py <board-dir> netclass --drop <net>... | --drop <name>
 table-write.py <board-dir> mate   [<ref> <pin> <ref> <pin> | --drop <ref> <pin> | --check]
 table-write.py <board-dir> notes  <ref> [<text>] | --none
 table-write.py <board-dir> unplace <ref>
@@ -267,6 +269,18 @@ each pair, and names a pair whose pins carry different nets or a pin with
 no net; it exits non-zero when it finds one. The record needs
 `mate_table`; an older one gains it on the next `init-pipeline` run.
 
+## netclass
+
+A net class, T2.6g and T2.6h: `netclass ADC_LVDS --track-width 0.09
+--clearance 0.09 --diff-pair-width 0.09 --diff-pair-gap 0.22 ADC_DA0_P
+ADC_DA0_N` creates the class or updates its widths, in mm, and puts the
+nets in it. A net is in one class; naming it again moves it. A width not
+given is left as it is, null on a new class, which is Default's value.
+`netclass --drop <net>...` takes nets out of any class; `netclass --drop
+<name>` with no nets removes the class and its members. `netclass` alone
+lists every class and member. The classes reach `.kicad_pro` on the next
+`kicad-update` place run.
+
 ## show
 
 Every part, its class, its status and its instances. With an IPN, that part
@@ -308,6 +322,7 @@ project nickname. `set --footprint` writes the footprint. `symbol` and
 - Lowering an instance count
 - A `drop-part` of a part any instance uses, or of no part
 - `add` with no description
+- A `netclass` net that no `net_table` row names
 - A project folder with no `board.db`, or one missing a table
 
 Each exits non-zero and names what it found.
