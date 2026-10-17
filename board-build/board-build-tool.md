@@ -85,8 +85,8 @@
 | 3 | `*.kicad_sch`, `*.kicad_pcb` | `Reference`, `ipn` |
 
 - `board.db` is master. Instance data reaches the sheet when the
-  schematics are regenerated, §1.4a; pull reads library fields back into
-  the record.
+  schematics are regenerated, §1.4a. Nothing flows back into the record
+  from a sheet or the library.
 - The schematic returns an instance the User placed on it — its existence
   and its `Reference`, nothing else. The tool deletes on neither side.
 - Instances take the record's fields when they are drawn.
@@ -170,9 +170,9 @@
 - `unit` numbers a package's units from 1; every unit is its own node
   under the same `ref`.
 - `x`, `y`, `rot` are the instance's place on its sheet: mm, KiCad's
-  axes, y down, degrees. Null until placed or pulled.
-- `placed` says who set it: `tool`, the packer; `hand`, a pull found the
-  symbol somewhere other than where the record had it.
+  axes, y down, degrees. Null until placed.
+- `placed` says who set it: `tool`, the packer; `hand`, set by the User
+  in the record.
 - `corner` is which corner of its box a room's name is placed at: `nw`,
   `ne`, `sw`, `se`. Null is `nw`.
 - `instance_notes` is what this one node does here — the role this
@@ -486,11 +486,8 @@
   `tool`. A family with no hand place takes the arrangement of a family
   marked `hand` with the same parent part and the same parts under it,
   matched one to one by part in reference order: the family template.
-- `--pull` writes a place only where the symbol is not where the record
-  has it, and marks it `hand`. Arrange by hand
-  in KiCad, pull, and the arrangement is the record's. `table-write
-  unplace` clears a place, and the packer lays that part next time the
-  page is placed afresh.
+- `table-write unplace` clears a place, and the packer lays that part
+  next time the page is placed afresh.
 - A sub-sheet page is drawn once, in its own file, whatever the number of
   instances. The instances sit on the page that placed the class-`B` part,
   as sheet symbols. KiCad's multichannel tools carry one instance's layout
@@ -612,9 +609,8 @@ One skill, one run — T4.2.
 - Each run reports what it left untouched.
 - A symbol the User placed on a sheet enters `ref_table` under its own
   uuid, with its `Reference`. No other field returns from a sheet.
-- Pull reads library fields back into the record. Place leaves a placed
-  instance's fields alone; a field change reaches the sheet by
-  regeneration, §1.4a.
+- Place leaves a placed instance's fields alone; a field change reaches
+  the sheet by regeneration, §1.4a.
 
 ### 4.4 — The RF-simulation file
 
@@ -654,7 +650,7 @@ One skill, one run — T4.2.
 | 4 | `copy-kicad-part` | Find a symbol, or a footprint with its 3D model, for a part in the KiCad libraries | the part file, KiCad symbol and footprint libraries | `<library>:<symbol>` or `<library>:<footprint>`, or `null`<br>part file — `symbol_donor`, `footprint_donor` |
 | 5 | `datasheet-read` | Read a pinout and a package out of a datasheet | `datasheets/` | Pins, package, physical fields |
 | 8 | `table-write` | Create or modify part; delete a part no instance uses; name, rename or drop a net; move an instance to another page; point an instance at another part; record and check the pins that mate between boards; put a node in a room; drop an empty room; record a vendor price survey; tag a simulation; define a net class and put nets in it | Record row, net, mating pins, room, vendor quote, block references, net class widths | `board.db` — `parts_table`, `ref_table`, `price_table`, `net_table`, `bus_table`, `sim_table`, `sim_net_table`, `mate_table`, `netclass_table`, `netclass_net_table` |
-| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole; pull library fields to record | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`*.kicad_pro` — `net_settings`, T2.11 row 12e<br>`board.db` — `ref_table`, `parts_table` |
+| 9 | `kicad-update` | Place instances; move an instance to its record page; start a board from a template PCB, empty or whole | `board.db`, `lib/`, `*.kicad_sch` | `*.kicad_sch`, `*.kicad_pcb`, `lib/*.kicad_sym`<br>`*.kicad_pro` — `net_settings`, T2.11 row 12e<br>`board.db` — `ref_table` |
 | 10 | `patch-wizard` | Make a footprint for a printed feature no library holds — an aperture-fed patch, an array guide, a Wilkinson divider, or a rat-race hybrid ring | the parameters, in KiCad's footprint editor | `lib/<nickname>.pretty/<name>.kicad_mod` |
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 | 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name; generate the table of contents of every box | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles, labels and the table of contents on User.Comments, live; nothing saved |

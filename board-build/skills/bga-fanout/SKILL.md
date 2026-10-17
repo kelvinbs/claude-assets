@@ -46,7 +46,7 @@ python3 ${CLAUDE_PLUGIN_ROOT}/skills/bga-fanout/bga-fanout.py <board-dir> <ref> 
 | 2 | End via | Every trace ends in a via outside the courtyard. Guidance, not a line: nearer costs less, so end vias sit close where they fit and further out where they must. Columns 0.8 mm apart, rows 0.8 mm apart, alternate columns offset 0.4 mm |
 | 3 | GND via | One per end via, 0.40 mm from it toward the part |
 | 4 | Layer | A trace runs on one layer from its pad or ball via to its end via. Escape: from a ball via on In4.Cu, out of the ball field only, then one layer-change via, with a GND via 0.40 mm toward the part, to F.Cu or In2.Cu. In4.Cu costs double per step and the change costs extra, so the plane is cut as little as it can be. A pair never escapes |
-| 4a | Clean-up | Each run is pulled taut: corners dropped where a straight or one-bend octilinear path clears all other copper and still heads the group's way |
+| 4a | Clean-up | Each run is drawn taut: corners dropped where a straight or one-bend octilinear path clears all other copper and still heads the group's way |
 | 5 | Differential pairs | `<stem>_P` and `<stem>_N` both in the run are a pair: one layer; adjacent, nothing between, which in the ball field allows one ball row; end vias side by side. Both or neither |
 | 6 | Negotiation | The run's nets share cells and end sites; an overlap costs more each pass. What still conflicts at the end is dropped and reported |
 | 7 | Scope | A run touches only its own group's nets of that step: their earlier tracks, end vias and GND vias are removed first |

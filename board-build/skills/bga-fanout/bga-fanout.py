@@ -718,7 +718,7 @@ def main():
             if x in route and y not in route:
                 add(x, route.pop(x), -1); dropped.append(x)
 
-    # ---- clean-up: pull each run taut, octilinear, never back, clear of all copper but its own net
+    # ---- clean-up: draw each run taut, octilinear, never back, clear of all copper but its own net
     def corners(p):
         pts = [p[0]]
         for a_, c, d in zip(p, p[1:], p[2:]):

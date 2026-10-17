@@ -87,11 +87,11 @@ SCHEMA = {
             "page          TEXT",
             "unit          INTEGER",
             # the instance's place on its sheet, mm, y down, degrees;
-            # null until pulled or placed by hand
+            # null until placed
             "x             REAL",
             "y             REAL",
             "rot           INTEGER",
-            # who set the place: tool, the packer; hand, a pull found it moved
+            # who set the place: tool, the packer; hand, the User
             "placed        TEXT",
             # which corner of its box a room's name is placed at
             "corner        TEXT",

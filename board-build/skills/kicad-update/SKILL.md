@@ -1,12 +1,11 @@
 ---
 name: kicad-update
-description: Regenerate the sheets from the record, pull library fields back. Stages 4 and 6.
+description: Regenerate the sheets from the record. Stages 4 and 6.
 ---
 
 # kicad-update
 
-Place instances, pull library fields to record. The skill of stages 4
-and 6.
+Place instances from the record. The skill of stages 4 and 6.
 
 ## Changing the schematic — the only way
 
@@ -19,24 +18,22 @@ it is modified in place, live, when necessary.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`, `netclass_table`, `netclass_net_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current; `net_settings` classes and patterns from the record on every place run<br>`board.db` — `ref_table`; `parts_table` on pull |
+| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`, `netclass_table`, `netclass_net_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current; `net_settings` classes and patterns from the record on every place run<br>`board.db` — `ref_table` |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --template <board> <template.kicad_pcb> [--whole]
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> --pull
 ```
 
-## The two verbs
+## The verb
 
 | Verb | Direction | Does |
 |---|---|---|
 | place, the default | record to sheets | rewrites the root; draws missing drawings with a label on every pin `net_table` names, sheet symbols for sub-sheet instances, a breakout for every bus that leaves a page; enters User-placed symbols. Instance fields written once at placement: `Reference`, `ipn`, and the library fields copied |
-| `--pull` | library and pages to record | reads library fields back onto the part: `Description`, `Value`, `Footprint`, `part_notes`, `Manufacturer`, `Datasheet`. `MPN` is reported on mismatch, never written — it is the record's. Then every symbol and sheet symbol that is not where the record has it: its place into `ref_table.x`, `y`, `rot`, marked `hand`; the run says how many. One where the tool left it is not written |
 
-The User's UI for part data is the Symbol Editor: edit the field there,
-then `--pull`. Claude's is `table-write`, then regeneration — delete,
-regenerate, open again.
+Part data is changed by `table-write`, then regeneration — delete,
+regenerate, open again. Nothing flows from the sheets or the library
+into the record.
 
 The User wires the sheet afterwards. That is the point of the tool: it puts
 the parts on the page so there is something to wire.
@@ -176,7 +173,7 @@ T2.12, in its order.
 An instance placed by hand, `placed` `hand` with `x`, `y`, `rot`, is drawn
 there, whatever the ranks say. The ranks order the rest, packed below
 what the hand placed; the packer writes where it put each one, marked
-`tool`, so a pull can tell a move from a packed spot. A family with no
+`tool`. A family with no
 hand place takes the arrangement of a hand-placed family with the same
 parent part and the same parts under it, the template: each element at
 the same offset from its parent, matched by part in reference order;
@@ -184,10 +181,7 @@ elements the template does not name are packed beside. Otherwise parts run left 
 right and wrap at the page edge, and the sort puts a group's members
 next to each other, so they read in order.
 
-Arrange a family by hand in KiCad, then `--pull`: the arrangement is the
-record's, a page placed afresh comes back the same, and the next family
-of that kind takes it. `table-write unplace <ref>` sends a part back to
-the packer.
+`table-write unplace <ref>` sends a part back to the packer.
 
 Order between rooms is arbitrary and subject to re-entry: once
 a part is on the page it does not move, so the order is only ever the order

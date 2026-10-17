@@ -38,7 +38,7 @@ the geometry:
 - The block's other parts follow one at a time, most connected to what is
   laid first. Each is turned 0, 90, 180 or 270 and set where its pads are
   nearest the pads they share a net with, `gap` clear of what is laid.
-  A net on more than half the scope's parts, ground or a rail, pulls
+  A net on more than half the scope's parts, ground or a rail, attracts
   nothing.
 - The blocks are set along the flow from the anchor, `block_gap` apart.
   A block that hits a footprint outside the scope goes to the nearest
@@ -501,7 +501,7 @@ def flow(db, strategy_path, dry):
                                   max(c[0] for c in cs), max(c[1] for c in cs)))
 
     # A net on more than half the scope's parts, ground or a rail, says
-    # nothing about where a part goes; it pulls nothing.
+    # nothing about where a part goes; it attracts nothing.
     on = {}
     for r, pt in parts.items():
         for *_, net in pt.pads:

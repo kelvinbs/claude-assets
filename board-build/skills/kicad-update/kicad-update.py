@@ -692,7 +692,7 @@ def library_blocks(board, nickname, lib_ids):
 
 def drawing(block):
     """The block with everything that draws nothing removed: the library's
-    own field positions (n9.7 — they sat far out and pushed the fields
+    own field positions (n9.7 — they sat far out and shoved the fields
     away) and polylines whose points all coincide."""
     body = re.sub(r'\n\s*\(property "[^"]*" "(?:[^"\\]|\\.)*"\n(?:.*?\n)*?\s*\)',
                   "", block)
@@ -1080,14 +1080,6 @@ def next_ref_free(con, prefix, taken):
 FIELDS = ["Value", "Footprint", "Description", "Datasheet", "Manufacturer",
           "MPN", "part_notes", "ipn", "checked"]
 
-PULLED = {"Description": ("parts_table", "description"),
-          "Value": ("parts_table", "value"),
-          "Footprint": ("parts_table", "footprint"),
-          "part_notes": ("parts_table", "part_notes"),
-          "Manufacturer": ("parts_table", "manufacturer"),
-          "Datasheet": ("parts_table", "datasheet")}
-
-
 def field_rows(con, nickname):
     """One dict of T2.11 fields per part whose symbol is in this project's
     library, keyed by the symbol name."""
@@ -1221,51 +1213,6 @@ def is_sim_fitting(project, sym):
             and bool(SIM_REF.match(sym["props"].get("Reference", ""))))
 
 
-def pull_positions(con, board, project, root_src):
-    """Pages to record: the place of every symbol and sheet symbol the
-    record knows that is not where the record has it, marked `hand`. One
-    where the tool left it is not written. Returns (written, moved)."""
-    placed, placed_sheets = read_pages(board, project,
-                                       page_files(con, project, root_src))
-    # the symbol on the page is KiCad's uuid; the record's own key is id.
-    # One drawing in a sub-sheet is one node per instance, so a sym_uuid
-    # reaches several ids and every one takes the place.
-    by_uuid = {}
-    for nid, su, x, y, r in con.execute(
-            "select id, sym_uuid, x, y, rot from ref_table"):
-        if su:
-            by_uuid.setdefault(su, []).append((nid, (x, y, r)))
-    written = moved = 0
-    def put(u, x, y, rot):
-        nonlocal written, moved
-        if u not in by_uuid:
-            return
-        for nid, (ox, oy, orot) in by_uuid[u]:
-            if ox is None or abs(ox - x) > 0.01 or abs(oy - y) > 0.01 \
-                    or (orot or 0) != rot:
-                if ox is not None:
-                    moved += 1
-                # not where the tool left it: the hand's place, locked
-                con.execute("update ref_table set x = ?, y = ?, rot = ?, "
-                            "placed = 'hand' where id = ?",
-                            (x, y, rot, nid))
-                written += 1
-    for path in sheet_files(board, project):
-        src = path.read_text()
-        for a, b in symbol_blocks(src):
-            sym = read_symbol(src[a:b])
-            at = re.search(r'\n\t\t\(at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)\)', src[a:b])
-            if sym["uuid"] and at:
-                put(sym["uuid"], float(at.group(1)), float(at.group(2)),
-                    int(float(at.group(3))) % 360)
-        for a, b in sheet_blocks(src):
-            sh = read_sheet(src[a:b])
-            if sh["uuid"]:
-                put(sh["uuid"], sh["at"][0], sh["at"][1], 0)
-    con.commit()
-    return written, moved
-
-
 def bus_alias_sexp(model):
     """The bus aliases as schematic blocks, `(bus_alias "NAME" (members
     ...))`, in name order."""
@@ -1368,40 +1315,6 @@ def write_netclasses(board, roots):
             pro.write_text(json.dumps(data, indent=2) + "\n")
             changed += 1
     return changed
-
-
-def pull_fields(con, library, nickname):
-    """Library to record: Description, Value, Footprint, part_notes, Manufacturer,
-    Datasheet to `parts_table`. MPN is reported on mismatch, never
-    written."""
-    src = library.read_text()
-    want = field_rows(con, nickname)
-    blocks = lib_blocks(src)
-    applied, reported = [], []
-    for name, fields in sorted(want.items()):
-        if name not in blocks:
-            continue
-        a, b = blocks[name]
-        props = read_symbol(src[a:b])["props"]
-        ipn = fields["ipn"]
-        if props.get("ipn", "").strip() != ipn:
-            reported.append((ipn, "ipn", ipn, props.get("ipn", "")))
-            continue
-        for field in FIELDS:
-            if field == "ipn" or field not in props:
-                continue
-            have, held = props[field].strip(), fields[field]
-            if have == held:
-                continue
-            table, column = PULLED.get(field, (None, None))
-            if table == "parts_table":
-                con.execute(f"update parts_table set {column} = ? "
-                            "where ipn = ?", (have or None, ipn))
-                applied.append((ipn, field, held, have))
-            else:
-                reported.append((ipn, field, held, have))
-    con.commit()
-    return applied, reported
 
 
 # ---------------------------------------------------------------- the placing
@@ -1690,7 +1603,7 @@ def draw_one(row, x, y, rot, blocks, project, ctx):
 
 def flow(rows, blocks, project, ctx, width, start_y, height=None):
     """Lay the sheet. A drawing with a place in the record is drawn there,
-    as it was pulled or arranged by hand. The rest are laid as boxes, not
+    as it was arranged by hand. The rest are laid as boxes, not
     as text: a box is a parent and everything under it, packed roughly
     square and sized by its contents, from a template when its family has
     one. Boxes pack the page below what has a place, largest first, and a
@@ -2020,8 +1933,6 @@ def board_from_template(board, project, con, name, template, whole=False):
 def main(argv):
     ap = argparse.ArgumentParser(add_help=True, description=__doc__)
     ap.add_argument("board", help="the KiCad project directory")
-    ap.add_argument("--pull", action="store_true",
-                    help="library to record: read the T2.11 fields back")
     ap.add_argument("--rename", nargs=2, metavar=("OLD", "NEW"),
                     help="rename a part: parts_table.name, the library "
                          "symbol, every sheet lib_id, one pass")
@@ -2159,10 +2070,9 @@ def main(argv):
         page_board = board_of_page(con)
     finally:
         con.close()
-    if not args.pull:
-        for page, src, dst in relocate_pages(board, project, roots,
-                                             page_board):
-            print(f"page {page}  moved with its board: {src} -> {dst}")
+    for page, src, dst in relocate_pages(board, project, roots,
+                                         page_board):
+        print(f"page {page}  moved with its board: {src} -> {dst}")
     if len(roots) == 1 and None in roots and roots[None]["src"] is None:
         raise Bad(f"{roots[None]['path']} does not exist. Run init-pipeline "
                   "first")
@@ -2187,35 +2097,6 @@ def main(argv):
         if run.returncode != 0:
             raise Bad(f"kicad-cli could not normalize {path}: "
                       + (run.stderr or run.stdout).strip())
-
-    if args.pull:
-        library = board / "lib" / f"{project}.kicad_sym"
-        if not library.exists():
-            raise Bad(f"{library} does not exist. Run init-pipeline first")
-        con = connect(board)
-        try:
-            applied, reported = pull_fields(con, library, project)
-            print(f"pull  {len(applied)} field(s) into the record")
-            written = moved = 0
-            for info in roots.values():
-                w, m = pull_positions(con, board, project, info["src"])
-                written += w
-                moved += m
-            print(f"pull  {written} place(s) into the record, "
-                  f"{moved} moved since last pulled")
-            for ipn, field, held, have in applied:
-                print(f"    {ipn}  {field}  {held!r} -> {have!r}")
-            for ipn, field, held, have in reported:
-                if field == "ipn":
-                    print(f"    {ipn}  no ipn field on the library "
-                          "symbol; pull skipped it")
-                else:
-                    print(f"    {ipn}  {field}  library {have!r} != "
-                          f"record {held!r} - reported only, not "
-                          "written")
-        finally:
-            con.close()
-        return 0
 
     # The return direction. Read every page back before anything is placed,
     # and enter what the User put there.
@@ -2380,7 +2261,7 @@ def main(argv):
 
     # An entered symbol gets its `ipn` field, and its Reference when the
     # tool renumbered it. Nothing else on a sheet is rewritten - the User
-    # pulls fields in KiCad, Update Symbols from Library (n9_1.9).
+    # refreshes fields in KiCad, Update Symbols from Library (n9_1.9).
     refreshed = {}
     for fname, by_id in fixes.items():
         path = board / fname
