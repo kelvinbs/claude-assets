@@ -1225,7 +1225,7 @@ def bus_alias_sexp(model):
     return out
 
 
-def write_bus_aliases(board, project, model):
+def write_bus_aliases(board, project, model, roots):
     """The bus aliases into every sheet file, after the lib_symbols block.
 
     Position matters: KiCad 10 writes them there, and a file carrying them
@@ -1233,11 +1233,16 @@ def write_bus_aliases(board, project, model):
     schematic that has been automatically fixed" - it moves them itself and
     asks to be saved.
 
-    KiCad 10 keeps them in the schematic, not the project: the GUI clears
-    `schematic.bus_aliases` in the `.kicad_pro` on open and does not read
-    it, so a bus there never expands and every rail and ground stays
-    page-local (n2.6). This runs LAST in a run: `kicad-cli sch upgrade`
-    drops the token, so nothing may normalize a sheet after it."""
+    Two readers, two homes. `kicad-cli` reads the sheet blocks. The KiCad
+    10 GUI reads `schematic.bus_aliases` in each root's `.kicad_pro` and
+    writes the sheet blocks from it on save: a member missing from the
+    project copy is no member in the GUI, its label stays page-local, and
+    Update PCB splits the net per sheet while kicad-cli still joins it.
+    So the record's aliases go to both, every run, replacing what is
+    there. Without an alias a bus never expands: every rail and ground
+    stays page-local (n2.6). This runs LAST in a run: `kicad-cli sch
+    upgrade` drops the sheet token, so nothing may normalize a sheet
+    after it."""
     body = bus_alias_sexp(model)
     changed = 0
     for path in sheet_files(board, project, f"{project}*.kicad_sch"):
@@ -1257,15 +1262,18 @@ def write_bus_aliases(board, project, model):
         if src != before:
             path.write_text(src)
             changed += 1
-    # one home. The project key held a second copy that went stale and
-    # that the GUI clears anyway: emptied here so nothing reads it
-    pro = Path(board) / f"{project}.kicad_pro"
-    if pro.exists():
+    # the GUI's copy: every root's project file, record replacing all
+    aliases = model.aliases()
+    for info in roots.values():
+        pro = info["dir"] / f"{info['stem']}.kicad_pro"
+        if not pro.exists():
+            continue
         data = json.loads(pro.read_text())
         sch = data.setdefault("schematic", {})
-        if sch.get("bus_aliases"):
-            sch["bus_aliases"] = {}
+        if sch.get("bus_aliases") != aliases:
+            sch["bus_aliases"] = aliases
             pro.write_text(json.dumps(data, indent=2) + "\n")
+            changed += 1
     return changed
 
 
@@ -2336,8 +2344,8 @@ def main(argv):
         normalize(board / name)
 
     # last: normalizing a sheet after this drops the aliases
-    wrote = write_bus_aliases(board, project, model)
-    print(f"    bus aliases written into {wrote} sheet(s)")
+    wrote = write_bus_aliases(board, project, model, roots)
+    print(f"    bus aliases written into {wrote} sheet and project file(s)")
     print(f"    net classes written into {write_netclasses(board, roots)} "
           "project file(s)")
 

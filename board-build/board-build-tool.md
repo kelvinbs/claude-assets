@@ -264,10 +264,11 @@
 | 2 | `bus` | TEXT | | |
 
 - A net is in at most one bus. Members keep their names; the bus is a
-  group alias, `{BUS}`, written to the project file's
-  `bus_alias` block in every sheet file, written by `kicad-update`. The
-  project file's `schematic.bus_aliases` is emptied: it held a second copy
-  that went stale, and the KiCad GUI clears it on open.
+  group alias, `{BUS}`, written by `kicad-update` to two homes every run:
+  the `bus_alias` block in every sheet file, which `kicad-cli` reads, and
+  `schematic.bus_aliases` in every root's `.kicad_pro`, which the KiCad 10
+  GUI reads. A member missing from the project copy is no member in the
+  GUI: its label stays page-local and Update PCB splits the net per sheet.
 
 **T2.6c — What a net is on a sheet**
 
@@ -535,7 +536,7 @@
 | 3 | `lib/*.pretty` | Hand |
 | 4 | `lib/3d/` | Hand |
 | 5 | `datasheets/` | Hand |
-| 6 | `*.kicad_pro` | Generated once; `schematic.bus_aliases` kept empty by the tool — the aliases live in the sheets |
+| 6 | `*.kicad_pro` | Generated once; `schematic.bus_aliases` and `net_settings` rewritten from the record every run |
 | 7 | `*.kicad_sch` | Updated by the tool, which does not wire. The root is the tool's, rewritten every run |
 | 8 | `*.kicad_pcb` | Updated by the tool, which does not route |
 | 9 | Board setup — stackup, fabricator rules, DRC rules | Hand |

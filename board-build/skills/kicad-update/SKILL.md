@@ -18,7 +18,7 @@ it is modified in place, live, when necessary.
 
 | Reads | Writes |
 |---|---|
-| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`, `netclass_table`, `netclass_net_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` kept current; `net_settings` classes and patterns from the record on every place run<br>`board.db` — `ref_table` |
+| `board.db` — `parts_table`, `ref_table`, `net_table`, `bus_table`, `netclass_table`, `netclass_net_table`<br>`lib/<project>.kicad_sym`<br>`<project>-<page>.kicad_sch` — what the User placed | `<project>.kicad_sch`, or `<project>-board-<board>.kicad_sch` one per board — the root, rewritten every run<br>`<project>-<page>.kicad_sch` — one per page, root page or sub-sheet<br>`<project>.kicad_pro`, written once; `schematic.bus_aliases` from the record on every run; `net_settings` classes and patterns from the record on every place run<br>`board.db` — `ref_table` |
 
 ```
 python3 ${CLAUDE_PLUGIN_ROOT}/skills/kicad-update/kicad-update.py <board-dir> [--move] [--assign <uuid>=<ipn> ...]
@@ -84,13 +84,16 @@ record names nets; it is not the netlist. A wire, a junction, two pins
 placed to touch: yours, in KiCad, and the tool never draws, moves or
 deletes one. KiCad's netlist is the design's.
 
-Bus aliases are a `bus_alias` block in every sheet file, written at the
-very end of a run. Nothing may normalize a sheet after them: `kicad-cli
-sch upgrade` drops the block. `schematic.bus_aliases` in
-`<project>.kicad_pro` is emptied — it was a second copy of the same fact,
-it went stale, and the KiCad GUI clears it on open. Without an alias a bus
-never expands: every member, `GND` and the rails included, stays local to
-its page and the netlist joins nothing.
+Bus aliases are written at the very end of a run to two homes: a
+`bus_alias` block in every sheet file, which `kicad-cli` reads, and
+`schematic.bus_aliases` in every root's `.kicad_pro`, which the KiCad 10
+GUI reads and rewrites the sheet blocks from on save. Both are replaced
+from the record. A member missing from the project copy is no member in
+the GUI: its label stays page-local and Update PCB splits the net per
+sheet while `kicad-cli` still joins it. Nothing may normalize a sheet
+after the blocks: `kicad-cli sch upgrade` drops them. Without an alias a
+bus never expands: every member, `GND` and the rails included, stays
+local to its page and the netlist joins nothing.
 
 ## Boards
 
@@ -210,8 +213,8 @@ wires are on these pages.
   pins follow the record.
 - The root is rewritten every run. A page keeps its sheet uuid and page
   number.
-- `<project>.kicad_pro` is written once, and its `schematic.bus_aliases`
-  emptied. The sheets carry the aliases.
+- `<project>.kicad_pro` is written once; its `schematic.bus_aliases` and
+  `net_settings` are rewritten from the record every run.
 
 Close the editor before running. KiCad holds the file in memory and will
 write it back over anything added underneath it. Confirm no `kicad` process
