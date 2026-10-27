@@ -28,11 +28,13 @@ The composition, `design/compositions/<name>.json`:
                 lengthens it by a U bend, mm, to `side` +1 or -1
   stubs         [{from, dir, length, width, pad}]: a line off a port to a
                 land, a shorted stub when the land takes a via
-  pads          {number: point}: the part's pads, one point each. A point
+  pads          {number: point or [points]}: the part's pads. A point
                 is `<element>.<port>` with a land of the join width, or
                 `<package>.<pin>` with that pin's own land, turned with the
-                package. A number in two places is two pieces of copper, not
-                one pad, so the script refuses it
+                package. A list puts the number at each point: two pieces of
+                copper on one net that the part cannot join on its own layer,
+                as the two diodes of a rat-race mixer meet at their IF across
+                a feed. The board joins them; KiCad shows the ratsnest
   net_tie       the pad numbers one copper piece joins, for KiCad's DRC
 
 A port is named by the element's id and either a pad number, where the
@@ -49,6 +51,7 @@ from pathlib import Path
 import pcbnew
 
 MM = pcbnew.FromMM
+OVERLAP = 0.05  # mm a land laps the copper it joins
 
 
 def to_mm(v):
@@ -75,10 +78,17 @@ class Frame:
         return self.x0 + X, self.y0 + Y
 
 
-def polygons(pad, layer):
-    """A pad's copper as point lists, mm, native frame."""
+def polygons(pad, layer, outside=False):
+    """A pad's copper as point lists, mm, native frame. `outside` traces a
+    curved edge from outside, 0.1 um off: a land drawn so holds the part's
+    own pad whole, within KiCad's 0.5 um DRC epsilon of it."""
     ps = pcbnew.SHAPE_POLY_SET()
-    pad.TransformShapeToPolygon(ps, layer, 0, MM(0.002), pcbnew.ERROR_INSIDE)
+    if outside:
+        pad.TransformShapeToPolygon(ps, layer, 0, MM(0.0001),
+                                    pcbnew.ERROR_OUTSIDE)
+    else:
+        pad.TransformShapeToPolygon(ps, layer, 0, MM(0.002),
+                                    pcbnew.ERROR_INSIDE)
     out = []
     for i in range(ps.OutlineCount()):
         o = ps.Outline(i)
@@ -154,6 +164,9 @@ class Composer:
         self.ports = {}
         self.points = {}
         self.lengths = []
+        self.line = []
+        self.tags = []   # per line piece: the package point its lead ends on
+        self.tag = None
 
     def load(self, name):
         fp = pcbnew.FootprintLoad(self.lib, name)
@@ -163,9 +176,14 @@ class Composer:
 
     # copper ---------------------------------------------------------------
 
-    def poly_pad(self, pts, number="", mask=False):
+    def poly_pad(self, pts, number="", mask=False, line=False):
         """Copper as a custom pad on the part's layer. Unnumbered copper is
-        line; a number makes it a port KiCad gives a net."""
+        line: kept until the part is built, then numbered by line_copper. A
+        number makes a port KiCad gives a net."""
+        if not number and not line:
+            self.line.append(pts)
+            self.tags.append(self.tag)
+            return
         pad = pcbnew.PAD(self.fp)
         pad.SetAttribute(pcbnew.PAD_ATTRIB_SMD)
         pad.SetShape(self.layer, pcbnew.PAD_SHAPE_CUSTOM)
@@ -184,6 +202,58 @@ class Composer:
         pad.AddPrimitivePoly(self.layer, vv, 0, True)
         pad.SetNumber(str(number))
         self.fp.Add(pad)
+
+    def line_copper(self):
+        """The line as custom pads under the net tie's first number: line
+        then belongs to the tie group, and KiCad's DRC skips clearance and
+        shorts between pads of one group, as the project's own Wilkinson
+        and ring do with one number. A copper shape would not: KiCad joins
+        a shape only to the pads it touches itself, never through the
+        shapes it touches.
+
+        Every pad of another number is cut out of a piece, so line meets
+        such a pad only at the pad's edge. A part soldered on a land, or a track ending on
+        a port, then touches the line only on that edge, and KiCad excuses
+        a net-tie contact only at a point on a tie pad of the same net."""
+        tie = [n.strip() for n in self.c.get("net_tie", "").split(",")
+               if n.strip()]
+        first = tie[0] if tie else ""
+        at = {}
+        for n, pts in self.c["pads"].items():
+            for pt in [pts] if isinstance(pts, str) else pts:
+                at[pt] = n
+        pads = {}
+        for pad in self.fp.Pads():
+            pads.setdefault(pad.GetNumber(), pcbnew.SHAPE_POLY_SET())
+            pad.TransformShapeToPolygon(pads[pad.GetNumber()], self.layer, 0,
+                                        MM(0.002), pcbnew.ERROR_OUTSIDE)
+        cuts = {}
+        for pts, tag in zip(self.line, self.tags):
+            # a lead ending on a land is that land's copper: the part
+            # soldered there then meets only copper of its own net
+            number = at.get(tag, first) if at.get(tag) in tie else first
+            piece = pcbnew.SHAPE_POLY_SET()
+            o = pcbnew.SHAPE_LINE_CHAIN()
+            for x, y in pts:
+                o.Append(MM(x), MM(y))
+            o.SetClosed(True)
+            piece.AddOutline(o)
+            if number not in cuts:
+                # a piece laps its own number's pads, so it joins them
+                cuts[number] = pcbnew.SHAPE_POLY_SET()
+                for n, ps in pads.items():
+                    if n != number:
+                        cuts[number].Append(ps)
+                cuts[number].Simplify()
+            piece.BooleanSubtract(cuts[number])
+            piece.Fracture()
+            for i in range(piece.OutlineCount()):
+                ol = piece.Outline(i)
+                if ol.PointCount() < 3:
+                    continue
+                self.poly_pad([(to_mm(ol.CPoint(j).x), to_mm(ol.CPoint(j).y))
+                               for j in range(ol.PointCount())],
+                              number, line=True)
 
     def rect_pad(self, number, cx, cy, sx, sy, mask=False):
         pad = pcbnew.PAD(self.fp)
@@ -237,7 +307,7 @@ class Composer:
                     x, y = fr.pt(to_mm(pad.GetPosition().x),
                                  to_mm(pad.GetPosition().y))
                     poly = [fr.pt(a, b) for a, b in
-                            polygons(pad, self.layer)[0]]
+                            polygons(pad, self.layer, outside=True)[0]]
                     self.points.setdefault(f"{eid}.land", []).append(
                         (x, y, poly))
             ports, kind = element_ports(fp, self.layer, self.w)
@@ -268,14 +338,19 @@ class Composer:
             tx, ty = ex + dx * lead, ey + dy * lead
             rx, ry = fr0.vec(ox, oy)
             fr = Frame((tx - rx, ty - ry), rot, False)
+            first = len(self.line)
             self.lengths.append((f"{p['port']} to {pid}.{p['pin']}",
                                  self.segment((ex, ey), (tx, ty), self.w)))
+            # the lead's run and its joint on the land are the land's; the
+            # joint at the port stays with the element it leaves
+            self.tags[first] = self.tags[first + 2] = f"{pid}.{p['pin']}"
             for num, q in pads.items():
                 # the land's own outline, turned with the package: a
                 # rectangle at any angle is a polygon, not a size
                 x, y = fr.pt(to_mm(q.GetPosition().x),
                              to_mm(q.GetPosition().y))
-                poly = [fr.pt(a, b) for a, b in polygons(q, pcbnew.F_Cu)[0]]
+                poly = [fr.pt(a, b) for a, b in
+                        polygons(q, pcbnew.F_Cu, outside=True)[0]]
                 self.points[f"{pid}.{num}"] = (x, y, poly)
             for item in fp.GraphicalItems():
                 if item.GetLayer() != pcbnew.F_Fab or \
@@ -332,24 +407,34 @@ class Composer:
         self.lengths.append((f"stub off {s['from']}",
                              self.segment(start, end, s["width"])))
         land = s.get("land", 0.6)
-        self.rect_pad(s["pad"], end[0] + d[0] * land / 2,
-                      end[1] + d[1] * land / 2, land, land)
+        # the land reaches OVERLAP back over the stub's end: copper that
+        # only abuts is not joined for KiCad's net tie
+        long_ = land + OVERLAP
+        cx = end[0] + d[0] * (land - OVERLAP) / 2
+        cy = end[1] + d[1] * (land - OVERLAP) / 2
+        sx, sy = (long_, land) if d[0] else (land, long_)
+        self.rect_pad(s["pad"], cx, cy, sx, sy)
 
     # pads -----------------------------------------------------------------
 
     def pads(self):
-        for number, point in self.c["pads"].items():
-            if not isinstance(point, str):
-                raise SystemExit(f"pad {number}: one point, not {point}")
-            if point in self.points:
-                self.poly_pad(self.points[point][2], number, mask=True)
-                continue
-            (x, y), (dx, dy) = self.ports[point]
-            # a land of line width at the port's end, a lead long
-            cx, cy = x + dx * self.lead / 2, y + dy * self.lead / 2
-            sx, sy = (self.lead, self.w) if abs(dx) > abs(dy) \
-                else (self.w, self.lead)
-            self.rect_pad(number, cx, cy, sx, sy)
+        for number, points in self.c["pads"].items():
+            for point in [points] if isinstance(points, str) else points:
+                self.pad(number, point)
+
+    def pad(self, number, point):
+        if point in self.points:
+            self.poly_pad(self.points[point][2], number, mask=True)
+            return
+        (x, y), (dx, dy) = self.ports[point]
+        # a land of line width at the port's end, a lead long, reaching
+        # OVERLAP back over the element so the two are joined, not abutted
+        long_ = self.lead + OVERLAP
+        cx = x + dx * (self.lead - OVERLAP) / 2
+        cy = y + dy * (self.lead - OVERLAP) / 2
+        sx, sy = (long_, self.w) if abs(dx) > abs(dy) \
+            else (self.w, long_)
+        self.rect_pad(number, cx, cy, sx, sy)
 
     def build(self):
         self.place_elements()
@@ -362,6 +447,7 @@ class Composer:
         for s in self.c.get("stubs", []):
             self.stub(s)
         self.pads()
+        self.line_copper()
         if self.c.get("net_tie"):
             self.fp.AddNetTiePadGroup(self.c["net_tie"])
         self.fp.SetLibDescription(self.c.get("description", ""))
