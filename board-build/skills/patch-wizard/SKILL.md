@@ -1,12 +1,12 @@
 ---
 name: patch-wizard
-description: Make a footprint for a printed feature no library holds — an aperture-fed patch, an array of them, a Wilkinson divider, a rat-race hybrid ring, a directional coupler or an I/Q mixer. Stage 5.
+description: Make a footprint for a printed feature no library holds — an aperture-fed patch, an array of them, a Wilkinson divider, a rat-race hybrid ring, a directional coupler, a branch-line hybrid, a T-junction splitter or an I/Q mixer. Stage 5.
 ---
 
 # patch-wizard
 
 A footprint for copper that is the design, not a purchased device. The skill covers printed features: a patch, an array guide, a
-Wilkinson divider, a rat-race hybrid ring, a directional coupler and an I/Q mixer. Stage 5's
+Wilkinson divider, a rat-race hybrid ring, a directional coupler, a branch-line hybrid, a T-junction splitter and an I/Q mixer. Stage 5's
 other skill, `copy-kicad-part`, borrows a footprint from the installed
 libraries; no library holds your antenna, so for a `pcb-feature` there is
 nothing to borrow and the stage cannot finish. This skill is how it finishes.
@@ -30,7 +30,7 @@ ln -s <repo>/tools/board-build/skills/patch-wizard \
 KiCad reads it at start, or on Tools, External Plugins, Refresh in the
 footprint editor.
 
-## The six wizards
+## The eight wizards
 
 | Wizard | Makes |
 |---|---|
@@ -40,6 +40,10 @@ footprint editor.
 | Rat-race hybrid ring | a ring of one and a half guide wavelengths, four ports on it a quarter wavelength apart. Driven at the Δ port the two outputs are 3 dB and 180° apart; driven at Σ they are in phase. Run backwards it is a combiner, as the Wilkinson is |
 | Directional coupler | two lines side by side for a quarter guide wavelength: input 1 and direct 6 on the main line, coupled 2 and isolated 5 on the other, ground holes 3 and 4. The coupled port samples the forward wave, the isolated port the reflected one. Pad numbers match KiCad's `RF:DC4759J5020AHF-2` symbol |
 | I/Q mixer | a drop-in for a packaged I/Q mixer: branch-line LO split, T-junction RF split, two rat-race single-balanced mixers. LO 1, RF 2, IF_I 3, IF_Q 4, diode lands 5 6 (I) and 7 8 (Q), termination 9. Diode pairs and the termination resistor solder to it; LO and RF arrive DC-blocked |
+| Branch-line hybrid | four quarter-wave arms, series at Z0/√2, shunt at Z0: input 1, through 2 at −90°, coupled 3 at −180°, isolated 4. The I/Q mixer's LO split as a part of its own |
+| T-junction splitter | two quarter-wave Z0·√2 arms from a common port, in phase, no resistor: input 1, outputs 2 and 3. The I/Q mixer's RF split as a part of its own |
+
+- The I/Q mixer is one footprint; the branch-line, the T-junction and two rat-race rings are the same copper as four. Either form can be laid out
 
 The array is deliberately not copper. Drawing it as copper would put a
 second, stale copy of every patch on the board; the patches are their own
