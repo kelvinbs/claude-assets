@@ -1,12 +1,12 @@
 ---
 name: patch-wizard
-description: Make a footprint for a printed feature no library holds — an aperture-fed patch, an array of them, a Wilkinson divider or a rat-race hybrid ring. Stage 5.
+description: Make a footprint for a printed feature no library holds — an aperture-fed patch, an array of them, a Wilkinson divider, a rat-race hybrid ring or a directional coupler. Stage 5.
 ---
 
 # patch-wizard
 
 A footprint for copper that is the design, not a purchased device. The skill covers printed features: a patch, an array guide, a
-Wilkinson divider and a rat-race hybrid ring. Stage 5's
+Wilkinson divider, a rat-race hybrid ring and a directional coupler. Stage 5's
 other skill, `copy-kicad-part`, borrows a footprint from the installed
 libraries; no library holds your antenna, so for a `pcb-feature` there is
 nothing to borrow and the stage cannot finish. This skill is how it finishes.
@@ -30,7 +30,7 @@ ln -s <repo>/tools/board-build/skills/patch-wizard \
 KiCad reads it at start, or on Tools, External Plugins, Refresh in the
 footprint editor.
 
-## The four wizards
+## The five wizards
 
 | Wizard | Makes |
 |---|---|
@@ -38,6 +38,7 @@ footprint editor.
 | Patch array guide | where the patches go — one outline per element, its centre, the pitch and the array extent. A graphic, not copper |
 | Wilkinson divider | two quarter-wave arms, three ports and the isolation resistor's pads. Run backwards it is a combiner; the copper is the same |
 | Rat-race hybrid ring | a ring of one and a half guide wavelengths, four ports on it a quarter wavelength apart. Driven at the Δ port the two outputs are 3 dB and 180° apart; driven at Σ they are in phase. Run backwards it is a combiner, as the Wilkinson is |
+| Directional coupler | two lines side by side for a quarter guide wavelength: input 1 and direct 6 on the main line, coupled 2 and isolated 5 on the other, ground holes 3 and 4. The coupled port samples the forward wave, the isolated port the reflected one. Pad numbers match KiCad's `RF:DC4759J5020AHF-2` symbol |
 
 The array is deliberately not copper. Drawing it as copper would put a
 second, stale copy of every patch on the board; the patches are their own
@@ -70,6 +71,8 @@ then Save As into the project library under the name the record carries in
 | Arms | length, width, separation | a quarter wavelength at the design frequency, at the width that makes Z0·√2 on this stack |
 | Resistor | pad size, pad separation | the chip resistor bridging the branches, 2·Z0 |
 | Ring | quarter wavelength, track width | a quarter wavelength at the design frequency — the ring is six of them round — at the width that makes Z0·√2 on this stack |
+| Section | length, main width, coupled width, gap | a quarter wavelength at the design frequency; the widths and the gap that set the coupling on this stack |
+| Ground | via drill, via size | the two plated holes that ground the coupler |
 
 A layer is named by what it carries — the patch layer, the ground the
 aperture is cut in, the feed layer. Nothing is called an inner layer: that
