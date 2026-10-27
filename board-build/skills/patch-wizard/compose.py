@@ -28,9 +28,11 @@ The composition, `design/compositions/<name>.json`:
                 lengthens it by a U bend, mm, to `side` +1 or -1
   stubs         [{from, dir, length, width, pad}]: a line off a port to a
                 land, a shorted stub when the land takes a via
-  pads          {number: [point, ...]}: the part's pads. A point is
-                `<element>.<port>` with a land of the join width, or
-                `<package>.<pin>` with that pin's own land
+  pads          {number: point}: the part's pads, one point each. A point
+                is `<element>.<port>` with a land of the join width, or
+                `<package>.<pin>` with that pin's own land, turned with the
+                package. A number in two places is two pieces of copper, not
+                one pad, so the script refuses it
   net_tie       the pad numbers one copper piece joins, for KiCad's DRC
 
 A port is named by the element's id and either a pad number, where the
@@ -161,7 +163,7 @@ class Composer:
 
     # copper ---------------------------------------------------------------
 
-    def poly_pad(self, pts, number=""):
+    def poly_pad(self, pts, number="", mask=False):
         """Copper as a custom pad on the part's layer. Unnumbered copper is
         line; a number makes it a port KiCad gives a net."""
         pad = pcbnew.PAD(self.fp)
@@ -171,6 +173,8 @@ class Composer:
         pad.SetSize(self.layer, pcbnew.VECTOR2I(MM(0.01), MM(0.01)))
         seq = pcbnew.LSEQ()
         seq.push_back(self.layer)
+        if mask:
+            seq.push_back(pcbnew.F_Mask)
         pad.SetLayerSet(pcbnew.LSET(seq))
         ax, ay = pts[0]
         pad.SetPosition(pcbnew.VECTOR2I(MM(ax), MM(ay)))
@@ -232,9 +236,10 @@ class Composer:
                 if is_land(pad):
                     x, y = fr.pt(to_mm(pad.GetPosition().x),
                                  to_mm(pad.GetPosition().y))
-                    sz = pad.GetSize(pcbnew.F_Cu)
+                    poly = [fr.pt(a, b) for a, b in
+                            polygons(pad, self.layer)[0]]
                     self.points.setdefault(f"{eid}.land", []).append(
-                        (x, y, to_mm(sz.x), to_mm(sz.y)))
+                        (x, y, poly))
             ports, kind = element_ports(fp, self.layer, self.w)
             for name, ((x, y), (dx, dy)) in ports.items():
                 px, py = fr.pt(x, y)
@@ -266,11 +271,12 @@ class Composer:
             self.lengths.append((f"{p['port']} to {pid}.{p['pin']}",
                                  self.segment((ex, ey), (tx, ty), self.w)))
             for num, q in pads.items():
+                # the land's own outline, turned with the package: a
+                # rectangle at any angle is a polygon, not a size
                 x, y = fr.pt(to_mm(q.GetPosition().x),
                              to_mm(q.GetPosition().y))
-                sz = q.GetSize(pcbnew.F_Cu)
-                sx, sy = fr.vec(to_mm(sz.x), to_mm(sz.y))
-                self.points[f"{pid}.{num}"] = (x, y, abs(sx), abs(sy))
+                poly = [fr.pt(a, b) for a, b in polygons(q, pcbnew.F_Cu)[0]]
+                self.points[f"{pid}.{num}"] = (x, y, poly)
             for item in fp.GraphicalItems():
                 if item.GetLayer() != pcbnew.F_Fab or \
                         item.GetClass() != "PCB_SHAPE" or \
@@ -332,18 +338,18 @@ class Composer:
     # pads -----------------------------------------------------------------
 
     def pads(self):
-        for number, points in self.c["pads"].items():
-            for point in points:
-                if point in self.points:
-                    x, y, sx, sy = self.points[point]
-                    self.rect_pad(number, x, y, sx, sy, mask=True)
-                    continue
-                (x, y), (dx, dy) = self.ports[point]
-                # a land of line width at the port's end, a lead long
-                cx, cy = x + dx * self.lead / 2, y + dy * self.lead / 2
-                sx, sy = (self.lead, self.w) if abs(dx) > abs(dy) \
-                    else (self.w, self.lead)
-                self.rect_pad(number, cx, cy, sx, sy)
+        for number, point in self.c["pads"].items():
+            if not isinstance(point, str):
+                raise SystemExit(f"pad {number}: one point, not {point}")
+            if point in self.points:
+                self.poly_pad(self.points[point][2], number, mask=True)
+                continue
+            (x, y), (dx, dy) = self.ports[point]
+            # a land of line width at the port's end, a lead long
+            cx, cy = x + dx * self.lead / 2, y + dy * self.lead / 2
+            sx, sy = (self.lead, self.w) if abs(dx) > abs(dy) \
+                else (self.w, self.lead)
+            self.rect_pad(number, cx, cy, sx, sy)
 
     def build(self):
         self.place_elements()
