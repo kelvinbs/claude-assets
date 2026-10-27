@@ -551,6 +551,15 @@ def net(con, args):
     unit that carries it, per the part file (T2.6a). The sheet takes a
     label at that pin on the next regeneration."""
     u = unit_of_pin(con, args.board, args.ref, args.pin)
+    # a pin is drawn by one unit. A row for it on another unit of the
+    # package is stale: left from before the package had its units
+    stale = con.execute(
+        "delete from net_table where pin = ? and id <> ? and id in "
+        "(select id from ref_table where ref = ?)",
+        (args.pin, u, args.ref)).rowcount
+    if stale:
+        print(f"{args.ref}  pin {args.pin}: {stale} stale row(s) on another "
+              "unit removed")
     if args.none:
         n = con.execute("delete from net_table where id = ? and pin = ?",
                         (u, args.pin)).rowcount

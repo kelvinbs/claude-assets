@@ -153,7 +153,8 @@ the drawing and pin. The drawing is named by any of its references. On a
 multi-unit package the pin picks the unit: the part file's `units` says
 which unit draws it, and the row goes on that unit's drawing. A reference
 names the package, so `net U14 5` reaches U14B without naming it.
-`--none` clears it. The sheet takes a label at that pin on the next
+A row for the same pin on another unit of the package is stale, left
+from before the package had its units, and is removed. `--none` clears it. The sheet takes a label at that pin on the next
 regeneration — local or hierarchical per T2.6c, never global — and
 loses it on the regeneration after the row goes. On a sub-sheet
 instance the pin is a name the sub-sheet exports, `VOUT`, or a bus,
