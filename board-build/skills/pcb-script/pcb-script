@@ -1,0 +1,54 @@
+#!/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3
+"""Run a pcbnew script outside KiCad, with KiCad's own Python.
+
+    pcb-script -c "<code>" [args ...]
+    pcb-script <script.py> [args ...]
+
+The same arguments as `python3 -c` or `python3 <script>`. pcbnew outside
+KiCad has no wx application, and at a normal interpreter exit its wx teardown
+segfaults; macOS then puts up a "Python quit unexpectedly" dialog. This runs
+the script to its end, drops its globals so its files close, flushes output,
+and leaves by os._exit with the script's own exit code."""
+import gc
+import os
+import runpy
+import sys
+import traceback
+
+
+def main():
+    args = sys.argv[1:]
+    if not args:
+        sys.stderr.write(__doc__)
+        os._exit(2)
+    code = 0
+    g = {}
+    try:
+        if args[0] == "-c":
+            sys.argv = ["-c"] + args[2:]
+            sys.path.insert(0, "")
+            g = {"__name__": "__main__", "__builtins__": __builtins__}
+            exec(compile(args[1], "<string>", "exec"), g)
+        else:
+            sys.argv = args
+            sys.path.insert(0, os.path.dirname(os.path.abspath(args[0])))
+            g = runpy.run_path(args[0], run_name="__main__")
+    except SystemExit as e:
+        if e.code is None:
+            code = 0
+        elif isinstance(e.code, int):
+            code = e.code
+        else:
+            sys.stderr.write(f"{e.code}\n")
+            code = 1
+    except BaseException:
+        traceback.print_exc()
+        code = 1
+    g.clear()
+    gc.collect()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
+
+
+main()
