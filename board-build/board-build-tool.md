@@ -42,6 +42,12 @@
   change to this document.
 - No code or skill outside T5.1. No runtime script for any board-build
   activity. Period.
+- A board is read or changed outside KiCad only through the skills of
+  T5.1: read with `board-read`; changed with `place-relative`,
+  `route-pad`, `copper-transform` and `rule-area-copy`, on the saved
+  file, with KiCad closed. No pcbnew script, no `pcb-script` call, no
+  text edit of a `.kicad_pcb` stands in for them. `pcb-script` is for
+  the model-building scripts of simulation studies only.
 - ERC and DRC: the tool does not run the checks, but may set up the
   checks to be performed.
 - On a failure — or when a skill does not cover the work:
@@ -571,7 +577,7 @@
 | 3 | Update library — symbols | `copy-kicad-part`<br>`datasheet-read` | — |
 | 4 | Update schematic | `kicad-update` | Wires |
 | 5 | Update library — footprints, 3D | `copy-kicad-part`<br>`datasheet-read`<br>`patch-wizard` | — |
-| 6 | Update PCB | `kicad-update`<br>`cooperative-placement`<br>`block-outline`<br>`bga-fanout` | Placement, block by block; routes |
+| 6 | Update PCB | `kicad-update`<br>`cooperative-placement`<br>`block-outline`<br>`bga-fanout`<br>`board-read`<br>`place-relative`<br>`route-pad`<br>`copper-transform`<br>`rule-area-copy` | Placement, block by block; routes |
 | 7 | RF-sim export | — | — |
 | 8 | Source | — | — |
 
@@ -657,7 +663,12 @@ One skill, one run — T4.2.
 | 11 | `cooperative-placement` | Cooperative parts placement, also called staging: gather one block's footprints above the board's upper right corner, packed 0.5 mm apart and selected, for the User to place. Flow placement: place a scope's parts block by block along a flow, from a strategy the LLM writes | `board.db` — `ref_table`<br>the board open in KiCad, live<br>`placement/<scope>.json` | footprint positions, rotations and the selection, live; nothing saved<br>`placement/<scope>.json` |
 | 12 | `block-outline` | Box each named group of parts — a room or a part and everything under it — on the open board, on User.Comments, labelled with its name; generate the table of contents of every box | `board.db` — `ref_table`<br>the board open in KiCad, live | rectangles, labels and the table of contents on User.Comments, live; nothing saved |
 | 13 | `bga-fanout` | Fan out a ball grid array on the open board, in steps: signal nets grouped by the part they serve; each group on F.Cu from its pads with no ball via, as far as F.Cu holds; a via in every other connected ball; power balls strapped on F.Cu; each group's remaining signals from their ball vias on F.Cu or In2.Cu. Every trace heads toward its part and ends in a via outside the courtyard, with a GND via toward the part | the board open in KiCad, live<br>`fanout/<ref>.json` | vias and tracks around the part, live; saved only with `--save`<br>`fanout/<ref>.json` |
-| 14 | `pcb-script` | Run a pcbnew script outside KiCad. Every pcbnew script run outside KiCad goes through it, never through KiCad's Python directly: outside KiCad the wx teardown segfaults at exit and macOS shows a crash dialog per run | the script and what it reads | what the script writes |
+| 14 | `pcb-script` | Run a model-building pcbnew script of a simulation study outside KiCad. Not for board work: a project board is read and changed only by rows 15 to 19. Every pcbnew script run outside KiCad goes through it, never through KiCad's Python directly: outside KiCad the wx teardown segfaults at exit and macOS shows a crash dialog per run | the script and what it reads | what the script writes |
+| 15 | `board-read` | Read a saved board headless: footprints; a part's pads; nets and the pads on them; zones with clearance, min width, fill settings, priority; rule areas with keepouts; tracks and vias by net, layer or box. Read-only. Also the library of rows 16 to 19 and their write harness: KiCad guard, back-up, worker, safe save, kicad-cli check, atomic replace | `*.kicad_pcb`, saved; `.kicad_pro` | Markdown on stdout |
+| 16 | `place-relative` | Place a footprint so a chosen pad sits at an offset from another footprint's pad, turned to face a way or to a rotation; move or turn a set of footprints rigidly. KiCad closed | `*.kicad_pcb`, saved | `*.kicad_pcb` — footprint positions, rotations<br>`<board>.bak-<timestamp>` |
+| 17 | `route-pad` | Add a straight or two-segment orthogonal track between two pads of one net on one layer, width from the net class or given. KiCad closed | `*.kicad_pcb`, saved; `.kicad_pro` — `net_settings` | `*.kicad_pcb` — tracks<br>`<board>.bak-<timestamp>` |
+| 18 | `copper-transform` | Select footprints by ref, and tracks, vias, zones, rule areas by net, name or box; translate, rotate, or mirror them about a horizontal or vertical line, nets kept; dry run first. KiCad closed | `*.kicad_pcb`, saved | `*.kicad_pcb` — item positions<br>`<board>.bak-<timestamp>` |
+| 19 | `rule-area-copy` | Create a rule area with every setting of a named one, a new name and an outline: a rectangle, a polygon, or refs, pads and tracks grown by N mm, union, convex or rectilinear. KiCad closed | `*.kicad_pcb`, saved | `*.kicad_pcb` — rule areas<br>`<board>.bak-<timestamp>` |
 
 ### 5.3 — Layout
 
@@ -666,3 +677,4 @@ One skill, one run — T4.2.
 - `board-build-tool.md` — the only document at the top level
 - `skills/<skill>/` — one folder per skill: `SKILL.md` and its script
 - A script finds a sibling by `<root>/skills/<name>/<name>.py`; a document names its script by `${CLAUDE_PLUGIN_ROOT}/skills/<name>/<name>.py`
+- `skills/board-read/board-read.py` is a skill's script and the library of the four writing skills of T5.1 rows 16 to 19, each of which loads it by that path
