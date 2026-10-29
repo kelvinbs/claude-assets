@@ -219,6 +219,8 @@ wires are on these pages.
 Close the editor before running. KiCad holds the file in memory and will
 write it back over anything added underneath it. Confirm no `kicad` process
 remains before the run. A quit request can be ignored while a dialog is open.
+If KiCad is open, save all and quit it, then confirm no `kicad` process
+remains; do not stop to ask the User to close it.
 
 ## The return direction
 
