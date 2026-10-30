@@ -164,7 +164,18 @@ def footprint(tool, b, ref):
 
 def pad(tool, b, spec):
     """`REF.PAD`, the pad numbered PAD of footprint REF. Refused when the
-    number is missing or held by more than one pad."""
+    number is missing or held by more than one pad. `REF.PAD@X,Y` picks,
+    among the pads numbered PAD, the one whose centre is nearest (X, Y) mm;
+    refused when two are equally near."""
+    near = None
+    if "@" in spec:
+        spec, at = spec.split("@", 1)
+        try:
+            near = tuple(float(v) for v in at.split(","))
+        except ValueError:
+            near = ()
+        if len(near) != 2:
+            raise Bad(tool, f"{at!r} is not X,Y")
     if "." not in spec:
         raise Bad(tool, f"{spec!r} is not REF.PAD")
     ref, num = spec.rsplit(".", 1)
@@ -172,8 +183,17 @@ def pad(tool, b, spec):
     hits = [q for q in fp.Pads() if q.GetNumber() == num]
     if not hits:
         raise Bad(tool, f"{ref} has no pad {num}")
-    if len(hits) > 1:
-        raise Bad(tool, f"{ref} has {len(hits)} pads numbered {num}")
+    if len(hits) > 1 and near is None:
+        raise Bad(tool, f"{ref} has {len(hits)} pads numbered {num}; "
+                  f"give {ref}.{num}@X,Y")
+    if near is not None:
+        def d(q):
+            return round(math.hypot(mm(q.GetPosition().x) - near[0],
+                                    mm(q.GetPosition().y) - near[1]), 6)
+        hits.sort(key=d)
+        if len(hits) > 1 and d(hits[0]) == d(hits[1]):
+            raise Bad(tool, f"two pads {ref}.{num} lie equally near "
+                      f"{near[0]}, {near[1]}")
     return hits[0]
 
 
